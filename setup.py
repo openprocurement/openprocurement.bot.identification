@@ -24,7 +24,11 @@ databridge_requires = requires + [
     'openprocurement_client>=1.0b2'
 ]
 
-entry_points = {}
+entry_points = {
+    'console_scripts': [
+        'competitive_dialogue_data_bridge = openprocurement.tender.competitivedialogue.databridge:main'
+    ],
+}
 
 setup(name='openprocurement.integrations.edr',
       version=version,
