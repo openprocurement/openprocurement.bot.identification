@@ -6,8 +6,6 @@ import uuid
 import unittest
 import datetime
 from gevent.queue import Queue
-
-from openprocurement.bot.identification.databridge.scanner import Scanner
 from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
@@ -15,8 +13,8 @@ from restkit.errors import (
     Unauthorized, RequestFailed, ResourceError
 )
 
-
-
+from openprocurement.bot.identification.databridge.scanner import Scanner
+from openprocurement.bot.identification.tests.utils import custom_sleep
 
 
 class TestScannerWorker(unittest.TestCase):
