@@ -88,6 +88,8 @@ class Scanner(Greenlet):
             except ResourceError as re:
                 if re.status_int == 425:
                     Scanner.sleep_change_value += self.increment_step
+                else:
+                    raise re
 
     def get_tenders_forward(self):
         logger.info('Start forward data sync worker...')
