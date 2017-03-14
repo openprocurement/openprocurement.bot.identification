@@ -6,7 +6,7 @@ import uuid
 import unittest
 import datetime
 from gevent.queue import Queue
-from gevent import sleep as gsleep
+
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from mock import patch, MagicMock
 from time import sleep
@@ -16,8 +16,7 @@ from restkit.errors import (
 )
 
 
-def custom_sleep(seconds):
-    return gsleep(seconds=0)
+
 
 
 class TestScannerWorker(unittest.TestCase):
