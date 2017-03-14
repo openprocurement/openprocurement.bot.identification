@@ -76,19 +76,24 @@ class TestScannerWorker(unittest.TestCase):
         tender_queue = Queue(10)
         client = MagicMock()
         client.sync_tenders.side_effect = [
-            munchify({'prev_page': {'offset': '123'},
-                      'next_page': {'offset': '1234'},
+            munchify({'prev_page': {'offset': '1234'},
+                      'next_page': {'offset': '1235'},
                       'data': [{'status': "active.pre-qualification",
                                 "id": uuid.uuid4().hex,
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
-            munchify({'prev_page': {'offset': '123'},
-                      'next_page': {'offset': '1234'},
+            munchify({'prev_page': {'offset': '1235'},
+                      'next_page': {'offset': '1236'},
                       'data': [{'status': "active.tendering",
                                 "id": uuid.uuid4().hex,
                                 'procurementMethodType': 'aboveThresholdUA'}]}),
+            munchify({'prev_page': {'offset': '1236'},
+                      'next_page': {'offset': '1237'},
+                      'data': [{'status': "active.qualification",
+                                "id": uuid.uuid4().hex,
+                                'procurementMethodType': 'aboveThresholdUA'}]}),
             ResourceError(http_code=425),
-            munchify({'prev_page': {'offset': '123'},
-                      'next_page': {'offset': '1234'},
+            munchify({'prev_page': {'offset': '1237'},
+                      'next_page': {'offset': '1238'},
                       'data': [{'status': "active.qualification",
                                 "id": uuid.uuid4().hex,
                                 'procurementMethodType': 'aboveThresholdUA'}]})]
@@ -98,7 +103,7 @@ class TestScannerWorker(unittest.TestCase):
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 2)
+        self.assertEqual(tender_queue.qsize(), 3)
         self.assertEqual(Scanner.sleep_change_value, 1)
         Scanner.sleep_change_value = 0
 
@@ -114,6 +119,16 @@ class TestScannerWorker(unittest.TestCase):
                       'data': [{'status': "active.pre-qualification",
                                 "id": uuid.uuid4().hex,
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
+            munchify({'prev_page': {'offset': '123'},
+                      'next_page': {'offset': '1234'},
+                      'data': [{'status': "active.tendering",
+                                "id": uuid.uuid4().hex,
+                                'procurementMethodType': 'aboveThresholdUA'}]}),
+            munchify({'prev_page': {'offset': '123'},
+                      'next_page': {'offset': '1234'},
+                      'data': [{'status': "active.tendering",
+                                "id": uuid.uuid4().hex,
+                                'procurementMethodType': 'aboveThresholdUA'}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.tendering",
