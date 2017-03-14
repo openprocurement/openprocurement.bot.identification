@@ -3,6 +3,7 @@
 from datetime import datetime
 import logging.config
 import gevent
+from gevent.event import Event
 from gevent import Greenlet, spawn
 from retrying import retry
 from restkit import ResourceError
@@ -37,7 +38,7 @@ class Scanner(Greenlet):
         self.filtered_tender_ids_queue = filtered_tender_ids_queue
 
         # blockers
-        self.initialization_event = gevent.event.Event()
+        self.initialization_event = Event()
         self.increment_step = increment_step
         self.decrement_step = decrement_step
 
