@@ -44,8 +44,8 @@ class Scanner(Greenlet):
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def initialize_sync(self, params=None, direction=None):
-        self.initialization_event.clear()
         if direction == "backward":
+            self.initialization_event.clear()
             assert params['descending']
             response = self.tenders_sync_client.sync_tenders(params, extra_headers={'X-Client-Request-ID': generate_req_id()})
             # set values in reverse order due to 'descending' option
