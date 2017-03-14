@@ -26,11 +26,11 @@ databridge_requires = requires + [
 
 entry_points = {
     'console_scripts': [
-        'competitive_dialogue_data_bridge = openprocurement.tender.competitivedialogue.databridge:main'
-    ],
+        'integrations_edr_data_bridge = openprocurement.bot.identification.databridge:main'
+    ]
 }
 
-setup(name='openprocurement.integrations.edr',
+setup(name='openprocurement.bot.identification',
       version=version,
       description="",
       long_description=open("README.rst").read(),
