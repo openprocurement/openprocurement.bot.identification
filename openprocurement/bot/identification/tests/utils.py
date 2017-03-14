@@ -3,4 +3,4 @@ from gevent import sleep as gsleep
 
 
 def custom_sleep(seconds):
-    return gsleep(seconds=1)
+    return gsleep(seconds=0)
