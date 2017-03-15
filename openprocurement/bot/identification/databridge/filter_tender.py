@@ -47,7 +47,7 @@ class FilterTenders(Greenlet):
         """Get tender_id from filtered_tender_ids_queue, check award/qualification status, documentType; get
         identifier's id and put into edrpou_codes_queue."""
         while True:
-            tender_id = self.filtered_tender_ids_queue.get()
+            tender_id = self.filtered_tender_ids_queue.peek()
             try:
                 tender = self.tenders_sync_client.get_tender(tender_id,
                                                              extra_headers={'X-Client-Request-ID': generate_req_id()})['data']
@@ -60,7 +60,6 @@ class FilterTenders(Greenlet):
                 logger.exception(e)
                 logger.info('Put tender {} back to tenders queue'.format(tender_id),
                             extra=journal_context(params={"TENDER_ID": tender_id}))
-                self.filtered_tender_ids_queue.put(tender_id)
                 gevent.sleep(0)
             else:
                 if 'awards' in tender:
@@ -108,6 +107,7 @@ class FilterTenders(Greenlet):
                                         'already document with documentType registerExtract.'.format(
                                             tender_id, qualification['id']),
                                             extra=journal_context(params={"TENDER_ID": tender['id']}))
+                self.filtered_tender_ids_queue.get()  # Remove elem from queue
 
     def check_processing_item(self, item_id, tender_id):
         """Check if current tender_id, item_id is processing"""

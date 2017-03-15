@@ -47,51 +47,51 @@ class TestFilterWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': {'status': "active.pre-qualification",
-                                'id': tender_id,
-                                'procurementMethodType': 'aboveThresholdEU',
-                                'bids': [{'id': first_bid_id,
-                                          'tenderers': [{'identifier': {
-                                              'scheme': 'UA-EDR',
-                                              'id': '14360570'}
-                                          }]},
-                                         {'id': second_bid_id,
-                                          'tenderers': [{'identifier': {
-                                              'scheme': 'UA-EDR',
-                                              'id': '0013823'}
-                                          }]},
-                                         {'id': third_bid_id,
-                                          'tenderers': [{'identifier': {
-                                              'scheme': 'UA-EDR',
-                                              'id': '23494714'}
-                                          }]},
-                                         {'id': forth_bid_id,
-                                          'tenderers': [{'identifier': {
-                                              'scheme': 'UA-EDR',
-                                              'id': '23494714'}
-                                          }]},
-                                         {'id': fifth_bid_id,
-                                          'tenderers': [{'identifier': {
-                                              'scheme': 'UA-ED',
-                                              'id': '23494714'}
-                                          }]},
-                                         ],
-                                'qualifications': [{'status': 'pending',
-                                                    'id': first_qualification_id,
-                                                    'bidID': first_bid_id},
-                                                   {'status': 'pending',
-                                                    'id': second_qualification_id,
-                                                    'bidID': second_bid_id},
-                                                   {'status': 'pending',
-                                                    'id': third_qualification_id,
-                                                    'bidID': third_bid_id},
-                                                   {'status': 'unsuccessful',
-                                                    'id': fourth_qualification_id,
-                                                    'bidID': forth_bid_id},
-                                                   {'status': 'pending',
-                                                    'id': fifth_qualification_id,
-                                                    'bidID': fifth_bid_id},
-                                                   ]
-                                }}),
+                               'id': tender_id,
+                               'procurementMethodType': 'aboveThresholdEU',
+                               'bids': [{'id': first_bid_id,
+                                         'tenderers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': '14360570'}
+                                         }]},
+                                        {'id': second_bid_id,
+                                         'tenderers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': '0013823'}
+                                         }]},
+                                        {'id': third_bid_id,
+                                         'tenderers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': '23494714'}
+                                         }]},
+                                        {'id': forth_bid_id,
+                                         'tenderers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': '23494714'}
+                                         }]},
+                                        {'id': fifth_bid_id,
+                                         'tenderers': [{'identifier': {
+                                             'scheme': 'UA-ED',
+                                             'id': '23494714'}
+                                         }]},
+                                        ],
+                               'qualifications': [{'status': 'pending',
+                                                   'id': first_qualification_id,
+                                                   'bidID': first_bid_id},
+                                                  {'status': 'pending',
+                                                   'id': second_qualification_id,
+                                                   'bidID': second_bid_id},
+                                                  {'status': 'pending',
+                                                   'id': third_qualification_id,
+                                                   'bidID': third_bid_id},
+                                                  {'status': 'unsuccessful',
+                                                   'id': fourth_qualification_id,
+                                                   'bidID': forth_bid_id},
+                                                  {'status': 'pending',
+                                                   'id': fifth_qualification_id,
+                                                   'bidID': fifth_bid_id},
+                                                  ]
+                               }}),
             ]
 
         first_data = Data(tender_id, first_qualification_id, '14360570', 'qualifications', None, None)
@@ -202,29 +202,30 @@ class TestFilterWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         processing_items = {}
         client = MagicMock()
-        client.get_tender.side_effect = [Unauthorized(),
-                                         Unauthorized(),
-                                         Unauthorized(),
-                                         munchify({'prev_page': {'offset': '123'},
-                                                   'next_page': {'offset': '1234'},
-                                                   'data': {'status': "active.pre-qualification",
-                                                            'id': tender_id,
-                                                            'procurementMethodType': 'aboveThresholdEU',
-                                                            'awards': [{'id': first_award_id,
-                                                                        'status': 'pending',
-                                                                        'suppliers': [{'identifier': {
-                                                                            'scheme': 'UA-EDR',
-                                                                            'id': '14360570'}
-                                                                        }]},
-                                                                       {'id': second_award_id,
-                                                                        'status': 'unsuccessful',
-                                                                        'suppliers': [{'identifier': {
-                                                                            'scheme': 'UA-EDR',
-                                                                            'id': '23494714'}
-                                                                        }]},
-                                                                       ]
-                                                            }}),
-                                         ]
+        client.get_tender.side_effect = [
+            Unauthorized(),
+            Unauthorized(),
+            Unauthorized(),
+            munchify({'prev_page': {'offset': '123'},
+                      'next_page': {'offset': '1234'},
+                      'data': {'status': "active.pre-qualification",
+                               'id': tender_id,
+                               'procurementMethodType': 'aboveThresholdEU',
+                               'awards': [{'id': first_award_id,
+                                           'status': 'pending',
+                                           'suppliers': [{'identifier': {
+                                               'scheme': 'UA-EDR',
+                                               'id': '14360570'}
+                                           }]},
+                                          {'id': second_award_id,
+                                           'status': 'unsuccessful',
+                                           'suppliers': [{'identifier': {
+                                               'scheme': 'UA-EDR',
+                                               'id': '23494714'}
+                                           }]},
+                                          ]
+                               }}),
+        ]
         data = Data(tender_id, first_award_id, '14360570', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
         sleep(2)
@@ -234,4 +235,60 @@ class TestFilterWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 1)
         self.assertEqual(edrpou_codes_queue.get(), data)
         self.assertItemsEqual(processing_items.keys(), [first_award_id])
+
+    @patch('gevent.sleep')
+    def test_worker_dead(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        filtered_tender_ids_queue = Queue(10)
+        filtered_tender_ids_queue.put(tender_id)
+        award_id = uuid.uuid4().hex
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        client = MagicMock()
+        client.get_tender.side_effect = [
+            munchify(
+                {'prev_page': {'offset': '123'},
+                 'next_page': {'offset': '1234'},
+                 'data': {
+                     'status': "active.pre-qualification",
+                     'id': tender_id,
+                     'procurementMethodType': 'aboveThresholdEU',
+                     'awards': [
+                         {'status': 'pending',  # award must have id
+                          'suppliers': [
+                              {'identifier': {'scheme': 'UA-EDR',
+                                              'id': '14360570'}
+                               }]
+                          }
+                      ]
+                  }}),
+            munchify(
+                {'prev_page': {'offset': '123'},
+                 'next_page': {'offset': '1234'},
+                 'data': {
+                     'status': "active.pre-qualification",
+                     'id': tender_id,
+                     'procurementMethodType': 'aboveThresholdEU',
+                     'awards': [
+                         {'id': award_id,
+                          'status': 'pending',  # award must have id
+                          'suppliers': [
+                              {'identifier': {'scheme': 'UA-EDR',
+                                              'id': '14360570'}
+                               }]
+                          }
+                     ]
+                 }}),
+         ]
+        data = Data(tender_id, award_id, '14360570', 'awards', None,None)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue,
+                                     edrpou_codes_queue, processing_items)
+        sleep(2)
+        worker.shutdown()
+        del worker
+
+        self.assertEqual(edrpou_codes_queue.qsize(), 1)
+        self.assertEqual(edrpou_codes_queue.get(), data)
+        self.assertItemsEqual(processing_items.keys(), [award_id])
 
