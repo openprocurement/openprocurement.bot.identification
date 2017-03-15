@@ -83,7 +83,7 @@ class FilterTenders(Greenlet):
                             logger.info('Tender {} award {} is not in status pending or award has already document '
                                         'with documentType registerExtract.'.format(tender_id, award['id']),
                                         extra=journal_context(params={"TENDER_ID": tender['id']}))
-                elif 'bids' in tender:
+                elif 'qualifications' in tender:
                     for qualification in tender['qualifications']:
                         if qualification['status'] == 'pending' and \
                                 not [document for document in qualification.get('documents', [])
