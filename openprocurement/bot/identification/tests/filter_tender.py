@@ -3,17 +3,13 @@ import uuid
 import unittest
 import datetime
 from gevent.queue import Queue
-from gevent import sleep as gsleep
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import Data
+from openprocurement.bot.identification.tests.utils import custom_sleep
 from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
 from restkit.errors import Unauthorized
-
-
-def custom_sleep(seconds):
-    return gsleep(seconds=0)
 
 
 class TestFilterWorker(unittest.TestCase):
@@ -175,6 +171,7 @@ class TestFilterWorker(unittest.TestCase):
 
     @patch('gevent.sleep')
     def test_get_tender_exception(self, gevent_sleep):
+        """ We must not lose tender after restart filter worker """
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
@@ -194,6 +191,7 @@ class TestFilterWorker(unittest.TestCase):
 
     @patch('gevent.sleep')
     def test_worker_restart(self, gevent_sleep):
+        """ Process tender after catch Unauthorized exception """
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
@@ -238,6 +236,7 @@ class TestFilterWorker(unittest.TestCase):
 
     @patch('gevent.sleep')
     def test_worker_dead(self, gevent_sleep):
+        """ Test that worker will process tender after exception  """
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
@@ -271,8 +270,8 @@ class TestFilterWorker(unittest.TestCase):
                      'id': tender_id,
                      'procurementMethodType': 'aboveThresholdEU',
                      'awards': [
-                         {'id': award_id,
-                          'status': 'pending',  # award must have id
+                         {'id': award_id,  # award must have id
+                          'status': 'pending',
                           'suppliers': [
                               {'identifier': {'scheme': 'UA-EDR',
                                               'id': '14360570'}
@@ -291,4 +290,3 @@ class TestFilterWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 1)
         self.assertEqual(edrpou_codes_queue.get(), data)
         self.assertItemsEqual(processing_items.keys(), [award_id])
-

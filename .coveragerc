@@ -3,6 +3,7 @@ omit =
     *tests*
     *journal_msg_ids.py
     *docs.py
+    *openprocurement/bot/identification/__init__.py
 
 [report]
 exclude_lines =
