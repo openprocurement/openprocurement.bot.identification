@@ -46,7 +46,7 @@ class FilterTenders(Greenlet):
     def prepare_data(self):
         """Get tender_id from filtered_tender_ids_queue, check award/qualification status, documentType; get
         identifier's id and put into edrpou_codes_queue."""
-        while True:
+        while not self.exit:
             tender_id = self.filtered_tender_ids_queue.peek()
             try:
                 tender = self.tenders_sync_client.get_tender(tender_id,
