@@ -21,3 +21,14 @@ def journal_context(record={}, params={}):
 
 def generate_req_id():
     return b'edr-api-data-bridge-req-' + str(uuid4()).encode('ascii')
+
+
+def create_file(details):
+    """ Return temp file with details """
+    temporary_file = io.BytesIO()
+    temporary_file.name = 'edr_request.json'
+    temporary_file.write(json.dumps(details, indent=4, separators=(',', ': '), ensure_ascii=False).encode('utf-8'))
+    temporary_file.seek(0)
+
+    return temporary_file
+
