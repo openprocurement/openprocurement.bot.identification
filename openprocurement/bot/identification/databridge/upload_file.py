@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+monkey.patch_all()
 from munch import munchify
 from gevent.queue import Queue
 from retrying import retry
-monkey.patch_all()
 
 try:
     import urllib3.contrib.pyopenssl
