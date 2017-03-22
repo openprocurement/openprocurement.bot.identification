@@ -2,6 +2,7 @@
 from uuid import uuid4
 from collections import namedtuple
 
+id_passport_len = 9
 
 Data = namedtuple('Data', [
     'tender_id',  # tender ID
@@ -21,3 +22,11 @@ def journal_context(record={}, params={}):
 
 def generate_req_id():
     return b'edr-api-data-bridge-req-' + str(uuid4()).encode('ascii')
+
+
+def validate_param(code):
+    return 'code' if code.isdigit() and len(code) != id_passport_len else 'passport'
+
+
+class RetryException(Exception):
+    pass

@@ -226,7 +226,7 @@ class TestFilterWorker(unittest.TestCase):
         ]
         data = Data(tender_id, first_award_id, '14360570', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
-        sleep(2)
+        sleep(10)
         worker.shutdown()
         del worker
 
