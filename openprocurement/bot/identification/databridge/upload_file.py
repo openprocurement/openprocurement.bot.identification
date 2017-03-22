@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from gevent import monkey
-monkey.patch_all()
 from munch import munchify
 from gevent.queue import Queue
 from retrying import retry
@@ -58,7 +56,7 @@ class UploadFile(Greenlet):
         while not self.exit:
             tender_data = self.upload_to_doc_service_queue.get()
             try:
-                response = self.doc_service_client.upload(create_file(tender_data.file_content))
+                response = self.doc_service_client.upload('edr_request.json', create_file(tender_data.file_content), 'application/json')
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
                                'Lost tender_data'.format(tender_data.tender_id, tender_data.item_name,
@@ -98,7 +96,7 @@ class UploadFile(Greenlet):
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
                                'Lost tender_data'.format(tender_data.tender_id, tender_data.item_name,
                                                          tender_data.item_id, e.message),
-                               extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE},
+                               extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
                                                       params={"TENDER_ID": tender_data.tender_id,
                                                               "ITEM_ID": tender_data.item_id}))
                 logger.exception(e)
@@ -115,7 +113,7 @@ class UploadFile(Greenlet):
                 else:
                     logger.info('Not successful response in retry from document service while uploading {} {} {}. Response {}'.
                                 format(tender_data.tender_id, tender_data.item_name, tender_data.item_id,response.status_code),
-                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
+                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE},
                                                       params={"TENDER_ID": tender_data.tender_id,
                                                               "ITEM_ID": tender_data.item_id}))
                     self.retry_upload_to_doc_service_queue.put(tender_data)
@@ -124,7 +122,7 @@ class UploadFile(Greenlet):
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
-        return self.doc_service_client.upload(create_file(tender_data.file_content))
+        return self.doc_service_client.upload('edr_request.json', create_file(tender_data.file_content), 'application/json')
 
     def upload_to_tender(self):
         """Get data from upload_to_tender_queue; Upload get_Url and documentType;
@@ -186,6 +184,7 @@ class UploadFile(Greenlet):
                                                  {'data': document_data},
                                                  '{}/{}/documents'.format(tender_data.item_name,
                                                                           tender_data.item_id))
+
     def _run(self):
         logger.info('Start UploadFile worker', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_UPLOAD}, {}))
         self.immortal_jobs = {'upload_to_doc_service': spawn(self.upload_to_doc_service),

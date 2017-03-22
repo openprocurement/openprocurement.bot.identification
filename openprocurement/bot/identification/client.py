@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import requests
-import base64
+
 
 class ProxyClient(object):
     """Base class for making requests to Proxy server"""
@@ -31,15 +31,15 @@ class ProxyClient(object):
 class DocServiceClient(object):
     """Base class for making requests to Document Service"""
 
-    def __init__(self, host, token, port=6555, timeout=None):
+    def __init__(self, host, user, password, port=6555, timeout=None):
         self.session = requests.Session()
-        self.token = base64.b64encode(token)
         self.url = '{host}:{port}/upload'.format(host=host, port=port)
-        self.headers = {"Authorization": "Basic {token}".format(token=self.token)}
+        self.user = user
+        self.password = password
         self.timeout = timeout
 
-    def upload(self, files):
-        files = {'file': files}
-        response = self.session.post(url=self.url, headers=self.headers, timeout=self.timeout, files=files)
+    def upload(self, filename, in_file, content_type):
+        files = {'file': (filename, in_file, content_type)}
+        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files)
 
         return response

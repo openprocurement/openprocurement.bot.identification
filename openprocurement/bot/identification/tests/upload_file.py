@@ -37,12 +37,12 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_successful_upload(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', token='')
+        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'text/plain',
+                                    'format': 'application/json',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'file.txt'}},
+                                    'title': 'edr_request.json'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
@@ -72,14 +72,14 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_retry_doc_service(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', token='')
+        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       [{'text': '', 'status_code': 401},
                        {'text': '', 'status_code': 401},
                       {'json': {'data': {'url': 'test url',
-                                         'format': 'text/plain',
+                                         'format': 'application/json',
                                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                         'title': 'file.txt'}},
+                                         'title': 'edr_request.json'}},
                        'status_code': 200}])
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
@@ -108,12 +108,12 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_retry_upload_to_tender(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', token='')
+        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'text/plain',
+                                    'format': 'application/json',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'file.txt'}},
+                                    'title': 'edr_request.json'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [Unauthorized(),
