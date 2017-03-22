@@ -107,6 +107,14 @@ class EdrHandler(Greenlet):
             try:
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code)
             except RetryException as re:
+                if re.args[1].status_code == 403 and re.args[1].json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
+                    logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
+                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
+                                                      params={"TENDER_ID": tender_data.tender_id}))
+                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                tender_data.item_name, [], self.error_details)
+                    self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
+                    continue
                 logger.info("RetryException error message {}".format(re.args[0]))
                 self.handle_status_response(re.args[1], tender_data.tender_id)
                 self.retry_edrpou_codes_queue.put(tender_data)
@@ -121,14 +129,6 @@ class EdrHandler(Greenlet):
                     extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
                 gevent.sleep(0)
             else:
-                if response.status_code == 403 and response.json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
-                    logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
-                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
-                                                      params={"TENDER_ID": tender_data.tender_id}))
-                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, [], self.error_details)
-                    self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
-                    continue
                 # Create new Data object. Write to Data.code list of edr ids from EDR.
                 # List because EDR can return 0, 1 or 2 values to our request
                 if response.status_code == 200:
