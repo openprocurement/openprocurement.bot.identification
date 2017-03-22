@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import json
+import io
+
 from uuid import uuid4
 from collections import namedtuple
 
