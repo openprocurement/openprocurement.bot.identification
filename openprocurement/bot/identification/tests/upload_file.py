@@ -40,9 +40,9 @@ class TestUploadFileWorker(unittest.TestCase):
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/json',
+                                    'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.json'}},
+                                    'title': 'edr_request.yaml'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
@@ -77,9 +77,9 @@ class TestUploadFileWorker(unittest.TestCase):
                       [{'text': '', 'status_code': 401},
                        {'text': '', 'status_code': 401},
                       {'json': {'data': {'url': 'test url',
-                                         'format': 'application/json',
+                                         'format': 'application/yaml',
                                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                         'title': 'edr_request.json'}},
+                                         'title': 'edr_request.yaml'}},
                        'status_code': 200}])
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
@@ -111,9 +111,9 @@ class TestUploadFileWorker(unittest.TestCase):
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/json',
+                                    'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.json'}},
+                                    'title': 'edr_request.yaml'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [Unauthorized(),
@@ -141,22 +141,3 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(processing_items, {})  # test that item removed from processing_items
         self.assertEqual(client._create_tender_resource_item.call_count, 4)  # check upload to tender
 
-    @patch('gevent.sleep')
-    def test_exception_upload_doc_service(self, gevent_sleep):
-        gevent_sleep.side_effect = custom_sleep
-        tender_id = uuid.uuid4().hex
-        award_id = uuid.uuid4().hex
-        processing_items = {award_id: tender_id}
-        upload_to_doc_service_queue = Queue(10)
-        upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test string'}))
-        self.assertItemsEqual(processing_items.keys(), [award_id])
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
-        worker = UploadFile.spawn(MagicMock(), upload_to_doc_service_queue, upload_to_tender_queue, processing_items, MagicMock())
-        sleep(4)
-        worker.shutdown()
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(worker.retry_upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(worker.retry_upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertItemsEqual(processing_items.keys(), [award_id])  # test that item removed from processing_items
