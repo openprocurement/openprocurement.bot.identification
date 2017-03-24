@@ -8,10 +8,10 @@ from time import sleep
 from mock import patch, MagicMock
 from restkit.errors import Unauthorized
 
-from openprocurement.integrations.edr.client import DocServiceClient
-from openprocurement.integrations.edr.databridge.upload_file import UploadFile
-from openprocurement.integrations.edr.databridge.utils import Data
-from openprocurement.integrations.edr.databridge.tests.utils import custom_sleep
+from openprocurement.bot.identification.client import DocServiceClient
+from openprocurement.bot.identification.databridge.upload_file import UploadFile
+from openprocurement.bot.identification.databridge.utils import Data
+from openprocurement.bot.identification.databridge.tests.utils import custom_sleep
 
 
 class TestUploadFileWorker(unittest.TestCase):
