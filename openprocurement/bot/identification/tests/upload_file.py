@@ -8,10 +8,10 @@ from time import sleep
 from mock import patch, MagicMock
 from restkit.errors import Unauthorized
 
-from openprocurement.bot.identification.client import DocServiceClient
-from openprocurement.bot.identification.databridge.upload_file import UploadFile
-from openprocurement.bot.identification.databridge.utils import Data
-from openprocurement.bot.identification.tests.utils import custom_sleep
+from openprocurement.integrations.edr.client import DocServiceClient
+from openprocurement.integrations.edr.databridge.upload_file import UploadFile
+from openprocurement.integrations.edr.databridge.utils import Data
+from openprocurement.integrations.edr.databridge.tests.utils import custom_sleep
 
 
 class TestUploadFileWorker(unittest.TestCase):
@@ -76,6 +76,10 @@ class TestUploadFileWorker(unittest.TestCase):
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       [{'text': '', 'status_code': 401},
                        {'text': '', 'status_code': 401},
+                       {'text': '', 'status_code': 401},
+                       {'text': '', 'status_code': 401},
+                       {'text': '', 'status_code': 401},
+                       {'text': '', 'status_code': 401},
                       {'json': {'data': {'url': 'test url',
                                          'format': 'application/yaml',
                                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -95,11 +99,11 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertItemsEqual(processing_items.keys(), [award_id])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(4)
+        sleep(7)
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(mrequest.call_count, 3)
+        self.assertEqual(mrequest.call_count, 7)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertItemsEqual(processing_items.keys(), [])  # test that item removed from processing_items
         self.assertEqual(client._create_tender_resource_item.call_count, 1)  # check upload to tender
@@ -119,6 +123,9 @@ class TestUploadFileWorker(unittest.TestCase):
         client._create_tender_resource_item.side_effect = [Unauthorized(),
                                                            Unauthorized(),
                                                            Unauthorized(),
+                                                           Unauthorized(),
+                                                           Unauthorized(),
+                                                           Unauthorized(),
                                                            {'data': {'id': uuid.uuid4().hex,
                                                                      'documentOf': 'tender',
                                                                      'documentType': 'registerExtract',
@@ -132,12 +139,12 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertItemsEqual(processing_items.keys(), [award_id])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(15)
+        sleep(60)
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertEqual(processing_items, {})  # test that item removed from processing_items
-        self.assertEqual(client._create_tender_resource_item.call_count, 4)  # check upload to tender
+        self.assertEqual(client._create_tender_resource_item.call_count, 7)  # check upload to tender
 
