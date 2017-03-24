@@ -11,7 +11,7 @@ from restkit.errors import Unauthorized
 from openprocurement.bot.identification.client import DocServiceClient
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
 from openprocurement.bot.identification.databridge.utils import Data
-from openprocurement.bot.identification.databridge.tests.utils import custom_sleep
+from openprocurement.bot.identification.tests.utils import custom_sleep
 
 
 class TestUploadFileWorker(unittest.TestCase):
