@@ -56,7 +56,7 @@ class UploadFile(Greenlet):
         while not self.exit:
             tender_data = self.upload_to_doc_service_queue.get()
             try:
-                response = self.doc_service_client.upload('edr_request.json', create_file(tender_data.file_content), 'application/json')
+                response = self.doc_service_client.upload('edr_request.yaml', create_file(tender_data.file_content), 'application/yaml')
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
                                'Lost tender_data'.format(tender_data.tender_id, tender_data.item_name,
@@ -122,7 +122,7 @@ class UploadFile(Greenlet):
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
-        return self.doc_service_client.upload('edr_request.json', create_file(tender_data.file_content), 'application/json')
+        return self.doc_service_client.upload('edr_request.yaml', create_file(tender_data.file_content), 'application/yaml')
 
     def upload_to_tender(self):
         """Get data from upload_to_tender_queue; Upload get_Url and documentType;
