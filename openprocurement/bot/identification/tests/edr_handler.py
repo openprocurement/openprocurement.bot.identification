@@ -7,6 +7,7 @@ import unittest
 import datetime
 import requests_mock
 import requests
+import random
 
 from time import sleep
 from gevent.queue import Queue
@@ -16,6 +17,10 @@ from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.utils import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep
 from openprocurement.bot.identification.client import ProxyClient
+
+
+def get_random_edr_ids(count=1):
+    return [str(random.randrange(10000000, 99999999)) for _ in range(count)]
 
 
 class TestEdrHandlerWorker(unittest.TestCase):
@@ -42,83 +47,107 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """ Test that proxy return json with id """
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'data': [{'id': '321'}]}, 'status_code': 200},
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200}])
+                     [{'json': {'data': [{'id': local_edr_ids[0]}]}, 'status_code': 200},
+                      {'json': {'data': [{'id': local_edr_ids[1]}]}, 'status_code': 200}])
 
         edrpou_codes_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '135', "awards", None, None))
+        check_queue = Queue(10)
 
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, MagicMock(), MagicMock())
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], None))  # result
 
-        sleep(10)
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
+
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[1].code))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 2)
-        self.assertEqual(mrequest.request_history[0].url,
-                         u'127.0.0.1:80/verify?code=123')
-        self.assertEqual(mrequest.request_history[1].url,
-                         u'127.0.0.1:80/verify?code=135')
+        self.assertEqual(mrequest.call_count, 4)
+
+
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_proxy_client_401(self, mrequest, gevent_sleep):
         """ After 401 need restart worker """
+        local_edr_ids = get_random_edr_ids(2)
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 401},
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200},
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200}])
+                      {'json': {'data': [{'id': local_edr_ids[0]}]}, 'status_code': 200},
+                      {'json': {'data': [{'id': local_edr_ids[1]}]}, 'status_code': 200}])
 
         edrpou_codes_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '135', "awards", None, None))
+        check_queue = Queue(10)
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], None))  # result
 
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue,
-                                  MagicMock(), MagicMock())
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
 
-        sleep(3)
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 3)  # Requests must call proxy three times
-        self.assertEqual(mrequest.request_history[0].url,
-                         u'127.0.0.1:80/verify?code=123')  # First return 401
-        self.assertEqual(mrequest.request_history[1].url,
-                         u'127.0.0.1:80/verify?code=123')  # From retry
-        self.assertEqual(mrequest.request_history[2].url,
-                         u'127.0.0.1:80/verify?code=135')  # Resume normal work
+        self.assertEqual(mrequest.call_count, 3)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # First return 401
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # Resume normal work
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[1].code))  # From retry
+
 
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_proxy_client_429(self, mrequest, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
+        local_edr_ids = get_random_edr_ids(2)
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 429, 'headers': {'Retry-After': '10'}},
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200},
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200}])
+                      {'json': {'data': [{'id': local_edr_ids[0]}]},'status_code': 200},
+                      {'json': {'data': [{'id': local_edr_ids[1]}]}, 'status_code': 200}])
+
 
         edrpou_codes_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '135', "awards", None, None))
+        check_queue = Queue(10)
 
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, MagicMock(), MagicMock())
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], None))  # result
 
-        sleep(5)
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
+
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 3)  # Requests must call proxy three times
-        self.assertEqual(mrequest.request_history[0].url,
-                         u'127.0.0.1:80/verify?code=123')  # First return 429
-        self.assertEqual(mrequest.request_history[1].url,
-                         u'127.0.0.1:80/verify?code=123')
-        self.assertEqual(mrequest.request_history[2].url,
-                         u'127.0.0.1:80/verify?code=135')
+        self.assertEqual(mrequest.call_count, 4)  # Requests must call proxy three times
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # First return 429
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[1].code))
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -126,31 +155,42 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """First request returns 402 status code."""
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 402},  # pay for me
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200},
-                      {'json': {'data': [{'id': '321'}]}, 'status_code': 200}])
+                      {'json': {'data': [{'id': local_edr_ids[0]}]}, 'status_code': 200},
+                      {'json': {'data': [{'id': local_edr_ids[1]}]}, 'status_code': 200}])
 
         edrpou_codes_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '135', "awards", None, None))
+        check_queue = Queue(10)
+
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], None))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue,
-                                  MagicMock(), MagicMock())
+                                  check_queue, MagicMock())
 
-        sleep(5)
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 3)  # Requests must call proxy three times
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')  # return 402
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code=123')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code=135')
+        self.assertEqual(mrequest.call_count, 3)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[1].code))
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_id(self, mrequest, gevent_sleep):
         """First and second response returns 402 status code. Tests retry for get_edr_id worker"""
         gevent_sleep.side_effect = custom_sleep
+        local_edr_ids = get_random_edr_ids(1)
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 402},
@@ -158,18 +198,26 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'json': {'data': [{'id': '321'}]}, 'status_code': 200}])
 
         edrpou_codes_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        check_queue = Queue(10)
+
+        expected_result = []
+        for i in range(1):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], None))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue,
-                                  MagicMock(), MagicMock())
+                                  check_queue, MagicMock())
 
-        sleep(5)
+        self.assertEqual(check_queue.get(), expected_result[0])
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 3)  # Requests must call proxy three times
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')  # return 402
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code=123')  # return 402
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code=123')
+        self.assertEqual(mrequest.call_count, 4)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -177,21 +225,26 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept response with 403 status code and error message 'EDRPOU not found'. Check that tender_data
         is in upload_to_doc_service_queue."""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, status_code=403)
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edr_ids_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
 
-        sleep(2)
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[], file_content={'error': "Couldn't find this code in EDR."}))
+
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)  # check that data in upload_to_doc_service_queue
         self.assertEqual(mrequest.call_count, 1)  # Requests must call proxy once
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
 
@@ -201,6 +254,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 5 times response with status code 403 and error, then accept response with status code 403 and
         message 'EDRPOU not found'"""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -213,14 +268,17 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue)
-        sleep(45)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[], file_content={'error': "Couldn't find this code in EDR."}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)  # check that data in upload_to_doc_service_queue
-        self.assertEqual(mrequest.call_count, 6)  # Requests must call proxy 6 times
+        self.assertEqual(mrequest.call_count, 6)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[5].url, u'127.0.0.1:80/verify?code=123')
 
@@ -229,21 +287,33 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_get_edr_details_two_ids(self, mrequest, gevent_sleep):
         """Accept two ids in first request to /verify endpoint. Then make requests to /details endpoint for each id."""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'data': [{'id': '321'}, {'id': '322'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322), json={'data': {}}, status_code=200)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322), json={'data': {'some': 'data'}}, status_code=200)
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(3)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id,
+                              item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321', u'322'], file_content={}))
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id,
+                              item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321', u'322'], file_content={'some': 'data'}))
+
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 2)  # check that there are two objects in queue
         self.assertEqual(mrequest.call_count, 3)  # 1 request to /verify and two requests to /details
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
@@ -255,6 +325,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept two ids in /verify request. Then accept 200 response for first id, and 402 and 200
         responses for second id. Check retry_get_edr_details job"""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'data': [{'id': '321'}, {'id': '322'}]}, status_code=200)
@@ -265,13 +337,22 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(3)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321', u'322'], file_content={}))
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id,
+                              item_id=award_id,
+                              code='123', item_name='awards', edr_ids=[u'322'],
+                              file_content={}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 2)  # check that there are two data objects in queue
         self.assertEqual(mrequest.call_count, 4)  # processed 4 requests
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
@@ -283,6 +364,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_job_get_edr_id_dead(self, mrequest, gevent_sleep):
         """Accept dict instead of list in first response to /verify endpoint. Check that worker get up"""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'data': {'id': '321'}}, 'status_code': 200},  # data contains dict, instead of list
@@ -291,13 +374,17 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(3)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321'], file_content={}))
+
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         self.assertEqual(mrequest.call_count, 3)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code=123')
@@ -308,6 +395,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_job_get_edr_details_dead(self, mrequest, gevent_sleep):
         """Accept list instead of dict in response to /details/{id} endpoint. Check that worker get up"""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'id': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
@@ -316,13 +405,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(3)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321'], file_content={}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         self.assertEqual(mrequest.call_count, 3)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
@@ -333,6 +425,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_retry_get_edr_details(self, mrequest, gevent_sleep):
         """Accept 6 times errors (403 and 402 status codes) in response while requesting /details"""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'id': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
@@ -346,13 +440,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(45)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321'], file_content={}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         self.assertEqual(mrequest.call_count, 8)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
@@ -363,6 +460,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_retry_get_edr_id(self, mrequest, gevent_sleep):
         """Accept 6 times errors (403 and 402 status codes) in response while requesting /verify"""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -376,13 +475,15 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(45)
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321'], file_content={}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         self.assertEqual(mrequest.call_count, 8)  # processing 8 requests
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')  # check first url
         self.assertEqual(mrequest.request_history[6].url, u'127.0.0.1:80/verify?code=123')  # check 7th url
@@ -394,6 +495,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Raise ReadTimeout while requesting /verify, then accept 200 status code. Raise ReadTimeout while requesting
         /details/{id}, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'exc': requests.exceptions.ReadTimeout}, {'json': {'data': [{'id': 321}]}, 'status_code': 200}])
@@ -402,13 +505,15 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(uuid.uuid4().hex, 'award_id', '123', "awards", None, None))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
-        sleep(5)
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[321], file_content={u'id': 321}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
-        self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         self.assertEqual(mrequest.call_count, 4)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code=123')
