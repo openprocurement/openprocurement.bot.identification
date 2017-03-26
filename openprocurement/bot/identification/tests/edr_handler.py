@@ -75,8 +75,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
         self.assertEqual(mrequest.call_count, 4)
 
-
-
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_proxy_client_401(self, mrequest, gevent_sleep):
@@ -138,10 +136,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 4)  # Requests must call proxy three times
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # First return 429
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[1].code))
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -204,10 +198,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(check_queue.get(), expected_result[0])
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))  # return 402
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
