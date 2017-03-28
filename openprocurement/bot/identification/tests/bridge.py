@@ -2,7 +2,7 @@
 
 import unittest
 import os
-from mock import patch
+from mock import patch, MagicMock
 
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, request, response
@@ -127,3 +127,25 @@ class TestBridgeWorker(BaseServersTest):
                          {'host': config['main']['proxy_server'],
                           'port': config['main']['proxy_port'],
                           'token': config['main']['proxy_token']})
+
+    def test_start_jobs(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        self.worker = EdrDataBridge(config)
+
+        scanner, filter_tender, edr_handler, upload_file = [MagicMock(return_value=i) for i in range(4)]
+        self.worker.scanner = scanner
+        self.worker.filter_tender = filter_tender
+        self.worker.edr_handler = edr_handler
+        self.worker.upload_file = upload_file
+
+        self.worker._start_jobs()
+        # check that all jobs were started
+        self.assertTrue(scanner.called)
+        self.assertTrue(scanner.called)
+        self.assertTrue(scanner.called)
+        self.assertTrue(scanner.called)
+
+        self.assertEqual(self.worker.jobs['scanner'], 0)
+        self.assertEqual(self.worker.jobs['filter_tender'], 1)
+        self.assertEqual(self.worker.jobs['edr_handler'], 2)
+        self.assertEqual(self.worker.jobs['upload_file'], 3)
