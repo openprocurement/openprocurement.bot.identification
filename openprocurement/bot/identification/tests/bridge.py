@@ -2,6 +2,7 @@
 
 import unittest
 import os
+from mock import patch
 
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, request, response
@@ -96,3 +97,19 @@ class TestBridgeWorker(BaseServersTest):
 
         # check processing items
         self.assertEqual(self.worker.processing_items, {})
+
+    @patch('openprocurement.bot.identification.databridge.bridge.TendersClientSync')
+    @patch('openprocurement.bot.identification.databridge.bridge.TendersClient')
+    def test_tender_sync_clients(self, sync_client, client):
+        self.worker = EdrDataBridge(config)
+        # Check client config
+        self.assertEqual(client.call_args[0], ('',))
+        self.assertEqual(client.call_args[1], {'host_url': config['main']['public_tenders_api_server'],
+                                               'api_version': config['main']['tenders_api_version']})
+
+        # Check sync client config
+        self.assertEqual(sync_client.call_args[0], (config['main']['api_token'],))
+        self.assertEqual(sync_client.call_args[1], {
+            'host_url': config['main']['tenders_api_server'],
+            'api_version': config['main']['tenders_api_version']})
+
