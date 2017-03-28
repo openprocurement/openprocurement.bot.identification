@@ -34,6 +34,19 @@ config = {
 }
 
 
+class AlmostAlwaysTrue(object):
+
+    def __init__(self, total_iterations=1):
+        self.total_iterations = total_iterations
+        self.current_iteration = 0
+
+    def __nonzero__(self):
+        if self.current_iteration < self.total_iterations:
+            self.current_iteration += 1
+            return bool(1)
+        return bool(0)
+
+
 class BaseServersTest(unittest.TestCase):
     """Api server to test openprocurement.integrations.edr.databridge.bridge """
 
@@ -149,3 +162,22 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.jobs['filter_tender'], 1)
         self.assertEqual(self.worker.jobs['edr_handler'], 2)
         self.assertEqual(self.worker.jobs['upload_file'], 3)
+
+    @patch('gevent.sleep')
+    def test_run(self, sleep):
+        setup_routing(self.api_server_bottle, response_spore)
+        self.worker = EdrDataBridge(config)
+        # create mocks
+        scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
+        self.worker.scanner = scanner
+        self.worker.filter_tender = filter_tender
+        self.worker.edr_handler = edr_handler
+        self.worker.upload_file = upload_file
+
+        with patch('__builtin__.True', AlmostAlwaysTrue(100)):
+            self.worker.run()
+        self.assertEqual(scanner.call_count, 1)
+        self.assertEqual(filter_tender.call_count, 1)
+        self.assertEqual(edr_handler.call_count, 1)
+        self.assertEqual(upload_file.call_count, 1)
+
