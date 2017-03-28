@@ -20,7 +20,8 @@ config = {
             'public_tenders_api_server': 'http://127.0.0.1:20605',
             'doc_service_server': 'http://127.0.0.1',
             'doc_service_port': 20606,
-            'doc_service_token': 'broker:broker',
+            'doc_service_user': 'broker',
+            'doc_service_password': 'broker_pass',
             'proxy_server': 'http://127.0.0.1',
             'proxy_port': 20607,
             'proxy_token': 'cm9ib3Q6cm9ib3Q=',
@@ -98,18 +99,31 @@ class TestBridgeWorker(BaseServersTest):
         # check processing items
         self.assertEqual(self.worker.processing_items, {})
 
+    @patch('openprocurement.bot.identification.databridge.bridge.ProxyClient')
+    @patch('openprocurement.bot.identification.databridge.bridge.DocServiceClient')
     @patch('openprocurement.bot.identification.databridge.bridge.TendersClientSync')
     @patch('openprocurement.bot.identification.databridge.bridge.TendersClient')
-    def test_tender_sync_clients(self, sync_client, client):
+    def test_tender_sync_clients(self, sync_client, client, doc_service_client, proxy_client):
         self.worker = EdrDataBridge(config)
-        # Check client config
+        # check client config
         self.assertEqual(client.call_args[0], ('',))
         self.assertEqual(client.call_args[1], {'host_url': config['main']['public_tenders_api_server'],
                                                'api_version': config['main']['tenders_api_version']})
 
-        # Check sync client config
+        # check sync client config
         self.assertEqual(sync_client.call_args[0], (config['main']['api_token'],))
-        self.assertEqual(sync_client.call_args[1], {
-            'host_url': config['main']['tenders_api_server'],
-            'api_version': config['main']['tenders_api_version']})
+        self.assertEqual(sync_client.call_args[1],
+                         {'host_url': config['main']['tenders_api_server'],
+                          'api_version': config['main']['tenders_api_version']})
 
+        # check doc_service_client config
+        self.assertEqual(doc_service_client.call_args[1],
+                         {'host': config['main']['doc_service_server'],
+                          'port': config['main']['doc_service_port'],
+                          'user': config['main']['doc_service_user'],
+                          'password': config['main']['doc_service_password']})
+        # check proxy_client config
+        self.assertEqual(proxy_client.call_args[1],
+                         {'host': config['main']['proxy_server'],
+                          'port': config['main']['proxy_port'],
+                          'token': config['main']['proxy_token']})
