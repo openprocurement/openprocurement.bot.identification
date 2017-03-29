@@ -36,8 +36,8 @@ class TestFilterWorker(unittest.TestCase):
         processing_items = {}
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue.put(tender_id)
-        first_bid_id, second_bid_id, third_bid_id, forth_bid_id, fifth_bid_id = (uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex)
-        first_qualification_id, second_qualification_id, third_qualification_id, fourth_qualification_id, fifth_qualification_id = (uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex)
+        first_bid_id, second_bid_id, third_bid_id, forth_bid_id, fifth_bid_id = [uuid.uuid4().hex for i in range(5)]
+        first_qualification_id, second_qualification_id, third_qualification_id, fourth_qualification_id, fifth_qualification_id = [uuid.uuid4().hex for i in range(5)]
         client = MagicMock()
         client.get_tender.side_effect = [
             munchify({'prev_page': {'offset': '123'},
@@ -88,20 +88,19 @@ class TestFilterWorker(unittest.TestCase):
                                                    'bidID': fifth_bid_id},
                                                   ]
                                }}),
-            ]
+        ]
 
         first_data = Data(tender_id, first_qualification_id, '14360570', 'qualifications', None, None)
         second_data = Data(tender_id, second_qualification_id, '0013823', 'qualifications', None, None)
         third_data = Data(tender_id, third_qualification_id, '23494714', 'qualifications', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
-        sleep(4)
+
+        for data in [first_data, second_data, third_data]:
+            self.assertEqual(edrpou_codes_queue.get(), data)
+
         worker.shutdown()
         del worker
 
-        self.assertEqual(edrpou_codes_queue.qsize(), 3)
-        self.assertEqual(edrpou_codes_queue.get(), first_data)
-        self.assertEqual(edrpou_codes_queue.get(), second_data)
-        self.assertEqual(edrpou_codes_queue.get(), third_data)
         self.assertItemsEqual(processing_items.keys(), [first_qualification_id, second_qualification_id, third_qualification_id])
 
     @patch('gevent.sleep')
@@ -112,8 +111,7 @@ class TestFilterWorker(unittest.TestCase):
         processing_items = {}
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue.put(tender_id)
-        first_award_id, second_award_id, third_award_id, fourth_award_id, fifth_award_id = \
-            (uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex)
+        first_award_id, second_award_id, third_award_id, fourth_award_id, fifth_award_id = [uuid.uuid4().hex for i in range(5)]
         client = MagicMock()
         client.get_tender.side_effect = [
             munchify({'prev_page': {'offset': '123'},
@@ -123,7 +121,7 @@ class TestFilterWorker(unittest.TestCase):
                                'procurementMethodType': 'aboveThresholdEU',
                                'awards': [{'id': first_award_id,
                                            'status': 'pending',
-                                         'suppliers': [{'identifier': {
+                                           'suppliers': [{'identifier': {
                                              'scheme': 'UA-EDR',
                                              'id': '14360570'}
                                          }]},
@@ -159,14 +157,13 @@ class TestFilterWorker(unittest.TestCase):
         second_data = Data(tender_id, second_award_id, '0013823', 'awards', None, None)
         third_data = Data(tender_id, third_award_id, '23494714', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
-        sleep(4)
+
+        for edrpou in [first_data, second_data, third_data]:
+            self.assertEqual(edrpou_codes_queue.get(), edrpou)
+
         worker.shutdown()
         del worker
 
-        self.assertEqual(edrpou_codes_queue.qsize(), 3)
-        self.assertEqual(edrpou_codes_queue.get(), first_data)
-        self.assertEqual(edrpou_codes_queue.get(), second_data)
-        self.assertEqual(edrpou_codes_queue.get(), third_data)
         self.assertItemsEqual(processing_items.keys(), [first_award_id, second_award_id, third_award_id])
 
     @patch('gevent.sleep')
@@ -226,12 +223,12 @@ class TestFilterWorker(unittest.TestCase):
         ]
         data = Data(tender_id, first_award_id, '14360570', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
-        sleep(10)
+
+        self.assertEqual(edrpou_codes_queue.get(), data)
+
         worker.shutdown()
         del worker
 
-        self.assertEqual(edrpou_codes_queue.qsize(), 1)
-        self.assertEqual(edrpou_codes_queue.get(), data)
         self.assertItemsEqual(processing_items.keys(), [first_award_id])
 
     @patch('gevent.sleep')
@@ -283,10 +280,10 @@ class TestFilterWorker(unittest.TestCase):
         data = Data(tender_id, award_id, '14360570', 'awards', None,None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue,
                                      edrpou_codes_queue, processing_items)
-        sleep(2)
+
+        self.assertEqual(edrpou_codes_queue.get(), data)
+
         worker.shutdown()
         del worker
 
-        self.assertEqual(edrpou_codes_queue.qsize(), 1)
-        self.assertEqual(edrpou_codes_queue.get(), data)
         self.assertItemsEqual(processing_items.keys(), [award_id])

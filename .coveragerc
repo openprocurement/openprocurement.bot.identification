@@ -10,3 +10,7 @@ exclude_lines =
     def __repr__
     raise NotImplementedError
     if __name__ == .__main__.:
+    def main()
+    if 'test' not in __import__('sys').argv[0]:
+        import gevent.monkey
+        gevent.monkey.patch_all()
