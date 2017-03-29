@@ -39,13 +39,14 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex, uuid.uuid4().hex]
         client.sync_tenders.side_effect = [
             RequestFailed(),
             # worker must restart
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdUA'}]}),
             Unauthorized(),
             munchify({'prev_page': {'offset': '123'},
@@ -56,18 +57,18 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]})
         ]
 
         worker = Scanner.spawn(client, tender_queue)
-        sleep(10)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
 
         # Kill worker
         worker.shutdown()
         del worker
-
-        self.assertEqual(tender_queue.qsize(), 2)
 
     @patch('gevent.sleep')
     def test_425(self, gevent_sleep):
@@ -75,11 +76,12 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex for i in range(3)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1235'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '1235'},
                       'next_page': {'offset': '1236'},
@@ -89,21 +91,23 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '1236'},
                       'next_page': {'offset': '1237'},
                       'data': [{'status': "active.qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdUA'}]}),
             ResourceError(http_code=425),
             munchify({'prev_page': {'offset': '1237'},
                       'next_page': {'offset': '1238'},
                       'data': [{'status': "active.qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdUA'}]})]
 
         worker = Scanner.spawn(client, tender_queue, 2, 1)
-        sleep(4)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
+
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 3)
         self.assertEqual(Scanner.sleep_change_value, 1)
         Scanner.sleep_change_value = 0
 
@@ -113,11 +117,12 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex for i in range(2)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
@@ -140,12 +145,14 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
         worker = Scanner.spawn(client, tender_queue, 1, 0.5)
-        sleep(4)
-        self.assertEqual(tender_queue.qsize(), 2)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
+
         self.assertEqual(Scanner.sleep_change_value, 2.5)
 
         # Kill worker
@@ -159,16 +166,17 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex for i in range(3)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1235'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '1235'},
                       'next_page': {'offset': '1236'},
@@ -177,16 +185,17 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '1236'},
                       'next_page': {'offset': '1237'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
         worker = Scanner.spawn(client, tender_queue, 1, 0.5)
-        sleep(7)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
 
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 3)
 
     @patch('gevent.sleep')
     def test_forward_dead(self, gevent_sleep):
@@ -194,6 +203,7 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex for i in range(2)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '123'},
@@ -204,22 +214,23 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1235'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             ResourceError(http_code=403),
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1235'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
         worker = Scanner.spawn(client, tender_queue, 1, 0.5)
-        sleep(7)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
 
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 2)
 
     @patch('gevent.sleep')
     def test_forward_run(self, gevent_sleep):
@@ -228,16 +239,17 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex for i in range(3)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1235'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '1235'},
                       'next_page': {'offset': '1235'},
@@ -245,16 +257,17 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '1236'},
                       'next_page': {'offset': '1237'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
         worker = Scanner.spawn(client, tender_queue, 1, 0.5)
-        sleep(5)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
 
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 3)
 
     @patch('gevent.sleep')
     def test_get_tenders_exception(self, gevent_sleep):
@@ -263,6 +276,7 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tenders_id = [uuid.uuid4().hex for i in range(3)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
@@ -274,12 +288,12 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[0],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
@@ -294,17 +308,18 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdEU'}]})
         ]
 
         worker = Scanner.spawn(client, tender_queue, 1, 0.5)
-        sleep(7)
+
+        for tender_id in tenders_id:
+            self.assertEqual(tender_queue.get(), tender_id)
 
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 3)
 
     @patch('gevent.sleep')
     def test_resource_error(self, gevent_sleep):
@@ -312,20 +327,21 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
+        tender_id = uuid.uuid4().hex
         client.sync_tenders.side_effect = [
             ResourceError(http_code=429),
             munchify({'prev_page': {'offset': '1237'},
                       'next_page': {'offset': '1238'},
                       'data': [{'status': "active.qualification",
-                                "id": uuid.uuid4().hex,
+                                "id": tender_id,
                                 'procurementMethodType': 'aboveThresholdUA'}]})]
 
         worker = Scanner.spawn(client, tender_queue, 2, 1)
-        sleep(4)
+        self.assertEqual(tender_queue.get(), tender_id)
+
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(tender_queue.qsize(), 1)
         self.assertEqual(Scanner.sleep_change_value, 0)
         Scanner.sleep_change_value = 0
 
