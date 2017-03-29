@@ -28,7 +28,7 @@ def generate_req_id():
 
 
 def validate_param(code):
-    return 'code' if code.isdigit() and len(code) != id_passport_len else 'passport'
+    return 'id' if code.isdigit() and len(code) != id_passport_len else 'passport'
 
 
 def create_file(details):
