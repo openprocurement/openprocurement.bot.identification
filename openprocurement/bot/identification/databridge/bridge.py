@@ -48,7 +48,7 @@ class EdrDataBridge(object):
         self.increment_step = self.config_get('increment_step') or 1
         self.decrement_step = self.config_get('decrement_step') or 1
         self.doc_service_host = self.config_get('doc_service_server')
-        self.doc_service_port = self.config_get('doc_service_port')
+        self.doc_service_port = self.config_get('doc_service_port') or 6555
 
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
@@ -116,7 +116,7 @@ class EdrDataBridge(object):
     def check_services(self):
         try:
             self.doc_service_client.session.get(url='{host}:{port}/'.format(host=self.doc_service_host,
-                                                                            port=self.doc_service_port or 6555))
+                                                                            port=self.doc_service_port))
         except (ConnectionError, ConnectTimeout) as e:
             logger.info('DocService connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
@@ -125,13 +125,11 @@ class EdrDataBridge(object):
             return True
 
     def _start_jobs(self):
-        if self.check_services():
-            self.jobs = {'scanner': self.scanner(),
-                         'filter_tender': self.filter_tender(),
-                         'edr_handler': self.edr_handler(),
-                         'upload_file': self.upload_file()}
-        else:
-            gevent.sleep(self.delay)
+        self.check_services()
+        self.jobs = {'scanner': self.scanner(),
+                     'filter_tender': self.filter_tender(),
+                     'edr_handler': self.edr_handler(),
+                     'upload_file': self.upload_file()}
 
     def run(self):
         logger.info('Start EDR API Data Bridge', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START}, {}))
