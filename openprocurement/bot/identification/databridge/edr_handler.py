@@ -80,7 +80,7 @@ class EdrHandler(Greenlet):
                 # Create new Data object. Write to Data.code list of edr ids from EDR.
                 # List because EDR can return 0, 1 or 2 values to our reques
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                            tender_data.item_name, [edr_ids['id'] for edr_ids in response.json().get('data', [])], None)
+                            tender_data.item_name, [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], None)
                 self.edr_ids_queue.put(data)
                 self.edrpou_codes_queue.get()
                 logger.info('Put tender {} {} {} to edr_ids_queue.'.format(tender_data.tender_id,
@@ -133,7 +133,7 @@ class EdrHandler(Greenlet):
                 # List because EDR can return 0, 1 or 2 values to our request
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, [obj['id'] for obj in response.json().get('data', [])], None)
+                                tender_data.item_name, [obj['x_edrInternalId'] for obj in response.json().get('data', [])], None)
                     self.edr_ids_queue.put(data)
                     logger.info('Put tender {} {} {} from retry to edr_ids_queue.'.format(tender_data.tender_id,
                                                                                tender_data.item_name,
