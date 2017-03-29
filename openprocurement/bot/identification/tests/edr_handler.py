@@ -68,8 +68,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for result in expected_result:
             self.assertEqual(check_queue.get(), result)
 
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[0].code))
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?code={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -179,7 +179,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 402},
                       {'text': '', 'status_code': 402},
-                      {'json': {'data': [{'x_edrInternalId': '321'}]}, 'status_code': 200}])
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200}])
 
         edrpou_codes_queue = Queue(10)
         check_queue = Queue(10)

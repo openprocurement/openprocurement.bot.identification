@@ -2,12 +2,6 @@
 from gevent import monkey
 monkey.patch_all()
 
-try:
-    import urllib3.contrib.pyopenssl
-    urllib3.contrib.pyopenssl.inject_into_urllib3()
-except ImportError:
-    pass
-
 import logging.config
 import gevent
 from datetime import datetime
