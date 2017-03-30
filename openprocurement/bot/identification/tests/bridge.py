@@ -196,3 +196,5 @@ class TestBridgeWorker(BaseServersTest):
             self.worker.check_services()
 
         self.doc_server.start()
+
+        self.worker.check_services()

@@ -9,6 +9,7 @@ exclude_lines =
     pragma: no cover
     def __repr__
     raise NotImplementedError
+    except KeyboardInterrupt:
     if __name__ == .__main__.:
     def main()
     if 'test' not in __import__('sys').argv[0]:
