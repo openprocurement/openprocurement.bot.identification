@@ -90,6 +90,10 @@ def response_spore():
     return response
 
 
+def doc_response():
+    return response
+
+
 class TestBridgeWorker(BaseServersTest):
 
     def test_init(self):
@@ -166,6 +170,7 @@ class TestBridgeWorker(BaseServersTest):
     @patch('gevent.sleep')
     def test_run(self, sleep):
         setup_routing(self.api_server_bottle, response_spore)
+        setup_routing(self.doc_server_bottle, doc_response, path='/')
         self.worker = EdrDataBridge(config)
         # create mocks
         scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]

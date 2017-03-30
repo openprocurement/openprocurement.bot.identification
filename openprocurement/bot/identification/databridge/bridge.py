@@ -11,7 +11,7 @@ import gevent
 from functools import partial
 from yaml import load
 from gevent.queue import Queue
-from requests import ConnectionError, ConnectTimeout
+from restkit import request, RequestError
 
 from openprocurement_client.client import TendersClientSync, TendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
@@ -109,9 +109,8 @@ class EdrDataBridge(object):
 
     def check_services(self):
         try:
-            self.doc_service_client.session.get(url='{host}:{port}/'.format(host=self.doc_service_host,
-                                                                            port=self.doc_service_port))
-        except (ConnectionError, ConnectTimeout) as e:
+            request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
+        except RequestError as e:
             logger.info('DocService connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
             raise e
