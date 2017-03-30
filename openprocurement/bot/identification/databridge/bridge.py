@@ -160,7 +160,9 @@ def main():
         with open(params.config) as config_file_obj:
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
-        EdrDataBridge(config).check_services().run()
+        bridge = EdrDataBridge(config)
+        bridge.check_services()
+        bridge.run()
     else:
         logger.info('Invalid configuration file. Exiting...')
 
