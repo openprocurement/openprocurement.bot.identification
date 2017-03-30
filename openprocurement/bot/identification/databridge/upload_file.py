@@ -53,13 +53,13 @@ class UploadFile(Greenlet):
                 response = self.doc_service_client.upload('edr_request.yaml', create_file(tender_data.file_content), 'application/yaml')
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
-                               'Lost tender_data'.format(tender_data.tender_id, tender_data.item_name,
-                                                         tender_data.item_id, e.message),
+                               'Put tender_data to retry queue '.format(tender_data.tender_id, tender_data.item_name,
+                                                                        tender_data.item_id, e.message),
                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
                                                       params={"TENDER_ID": tender_data.tender_id,
                                                               "ITEM_ID": tender_data.item_id}))
                 logger.exception(e)
-                raise e
+                self.retry_upload_to_doc_service_queue.put(tender_data)
             else:
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
@@ -193,7 +193,7 @@ class UploadFile(Greenlet):
                     if job.dead:
                         logger.warning("{} worker dead try restart".format(name), extra=journal_context({"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
                         self.immortal_jobs[name] = gevent.spawn(getattr(self, name))
-                        logger.info("{} worker get_edr_id is up".format(name))
+                        logger.info("{} worker is up".format(name))
 
         except Exception as e:
             logger.error(e)
