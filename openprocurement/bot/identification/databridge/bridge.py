@@ -118,7 +118,6 @@ class EdrDataBridge(object):
             return True
 
     def _start_jobs(self):
-        self.check_services()
         self.jobs = {'scanner': self.scanner(),
                      'filter_tender': self.filter_tender(),
                      'edr_handler': self.edr_handler(),
@@ -161,7 +160,7 @@ def main():
         with open(params.config) as config_file_obj:
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
-        EdrDataBridge(config).run()
+        EdrDataBridge(config).check_services().run()
     else:
         logger.info('Invalid configuration file. Exiting...')
 
