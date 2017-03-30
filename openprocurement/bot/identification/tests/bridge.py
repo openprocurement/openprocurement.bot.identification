@@ -3,9 +3,10 @@
 import unittest
 import os
 from mock import patch, MagicMock
+from restkit import RequestError
 
 from gevent.pywsgi import WSGIServer
-from bottle import Bottle, request, response
+from bottle import Bottle, response
 
 from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement_client.client import TendersClientSync, TendersClient
@@ -186,3 +187,12 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(edr_handler.call_count, 1)
         self.assertEqual(upload_file.call_count, 1)
 
+    def test_check_service(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        self.doc_server.stop()
+        self.worker = EdrDataBridge(config)
+
+        with self.assertRaises(RequestError):
+            self.worker.check_services()
+
+        self.doc_server.start()
