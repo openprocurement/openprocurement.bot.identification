@@ -12,8 +12,10 @@ import random
 from time import sleep
 from gevent.queue import Queue
 from mock import patch, MagicMock
+from munch import munchify
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
+from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep
 from openprocurement.bot.identification.client import ProxyClient
@@ -564,3 +566,47 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?id=123')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
         self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/details/321')
+
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_identifier_id_type(self, mrequest, gevent_sleep):
+        """Create filter_tenders and edr_handler workers. Test when identifier.id is type int (not str)."""
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+
+        #  create queues
+        filtered_tender_ids_queue = Queue(10)
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        filtered_tender_ids_queue.put(tender_id)
+
+        # create workers and responses
+        client = MagicMock()
+        client.get_tender.side_effect = [
+            munchify({'prev_page': {'offset': '123'},
+                      'next_page': {'offset': '1234'},
+                      'data': {'status': "active.pre-qualification",
+                               'id': tender_id,
+                               'procurementMethodType': 'aboveThresholdEU',
+                               'awards': [{'id': award_id,
+                                           'status': 'pending',
+                                           'suppliers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': 14360570}  # int instead of str type
+                                         }]}, ]}}), ]
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': {'data': [{'x_edrInternalId': 321}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), [{'json': {'data': {'id': 321}}, 'status_code': 200}])
+        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
+
+        self.assertEqual(upload_to_doc_service_queue.get(), Data(tender_id=tender_id, item_id=award_id, code='14360570',
+                                                                 item_name='awards', edr_ids=[321], file_content={u'id': 321}))
+        worker.shutdown()
+        filter_tenders_worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(filtered_tender_ids_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0)
