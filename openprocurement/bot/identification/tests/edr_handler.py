@@ -372,6 +372,39 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
+    def test_job_retry_get_edr_id_dead(self, mrequest, gevent_sleep):
+        """Accept dict instead of list in first response to /verify endpoint. Check that worker get up"""
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        mrequest.get("{url}".format(url=proxy_client.verify_url),
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
+                      {'json': {'data': [{'x_edrInternalId': '321'}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}}, status_code=200)
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321'], file_content={}))
+
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0)
+        self.assertEqual(mrequest.call_count, 4)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?id=123')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/details/321')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
     def test_job_get_edr_details_dead(self, mrequest, gevent_sleep):
         """Accept list instead of dict in response to /details/{id} endpoint. Check that worker get up"""
         gevent_sleep.side_effect = custom_sleep
@@ -399,6 +432,38 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_job_retry_get_edr_details_dead(self, mrequest, gevent_sleep):
+        """Accept list instead of dict in response to /details/{id} endpoint. Check that worker get up"""
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}]}, status_code=200)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
+                     [{'text': '', 'status_code': 402},
+                      {'json': [], 'status_code': 200},  # list instead of dict in data
+                      {'json': {'data': {}}, 'status_code': 200}])
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
+
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[u'321'], file_content={}))
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0)
+        self.assertEqual(mrequest.call_count, 4)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
