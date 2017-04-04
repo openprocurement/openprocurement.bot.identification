@@ -26,6 +26,7 @@ config = {
             'proxy_server': 'http://127.0.0.1',
             'proxy_port': 20607,
             'proxy_token': 'cm9ib3Q6cm9ib3Q=',
+            'proxy_version': 1.0,
             'buffers_size': 450,
             'full_stack_sync_delay': 15,
             'empty_stack_sync_delay': 101,
@@ -145,7 +146,7 @@ class TestBridgeWorker(BaseServersTest):
                          {'host': config['main']['proxy_server'],
                           'port': config['main']['proxy_port'],
                           'token': config['main']['proxy_token'],
-                          'version': None})
+                          'version': config['main']['proxy_version']})
 
     def test_start_jobs(self):
         setup_routing(self.api_server_bottle, response_spore)
