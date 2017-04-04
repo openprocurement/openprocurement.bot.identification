@@ -48,7 +48,8 @@ class EdrDataBridge(object):
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
         self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=api_version)
         self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
-                                       token=self.config_get('proxy_token'),
+                                       user=self.config_get('proxy_user'),
+                                       password=self.config_get('proxy_password'),
                                        port=self.config_get('proxy_port'),
                                        version=self.config_get('proxy_version'))
         self.doc_service_client = DocServiceClient(host=self.doc_service_host,

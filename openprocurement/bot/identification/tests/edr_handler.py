@@ -48,7 +48,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_proxy_client(self, mrequest, gevent_sleep):
         """ Test that proxy return json with id """
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
@@ -83,7 +83,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """ After 401 need restart worker """
         local_edr_ids = get_random_edr_ids(2)
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 401},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
@@ -113,7 +113,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 429 status code in first request with header 'Retry-After'"""
         local_edr_ids = get_random_edr_ids(2)
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 429, 'headers': {'Retry-After': '10'}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]},'status_code': 200},
@@ -144,7 +144,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_proxy_client_402(self, mrequest, gevent_sleep):
         """First request returns 402 status code."""
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 402},  # pay for me
@@ -177,7 +177,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """First and second response returns 402 status code. Tests retry for get_edr_id worker"""
         gevent_sleep.side_effect = custom_sleep
         local_edr_ids = get_random_edr_ids(1)
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 402},
                       {'text': '', 'status_code': 402},
@@ -209,7 +209,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, status_code=403)
         edrpou_codes_queue = Queue(10)
@@ -238,7 +238,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -271,7 +271,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}}, status_code=200)
@@ -309,7 +309,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}}, status_code=200)
@@ -348,7 +348,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
                       {'json': {'data': [{'x_edrInternalId': '321'}]}, 'status_code': 200}])
@@ -379,7 +379,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
@@ -412,7 +412,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': [], 'status_code': 200},  # list instead of dict in data
@@ -442,7 +442,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'text': '', 'status_code': 402},
@@ -474,7 +474,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': '', 'status_code': 403},
@@ -509,7 +509,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -544,7 +544,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'exc': requests.exceptions.ReadTimeout}, {'json': {'data': [{'x_edrInternalId': 321}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
@@ -597,7 +597,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                              'scheme': 'UA-EDR',
                                              'id': 14360570}  # int instead of str type
                                          }]}, ]}}), ]
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', token='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': {'data': [{'x_edrInternalId': 321}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), [{'json': {'data': {'id': 321}}, 'status_code': 200}])
         filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
