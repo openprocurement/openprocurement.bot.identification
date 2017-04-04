@@ -144,7 +144,8 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(proxy_client.call_args[1],
                          {'host': config['main']['proxy_server'],
                           'port': config['main']['proxy_port'],
-                          'token': config['main']['proxy_token']})
+                          'token': config['main']['proxy_token'],
+                          'version': None})
 
     def test_start_jobs(self):
         setup_routing(self.api_server_bottle, response_spore)
