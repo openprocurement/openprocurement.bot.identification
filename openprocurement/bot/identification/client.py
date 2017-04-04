@@ -5,25 +5,25 @@ import requests
 class ProxyClient(object):
     """Base class for making requests to Proxy server"""
 
-    def __init__(self, host, token, timeout=None, port=6547, version=1.0):
+    def __init__(self, host, user, password, timeout=None, port=6547, version=1.0):
         self.session = requests.Session()
-        self.token = token
+        self.user = user
+        self.password = password
         self.verify_url = '{host}:{port}/api/{version}/verify'.format(host=host, port=port, version=version)
         self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
-        self.headers = {"Authorization": "Basic {token}".format(token=self.token)}
         self.timeout = timeout
 
     def verify(self, param, code):
         """Send request to Proxy server to verify EDRPOU code"""
         url = '{url}?{param}={code}'.format(url=self.verify_url, param=param, code=code)
-        response = self.session.get(url=url, headers=self.headers, timeout=self.timeout)
+        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
 
         return response
 
     def details(self, id):
         """ Send request to Proxy server to get details."""
         url = '{url}/{id}'.format(url=self.details_url, id=id)
-        response = self.session.get(url=url, headers=self.headers, timeout=self.timeout)
+        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
 
         return response
 
