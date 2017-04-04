@@ -204,14 +204,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_get_edr_id_empty_response(self, mrequest, gevent_sleep):
-        """Accept response with 403 status code and error message 'EDRPOU not found'. Check that tender_data
+        """Accept response with 404 status code and error message 'EDRPOU not found'. Check that tender_data
         is in upload_to_doc_service_queue."""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, status_code=403)
+                     json={'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, status_code=404)
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -233,7 +233,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_id_empty_response(self, mrequest, gevent_sleep):
-        """Accept 5 times response with status code 403 and error, then accept response with status code 403 and
+        """Accept 5 times response with status code 403 and error, then accept response with status code 404 and
         message 'EDRPOU not found'"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
@@ -245,7 +245,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, 'status_code': 403}])
+                      {'json': {'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, 'status_code': 404}])
 
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)
