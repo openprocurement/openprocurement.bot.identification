@@ -70,8 +70,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for result in expected_result:
             self.assertEqual(check_queue.get(), result)
 
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -228,7 +228,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
         self.assertEqual(mrequest.call_count, 1)  # Requests must call proxy once
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -261,8 +261,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
         self.assertEqual(mrequest.call_count, 6)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[5].url, u'127.0.0.1:80/verify?id=123')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[5].url, u'127.0.0.1:80/api/1.0/verify?id=123')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -297,9 +297,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)  # 1 request to /verify and two requests to /details
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/322')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -336,10 +336,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)  # processed 4 requests
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/322')
-        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/details/322')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/322')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -368,9 +368,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -400,10 +400,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -431,9 +431,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -462,10 +462,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -498,9 +498,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 8)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -532,9 +532,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 8)  # processing 8 requests
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')  # check first url
-        self.assertEqual(mrequest.request_history[6].url, u'127.0.0.1:80/verify?id=123')  # check 7th url
-        self.assertEqual(mrequest.request_history[7].url, u'127.0.0.1:80/details/321')  # check 8th url
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')  # check first url
+        self.assertEqual(mrequest.request_history[6].url, u'127.0.0.1:80/api/1.0/verify?id=123')  # check 7th url
+        self.assertEqual(mrequest.request_history[7].url, u'127.0.0.1:80/api/1.0/details/321')  # check 8th url
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -562,10 +562,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
 
 
     @requests_mock.Mocker()

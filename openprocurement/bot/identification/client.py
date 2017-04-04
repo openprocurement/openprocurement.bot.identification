@@ -5,11 +5,11 @@ import requests
 class ProxyClient(object):
     """Base class for making requests to Proxy server"""
 
-    def __init__(self, host, token, timeout=None, port=6547):
+    def __init__(self, host, token, timeout=None, port=6547, version=1.0):
         self.session = requests.Session()
         self.token = token
-        self.verify_url = '{host}:{port}/verify'.format(host=host, port=port)
-        self.details_url = '{host}:{port}/details'.format(host=host, port=port)
+        self.verify_url = '{host}:{port}/api/{version}/verify'.format(host=host, port=port, version=version)
+        self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
         self.headers = {"Authorization": "Basic {token}".format(token=self.token)}
         self.timeout = timeout
 
