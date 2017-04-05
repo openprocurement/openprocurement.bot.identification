@@ -206,7 +206,7 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(10)
+        sleep(60)
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
