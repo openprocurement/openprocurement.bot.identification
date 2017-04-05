@@ -37,4 +37,4 @@ DATABRIDGE_RESTART_RETRY_UPLOAD_TO_TENDER = 'edr_databridge_restart_retry_upload
 DATABRIDGE_RESTART_RETRY_GET_EDR_ID = 'edr_databridge_restart_retry_get_edr_id'
 DATABRIDGE_RESTART_RETRY_GET_EDR_DETAILS = 'edr_databridge_restart_retry_get_edr_details'
 DATABRIDGE_DOC_SERVICE_CONN_ERROR = 'edr_databridge_doc_service_conn_error'
-
+DATABRIDGE_422_UPLOAD_TO_TENDER = 'edr_databridge_422_upload_to_tender'
