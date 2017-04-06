@@ -138,7 +138,7 @@ class UploadFile(Greenlet):
                     logger.warn("Accept 422, skip tender {} {} {}.".format(tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
                                                       {"TENDER_ID": tender_data.tender_id}))
-                    del self.processing_items[tender_data.item_id]
+                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
                 else:
                     self.retry_upload_to_tender_queue.put(tender_data)
@@ -154,7 +154,7 @@ class UploadFile(Greenlet):
                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
                                           params={"TENDER_ID": tender_data.tender_id}))
                 # delete current tender after successful upload file (to avoid reloading file)
-                del self.processing_items[tender_data.item_id]
+                self.update_processing_items(tender_data.tender_id, tender_data.item_id)
             gevent.sleep(0)
 
     def retry_upload_to_tender(self):
@@ -170,7 +170,7 @@ class UploadFile(Greenlet):
                                                                            tender_data.item_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
                                                       {"TENDER_ID": tender_data.tender_id}))
-                    del self.processing_items[tender_data.item_id]
+                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
                 else:
                     logger.info('Exception while retry uploading file to tender {} {} {}. Message: {}'.format(
@@ -192,7 +192,7 @@ class UploadFile(Greenlet):
                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
                                           params={"TENDER_ID": tender_data.tender_id}))
                 # delete current tender after successful upload file (to avoid reloading file)
-                del self.processing_items[tender_data.item_id]
+                self.update_processing_items(tender_data.tender_id, tender_data.item_id)
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
@@ -204,6 +204,13 @@ class UploadFile(Greenlet):
                                                  {'data': document_data},
                                                  '{}/{}/documents'.format(tender_data.item_name,
                                                                           tender_data.item_id))
+
+    def update_processing_items(self, tender_id, item_id):
+        key = '{}_{}'.format(tender_id, item_id)
+        if self.processing_items[key] > 1:
+            self.processing_items[key] -= 1
+        else:
+            del self.processing_items[key]
 
     def _run(self):
         logger.info('Start UploadFile worker', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_UPLOAD}, {}))

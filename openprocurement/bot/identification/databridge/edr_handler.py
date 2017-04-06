@@ -27,7 +27,7 @@ class EdrHandler(Greenlet):
     identification_scheme = u"UA-EDR"
     activityKind_scheme = u'КВЕД'
 
-    def __init__(self, proxyClient, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, delay=15):
+    def __init__(self, proxyClient, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, processing_items, delay=15):
         super(EdrHandler, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -50,6 +50,7 @@ class EdrHandler(Greenlet):
         self.until_too_many_requests_event.set()
 
         self.delay = delay
+        self.processing_items = processing_items
 
     def get_edr_id(self):
         """Get data from edrpou_codes_queue; make request to EDR Api, passing EDRPOU (IPN, passport); Received ids is
@@ -76,6 +77,7 @@ class EdrHandler(Greenlet):
                 try:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], None)
+                    self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                 except TypeError as e:
                     logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
                                                                       tender_data.item_id, e))
@@ -134,6 +136,7 @@ class EdrHandler(Greenlet):
                     try:
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, [obj['x_edrInternalId'] for obj in response.json().get('data', [])], None)
+                        self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                     except TypeError as e:
                         logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
                                                                           tender_data.item_id, e))
