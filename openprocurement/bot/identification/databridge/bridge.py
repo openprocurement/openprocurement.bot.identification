@@ -96,6 +96,7 @@ class EdrDataBridge(object):
                                    edrpou_codes_queue=self.edrpou_codes_queue,
                                    edr_ids_queue=self.edr_ids_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
+                                   processing_items=self.processing_items,
                                    delay=self.delay)
 
         self.upload_file = partial(UploadFile.spawn,
