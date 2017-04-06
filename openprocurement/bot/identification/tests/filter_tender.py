@@ -101,7 +101,10 @@ class TestFilterWorker(unittest.TestCase):
         worker.shutdown()
         del worker
 
-        self.assertItemsEqual(processing_items.keys(), [first_qualification_id, second_qualification_id, third_qualification_id])
+        self.assertItemsEqual(processing_items.keys(),
+                              ['{}_{}'.format(tender_id, first_qualification_id),
+                               '{}_{}'.format(tender_id, second_qualification_id),
+                               '{}_{}'.format(tender_id, third_qualification_id)])
 
     @patch('gevent.sleep')
     def test_worker_award(self, gevent_sleep):
@@ -164,7 +167,10 @@ class TestFilterWorker(unittest.TestCase):
         worker.shutdown()
         del worker
 
-        self.assertItemsEqual(processing_items.keys(), [first_award_id, second_award_id, third_award_id])
+        self.assertItemsEqual(processing_items.keys(),
+                              ['{}_{}'.format(tender_id, first_award_id),
+                               '{}_{}'.format(tender_id, second_award_id),
+                               '{}_{}'.format(tender_id, third_award_id)])
 
     @patch('gevent.sleep')
     def test_get_tender_exception(self, gevent_sleep):
@@ -229,7 +235,7 @@ class TestFilterWorker(unittest.TestCase):
         worker.shutdown()
         del worker
 
-        self.assertItemsEqual(processing_items.keys(), [first_award_id])
+        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, first_award_id)])
 
     @patch('gevent.sleep')
     def test_worker_dead(self, gevent_sleep):
@@ -286,4 +292,4 @@ class TestFilterWorker(unittest.TestCase):
         worker.shutdown()
         del worker
 
-        self.assertItemsEqual(processing_items.keys(), [award_id])
+        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, award_id)])
