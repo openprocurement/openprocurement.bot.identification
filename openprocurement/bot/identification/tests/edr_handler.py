@@ -672,9 +672,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/details/321')
-        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
 
 
