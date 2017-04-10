@@ -48,8 +48,10 @@ class EdrDataBridge(object):
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
         self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=api_version)
         self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
-                                       token=self.config_get('proxy_token'),
-                                       port=self.config_get('proxy_port'))
+                                       user=self.config_get('proxy_user'),
+                                       password=self.config_get('proxy_password'),
+                                       port=self.config_get('proxy_port'),
+                                       version=self.config_get('proxy_version'))
         self.doc_service_client = DocServiceClient(host=self.doc_service_host,
                                                    port=self.doc_service_port,
                                                    user=self.config_get('doc_service_user'),
@@ -94,6 +96,7 @@ class EdrDataBridge(object):
                                    edrpou_codes_queue=self.edrpou_codes_queue,
                                    edr_ids_queue=self.edr_ids_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
+                                   processing_items=self.processing_items,
                                    delay=self.delay)
 
         self.upload_file = partial(UploadFile.spawn,
