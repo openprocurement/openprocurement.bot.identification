@@ -663,7 +663,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue)
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, {})
         self.assertEqual(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
