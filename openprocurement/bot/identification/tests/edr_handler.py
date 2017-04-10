@@ -645,3 +645,36 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(processing_items[award_key], 2)
         self.assertEqual(processing_items[qualification_key], 3)
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_wrong_ip(self, mrequest, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.get("{url}".format(url=proxy_client.verify_url),
+                     [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403},
+                      {'json': {'data': [{'x_edrInternalId': 321}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
+                     [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]},'status_code': 403},
+                      {'json': {'data': {'id': 321}}, 'status_code': 200}])
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, {})
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                         Data(tender_id=tender_id, item_id=award_id,
+                              code='123', item_name='awards',
+                              edr_ids=[321], file_content={u'id': 321}))
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0)
+        self.assertEqual(mrequest.call_count, 4)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
+
+
