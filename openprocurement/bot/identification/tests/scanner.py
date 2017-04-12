@@ -178,10 +178,10 @@ class TestScannerWorker(unittest.TestCase):
                       'data': [{'status': "active.pre-qualification",
                                 "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
+            ResourceError(http_code=403),
             munchify({'prev_page': {'offset': '1235'},
                       'next_page': {'offset': '1236'},
                       'data': []}),
-            ResourceError(http_code=403),
             munchify({'prev_page': {'offset': '1236'},
                       'next_page': {'offset': '1237'},
                       'data': [{'status': "active.pre-qualification",
@@ -276,20 +276,16 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
-        tenders_id = [uuid.uuid4().hex for i in range(3)]
+        tenders_id = [uuid.uuid4().hex for i in range(4)]
         client.sync_tenders.side_effect = [
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                'procurementMethodType': 'aboveThresholdEU'}]}),
+                                'procurementMethodType': 'aboveThresholdEU',
+                                'id': tenders_id[0]}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': []}),
-            munchify({'prev_page': {'offset': '123'},
-                      'next_page': {'offset': '1234'},
-                      'data': [{'status': "active.pre-qualification",
-                                "id": tenders_id[0],
-                                'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
@@ -298,6 +294,7 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
+                                "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdEU'}]}),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
@@ -308,7 +305,7 @@ class TestScannerWorker(unittest.TestCase):
             munchify({'prev_page': {'offset': '1234'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",
-                                "id": tenders_id[2],
+                                "id": tenders_id[3],
                                 'procurementMethodType': 'aboveThresholdEU'}]})
         ]
 

@@ -56,7 +56,7 @@ class Scanner(Greenlet):
             return response
         else:
             assert 'descending' not in params
-            gevent.wait([self.initialization_event])
+            self.initialization_event.wait()
             params['offset'] = self.initial_sync_point['forward_offset']
             logger.info("Starting forward sync from offset {}".format(params['offset']))
             return self.tenders_sync_client.sync_tenders(params, extra_headers={'X-Client-Request-ID': generate_req_id()})
