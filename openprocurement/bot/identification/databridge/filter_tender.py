@@ -102,6 +102,7 @@ class FilterTenders(Greenlet):
                                             tender_id, qualification['id']),
                                             extra=journal_context(params={"TENDER_ID": tender['id']}))
                 self.filtered_tender_ids_queue.get()  # Remove elem from queue
+            gevent.sleep(0)
 
     def check_processing_item(self, tender_id, item_id):
         """Check if current tender_id, item_id is processing"""

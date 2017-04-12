@@ -244,7 +244,9 @@ class TestFilterWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
         filtered_tender_ids_queue.put(tender_id)
-        award_id = uuid.uuid4().hex
+        filtered_tender_ids_queue.put(tender_id)
+        first_award_id = uuid.uuid4().hex
+        second_award_id = uuid.uuid4().hex
         edrpou_codes_queue = Queue(10)
         processing_items = {}
         client = MagicMock()
@@ -257,14 +259,12 @@ class TestFilterWorker(unittest.TestCase):
                      'id': tender_id,
                      'procurementMethodType': 'aboveThresholdEU',
                      'awards': [
-                         {'status': 'pending',  # award must have id
+                         {'id': first_award_id,
+                          'status': 'pending',
                           'suppliers': [
                               {'identifier': {'scheme': 'UA-EDR',
-                                              'id': '14360570'}
-                               }]
-                          }
-                      ]
-                  }}),
+                                              'id': '14360570'}}]
+                          }]}}),
             munchify(
                 {'prev_page': {'offset': '123'},
                  'next_page': {'offset': '1234'},
@@ -273,23 +273,22 @@ class TestFilterWorker(unittest.TestCase):
                      'id': tender_id,
                      'procurementMethodType': 'aboveThresholdEU',
                      'awards': [
-                         {'id': award_id,  # award must have id
+                         {'id': second_award_id,
                           'status': 'pending',
                           'suppliers': [
                               {'identifier': {'scheme': 'UA-EDR',
                                               'id': '14360570'}
-                               }]
-                          }
-                     ]
-                 }}),
-         ]
-        data = Data(tender_id, award_id, '14360570', 'awards', None,None)
+                               }]}]}}),]
+        first_data = Data(tender_id, first_award_id, '14360570', 'awards', None, None)
+        second_data = Data(tender_id, second_award_id, '14360570', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue,
                                      edrpou_codes_queue, processing_items)
-
-        self.assertEqual(edrpou_codes_queue.get(), data)
+        self.assertEqual(edrpou_codes_queue.get(), first_data)
+        worker.job.kill(timeout=1)
+        self.assertEqual(edrpou_codes_queue.get(), second_data)
 
         worker.shutdown()
         del worker
 
-        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, award_id)])
+        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, first_award_id),
+                                                        '{}_{}'.format(tender_id, second_award_id)])
