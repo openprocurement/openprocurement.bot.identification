@@ -20,11 +20,13 @@ from openprocurement.bot.identification.tests.utils import custom_sleep
 class TestScannerWorker(unittest.TestCase):
 
     def test_init(self):
-        worker = Scanner.spawn(None, None)
+        client = MagicMock()
+        tender_queue = Queue(10)
+        worker = Scanner.spawn(client, tender_queue)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
-        self.assertEqual(worker.tenders_sync_client, None)
-        self.assertEqual(worker.filtered_tender_ids_queue, None)
+        self.assertEqual(worker.tenders_sync_client, client)
+        self.assertEqual(worker.filtered_tender_ids_queue, tender_queue)
         self.assertEqual(worker.increment_step, 1)
         self.assertEqual(worker.decrement_step, 1)
         self.assertEqual(worker.delay, 15)
