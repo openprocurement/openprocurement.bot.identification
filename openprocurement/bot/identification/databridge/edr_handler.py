@@ -81,19 +81,19 @@ class EdrHandler(Greenlet):
                 except TypeError as e:
                     logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
                                                                       tender_data.item_id, e))
+                    self.retry_edrpou_codes_queue.put(tender_data)
                 else:
                     self.edr_ids_queue.put(data)
-                    self.edrpou_codes_queue.get()
                     logger.info('Put tender {} {} {} to edr_ids_queue.'.format(tender_data.tender_id,
                                                                                tender_data.item_name,
                                                                                tender_data.item_id))
             else:
-                self.edrpou_codes_queue.get()
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
                 self.handle_status_response(response, tender_data.tender_id)
                 logger.info('Put tender {} with {} id {} to retry_edrpou_codes_queue'.format(
                     tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                     extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
+            self.edrpou_codes_queue.get()
             gevent.sleep(0)
 
     def retry_get_edr_id(self):
@@ -175,9 +175,10 @@ class EdrHandler(Greenlet):
                     except AttributeError as e:
                         logger.info('Error data type {} {} {}. Message {}'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, e))
+                        self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                                          tender_data.item_name, [edr_id], tender_data.file_content))
                     else:
                         self.upload_to_doc_service_queue.put(data)
-                        self.edr_ids_queue.get()
                         logger.info('Successfully created file for tender {} {} {}'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
@@ -185,11 +186,11 @@ class EdrHandler(Greenlet):
                 else:
                     self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                       tender_data.item_name, [edr_id], tender_data.file_content))
-                    self.edr_ids_queue.get()
                     self.handle_status_response(response, tender_data.tender_id)
                     logger.info('Put tender {} with {} id {} to retry_edr_ids_queue'.format(
                                 tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
+            self.edr_ids_queue.get()
             gevent.sleep(0)
 
     def retry_get_edr_details(self):
@@ -241,20 +242,18 @@ class EdrHandler(Greenlet):
     def handle_status_response(self, response, tender_id):
         """Process unsuccessful request"""
         if response.status_code == 401:
-            logger.info('Not Authorized (invalid token) for tender {}'.format(tender_id),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNAUTHORIZED_EDR}, {"TENDER_ID": tender_id}))
-            raise Exception('Invalid EDR API token')
+            logger.warning('Not Authorized (invalid token) for tender {}'.format(tender_id),
+                           extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNAUTHORIZED_EDR}, {"TENDER_ID": tender_id}))
         elif response.status_code == 429:
             self.until_too_many_requests_event.wait(response.headers.get('Retry-After', self.delay))
         elif response.status_code == 402:
-            logger.info('Payment required for requesting info to EDR. '
-                        'Error description: {err}'.format(err=response.text),
-                        extra=journal_context(params={"TENDER_ID": tender_id}))
-            raise Exception('Payment required for requesting info to EDR.')
+            logger.warning('Payment required for requesting info to EDR. '
+                           'Error description: {err}'.format(err=response.text),
+                           extra=journal_context(params={"TENDER_ID": tender_id}))
         else:
-            logger.info('Error appeared while requesting to EDR. '
-                        'Description: {err}'.format(err=response.text),
-                        extra=journal_context(params={"TENDER_ID": tender_id}))
+            logger.warning('Error appeared while requesting to EDR. '
+                           'Description: {err}'.format(err=response.text),
+                           extra=journal_context(params={"TENDER_ID": tender_id}))
 
     def _run(self):
         logger.info('Start EDR Handler', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_EDR_HANDLER}, {}))
