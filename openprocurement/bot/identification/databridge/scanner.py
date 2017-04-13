@@ -56,7 +56,7 @@ class Scanner(Greenlet):
             return response
         else:
             assert 'descending' not in params
-            gevent.wait([self.initialization_event])
+            self.initialization_event.wait()
             params['offset'] = self.initial_sync_point['forward_offset']
             logger.info("Starting forward sync from offset {}".format(params['offset']))
             return self.tenders_sync_client.sync_tenders(params, extra_headers={'X-Client-Request-ID': generate_req_id()})
@@ -118,9 +118,10 @@ class Scanner(Greenlet):
         except Exception as e:
             logger.warning('Backward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
             logger.exception(e)
-            raise e
+            return False
         else:
             logger.info('Backward data sync finished.')
+            return True
 
     def _start_synchronization_workers(self):
         logger.info('Scanner starting forward and backward sync workers')
@@ -142,7 +143,7 @@ class Scanner(Greenlet):
             while not self.exit:
                 gevent.sleep(self.delay)
                 if forward_worker.dead or (backward_worker.dead and
-                                           not backward_worker.successful()):
+                                           not backward_worker.value):
                     self._restart_synchronization_workers()
                     backward_worker, forward_worker = self.jobs
         except Exception as e:

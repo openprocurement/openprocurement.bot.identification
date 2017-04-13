@@ -200,8 +200,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
                      [{'text': '', 'status_code': 402},
                       {'text': '', 'status_code': 402},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
 
         edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
         check_queue = Queue(10)
 
         expected_result = []
@@ -210,9 +213,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
-            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], None))  # result
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {}))  # result
 
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock(), MagicMock())
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
         self.assertEqual(check_queue.get(), expected_result[0])
         worker.shutdown()
