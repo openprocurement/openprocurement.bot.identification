@@ -295,7 +295,7 @@ class TestFilterWorker(unittest.TestCase):
                                                         '{}_{}'.format(tender_id, second_award_id)])
 
     @patch('gevent.sleep')
-    def test_loopexit(self, gevent_sleep):
+    def test_filtered_tender_ids_queue_loop_exit(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue = MagicMock()

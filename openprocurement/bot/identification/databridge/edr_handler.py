@@ -60,6 +60,7 @@ class EdrHandler(Greenlet):
             try:
                 tender_data = self.edrpou_codes_queue.peek()
             except LoopExit:
+                gevent.sleep(0)
                 continue
             logger.info('Get tender {} from edrpou_codes_queue'.format(tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
