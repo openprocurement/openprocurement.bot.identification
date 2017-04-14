@@ -7,6 +7,7 @@ import logging.config
 import gevent
 from datetime import datetime
 from gevent import Greenlet, spawn
+from gevent.hub import LoopExit
 from restkit import ResourceError
 
 from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file
@@ -50,7 +51,11 @@ class UploadFile(Greenlet):
         """Get data from upload_to_doc_service_queue; Create file of the Data.file_content data; If upload successful put Data
         object to upload_file_to_tender, otherwise put Data to retry_upload_file_queue."""
         while not self.exit:
-            tender_data = self.upload_to_doc_service_queue.get()
+            try:
+                tender_data = self.upload_to_doc_service_queue.get()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             try:
                 response = self.doc_service_client.upload('edr_request.yaml', create_file(tender_data.file_content), 'application/yaml')
             except Exception as e:
@@ -84,7 +89,11 @@ class UploadFile(Greenlet):
         """Get data from retry_upload_to_doc_service_queue; If upload were successful put Data obj to
         upload_to_tender_queue, otherwise put Data obj back to retry_upload_file_queue"""
         while not self.exit:
-            tender_data = self.retry_upload_to_doc_service_queue.get()
+            try:
+                tender_data = self.retry_upload_to_doc_service_queue.get()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             try:
                 # create patch request to award/qualification with document to upload
                 response = self.client_upload_to_doc_service(tender_data)
@@ -125,7 +134,11 @@ class UploadFile(Greenlet):
         If upload to tender were unsuccessful put Data object to retry_upload_to_tender_queue, otherwise delete given
         award/qualification from processing_items."""
         while not self.exit:
-            tender_data = self.upload_to_tender_queue.get()
+            try:
+                tender_data = self.upload_to_tender_queue.get()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             document_data = tender_data.file_content
             document_data["documentType"] = "registerExtract"
             try:
@@ -161,7 +174,11 @@ class UploadFile(Greenlet):
         """Get data from retry_upload_to_tender_queue; If upload was unsuccessful put Data obj back to
         retry_upload_to_tender_queue"""
         while not self.exit:
-            tender_data = self.retry_upload_to_tender_queue.get()
+            try:
+                tender_data = self.retry_upload_to_tender_queue.get()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             try:
                 self.client_upload_to_tender(tender_data)
             except ResourceError as re:
