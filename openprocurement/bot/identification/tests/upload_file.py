@@ -7,6 +7,7 @@ import unittest
 import datetime
 import requests_mock
 from gevent.queue import Queue
+from gevent.hub import LoopExit
 from time import sleep
 from mock import patch, MagicMock
 from restkit.errors import Unauthorized
@@ -15,7 +16,7 @@ from restkit import ResourceError
 from openprocurement.bot.identification.client import DocServiceClient
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
 from openprocurement.bot.identification.databridge.utils import Data
-from openprocurement.bot.identification.tests.utils import custom_sleep
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 
 
 class TestUploadFileWorker(unittest.TestCase):
@@ -262,3 +263,92 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(processing_items, {})
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
 
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_upload_to_doc_service_queue_loopexit(self, mrequest, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        client = MagicMock()
+        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.post('{url}'.format(url=doc_service_client.url),
+                      [{'json': {'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': 'edr_request.yaml'}},
+                        'status_code': 200},
+                       {'json': {'data': {
+                           'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                           'format': 'application/yaml',
+                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                           'title': 'edr_request.yaml'}},
+                           'status_code': 200}])
+        client._create_tender_resource_item.side_effect = [
+            {'data': {'id': uuid.uuid4().hex,
+                      'documentOf': 'tender',
+                      'documentType': 'registerExtract',
+                      'url': 'url'}},
+            {'data': {'id': uuid.uuid4().hex,
+                      'documentOf': 'tender',
+                      'documentType': 'registerExtract',
+                      'url': 'url'}}]
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        key = '{}_{}'.format(tender_id, award_id)
+        processing_items = {key: 2}
+        upload_to_doc_service_queue = MagicMock()
+        upload_to_tender_queue = Queue(10)
+        upload_to_doc_service_queue.get.side_effect = generate_answers(
+            answers=[LoopExit(), Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}), Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'})],
+            default=LoopExit())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
+        sleep(10)
+        worker.shutdown()
+        self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
+        self.assertEqual(processing_items, {})
+        self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_upload_to_tender_queue_loopexit(self, mrequest, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        client = MagicMock()
+        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
+        client._create_tender_resource_item.side_effect = [
+            {'data': {'id': uuid.uuid4().hex,
+                      'documentOf': 'tender',
+                      'documentType': 'registerExtract',
+                      'url': 'url'}},
+            {'data': {'id': uuid.uuid4().hex,
+                      'documentOf': 'tender',
+                      'documentType': 'registerExtract',
+                      'url': 'url'}}]
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        key = '{}_{}'.format(tender_id, award_id)
+        processing_items = {key: 2}
+        upload_to_doc_service_queue = Queue(1)
+        upload_to_tender_queue = MagicMock()
+        upload_to_tender_queue.get.side_effect = generate_answers(
+            answers=[LoopExit(),
+                     Data(tender_id=tender_id,
+                          item_id=award_id,
+                          code='123', item_name='awards', edr_ids=None,
+                          file_content={
+                              u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                              u'format': u'application/yaml',
+                              u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                              u'title': u'edr_request.yaml'}),
+                     Data(tender_id=tender_id,
+                          item_id=award_id,
+                          code='123', item_name='awards', edr_ids=None,
+                          file_content={
+                              u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                              u'format': u'application/yaml',
+                              u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                              u'title': u'edr_request.yaml'})],
+            default=LoopExit())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
+        sleep(10)
+        worker.shutdown()
+        self.assertEqual(processing_items, {})
+        self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request

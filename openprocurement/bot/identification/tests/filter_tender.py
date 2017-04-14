@@ -2,6 +2,7 @@
 import uuid
 import unittest
 import datetime
+from gevent.hub import LoopExit
 from gevent.queue import Queue
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import Data
@@ -292,3 +293,42 @@ class TestFilterWorker(unittest.TestCase):
 
         self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, first_award_id),
                                                         '{}_{}'.format(tender_id, second_award_id)])
+
+    @patch('gevent.sleep')
+    def test_loopexit(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        filtered_tender_ids_queue = MagicMock()
+        filtered_tender_ids_queue.peek.side_effect = [LoopExit(), tender_id]
+
+        first_award_id = uuid.uuid4().hex
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        client = MagicMock()
+        client.get_tender.side_effect = [
+            munchify(
+                {'prev_page': {'offset': '123'},
+                 'next_page': {'offset': '1234'},
+                 'data': {
+                     'status': "active.pre-qualification",
+                     'id': tender_id,
+                     'procurementMethodType': 'aboveThresholdEU',
+                     'awards': [
+                         {'id': first_award_id,
+                          'status': 'pending',
+                          'suppliers': [
+                              {'identifier': {'scheme': 'UA-EDR',
+                                              'id': '14360570'}}]
+                          }]}})
+        ]
+        first_data = Data(tender_id, first_award_id, '14360570', 'awards',
+                          None, None)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue,
+                                     edrpou_codes_queue, processing_items)
+        self.assertEqual(edrpou_codes_queue.get(), first_data)
+
+        worker.shutdown()
+        del worker
+
+        self.assertItemsEqual(processing_items.keys(),
+                              ['{}_{}'.format(tender_id, first_award_id)])
