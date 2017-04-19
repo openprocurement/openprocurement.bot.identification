@@ -8,6 +8,7 @@ import logging.config
 import gevent
 from datetime import datetime
 from gevent import Greenlet, spawn
+from gevent.hub import LoopExit
 
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_START_EDR_HANDLER,
@@ -56,7 +57,11 @@ class EdrHandler(Greenlet):
         """Get data from edrpou_codes_queue; make request to EDR Api, passing EDRPOU (IPN, passport); Received ids is
         put into Data.edr_ids variable; Data variable placed to edr_ids_queue."""
         while not self.exit:
-            tender_data = self.edrpou_codes_queue.peek()
+            try:
+                tender_data = self.edrpou_codes_queue.peek()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             logger.info('Get tender {} from edrpou_codes_queue'.format(tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
@@ -100,7 +105,11 @@ class EdrHandler(Greenlet):
         """Get data from retry_edrpou_codes_queue; Put data into edr_ids_queue if request is successful, otherwise put
         data back to retry_edrpou_codes_queue."""
         while not self.exit:
-            tender_data = self.retry_edrpou_codes_queue.get()
+            try:
+                tender_data = self.retry_edrpou_codes_queue.get()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             logger.info('Get tender {} from retry_edrpou_codes_queue'.format(tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
@@ -160,7 +169,11 @@ class EdrHandler(Greenlet):
         """Get data from edr_ids_queue; make request to EDR Api for detailed info; Required fields is put to
         Data.file_content variable, Data object is put to upload_to_doc_service_queue."""
         while not self.exit:
-            tender_data = self.edr_ids_queue.peek()
+            try:
+                tender_data = self.edr_ids_queue.peek()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             logger.info('Get edr ids {}  tender {} from edr_ids_queue'.format(tender_data.edr_ids, tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
@@ -197,7 +210,11 @@ class EdrHandler(Greenlet):
         """Get data from retry_edr_ids_queue; Put data into upload_to_doc_service_queue if request is successful, otherwise put
         data back to retry_edr_ids_queue."""
         while not self.exit:
-            tender_data = self.retry_edr_ids_queue.get()
+            try:
+                tender_data = self.retry_edr_ids_queue.get()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             logger.info('Get edr ids {}  tender {} from retry_edr_ids_queue'.format(tender_data.edr_ids,
                                                                                     tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
