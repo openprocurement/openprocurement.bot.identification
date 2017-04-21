@@ -39,22 +39,7 @@ def create_file(details):
     """ Return temp file with details """
     temporary_file = io.BytesIO()
     temporary_file.name = 'edr_request.yaml'
-    logger.info("Details: {0}".format(details))
     temporary_file.write(yaml.safe_dump(details, allow_unicode=True, default_flow_style=False))
-    temporary_file.seek(0)
-
-    return temporary_file
-
-
-def create_file_w_metadata(details, metadata):
-    """ Return temp file with details """
-    temporary_file = io.BytesIO()
-    temporary_file.name = 'edr_request.yaml'
-    logger.info("Details: {0}".format(details))
-    t = {"meta": metadata, "data": details}
-    logger.info("t = {0}".format(t))
-    temporary_file.write(yaml.safe_dump(t, allow_unicode=True,
-                                        default_flow_style=False))
     temporary_file.seek(0)
 
     return temporary_file
