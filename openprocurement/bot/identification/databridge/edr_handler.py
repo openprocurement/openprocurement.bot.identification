@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class EdrHandler(Greenlet):
     """ Edr API Data Bridge """
-    error_details = {'error': 'Couldn\'t find this code in EDR.'}
+    error_details = {'data': {'error': 'Couldn\'t find this code in EDR.'}}
     identification_scheme = u"UA-EDR"
     activityKind_scheme = u'КВЕД'
 
@@ -67,7 +67,7 @@ class EdrHandler(Greenlet):
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                   params={"TENDER_ID": tender_data.tender_id}))
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                            tender_data.item_name, [], {"data": self.error_details})
+                            tender_data.item_name, [], self.error_details)
                 self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                 self.edrpou_codes_queue.get()
                 continue
@@ -77,7 +77,6 @@ class EdrHandler(Greenlet):
                 try:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], None)
-                    logger.info("DATA: {0}".format(data))
                     self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                 except TypeError as e:
                     logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
@@ -114,7 +113,7 @@ class EdrHandler(Greenlet):
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id}))
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, [], {"data": self.error_details})
+                                tender_data.item_name, [], self.error_details)
                     self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                     continue
                 logger.info("RetryException error message {}".format(re.args[0]))
