@@ -4,11 +4,6 @@ import io
 
 from uuid import uuid4
 from collections import namedtuple
-import logging.config
-
-logger = logging.getLogger(__name__)
-
-
 id_passport_len = 9
 
 Data = namedtuple('Data', [
