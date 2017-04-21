@@ -6,6 +6,7 @@ import logging.config
 import gevent
 from datetime import datetime
 from gevent import Greenlet, spawn
+from gevent.hub import LoopExit
 
 from openprocurement.bot.identification.databridge.utils import (
     generate_req_id, journal_context, Data
@@ -41,7 +42,11 @@ class FilterTenders(Greenlet):
         """Get tender_id from filtered_tender_ids_queue, check award/qualification status, documentType; get
         identifier's id and put into edrpou_codes_queue."""
         while not self.exit:
-            tender_id = self.filtered_tender_ids_queue.peek()
+            try:
+                tender_id = self.filtered_tender_ids_queue.peek()
+            except LoopExit:
+                gevent.sleep(0)
+                continue
             try:
                 tender = self.tenders_sync_client.get_tender(tender_id,
                                                              extra_headers={'X-Client-Request-ID': generate_req_id()})['data']

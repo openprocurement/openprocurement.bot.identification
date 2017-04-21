@@ -11,13 +11,14 @@ import random
 
 from time import sleep
 from gevent.queue import Queue
+from gevent.hub import LoopExit
 from mock import patch, MagicMock
 from munch import munchify
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import Data
-from openprocurement.bot.identification.tests.utils import custom_sleep
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 from openprocurement.bot.identification.client import ProxyClient
 
 
@@ -709,4 +710,175 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
 
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_edrpou_codes_queue_loop_exit(self, mrequest, gevent_sleep):
+        """ Test LoopExit for edrpou_codes_queue """
+        gevent_sleep.side_effect = custom_sleep
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        local_edr_ids = get_random_edr_ids(2)
+        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
+                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
+                     json={'data': {}}, status_code=200)
+
+        edrpou_codes_queue = MagicMock()
+        edr_ids_queue = Queue(10)
+        check_queue = Queue(10)
+
+        expected_result = []
+        edrpou_codes_queue_list = [LoopExit()]
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {}))  # result
+
+        edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list,
+                                                               default=LoopExit())
+
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
+        self.assertEqual(mrequest.request_history[0].url,
+                         u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url,
+                         u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+
+        worker.shutdown()
+        self.assertEqual(mrequest.call_count, 4)
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_edrpou_codes_queue_loop_exit(self, mrequest, gevent_sleep):
+        """ Test LoopExit for retry_edrpou_codes_queue """
+        gevent_sleep.side_effect = custom_sleep
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        local_edr_ids = get_random_edr_ids(2)
+        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
+                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
+                     json={'data': {}}, status_code=200)
+
+        edrpou_codes_queue = Queue(1)
+        edr_ids_queue = Queue(10)
+        check_queue = Queue(10)
+        edrpou_codes_queue_list = [LoopExit()]
+
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {}))  # result
+
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+        worker.retry_edrpou_codes_queue = MagicMock()
+        worker.retry_edrpou_codes_queue.get.side_effect = generate_answers(answers=edrpou_codes_queue_list,
+                                                                           default=LoopExit())
+
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+
+        worker.shutdown()
+        self.assertEqual(mrequest.call_count, 4)
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_edr_ids_queue_loop_exit(self, mrequest, gevent_sleep):
+        """ Test LoopExit for edr_ids_queue """
+        gevent_sleep.side_effect = custom_sleep
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        local_edr_ids = get_random_edr_ids(2)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
+                     json={'data': {}}, status_code=200)
+
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = MagicMock()
+        check_queue = Queue(10)
+
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {}))  # result
+
+        edr_ids_queue.peek.side_effect = generate_answers(
+            answers=[LoopExit(),
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content=None),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content=None)],
+            default=LoopExit())
+
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
+        self.assertEqual(mrequest.request_history[0].url,
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
+        self.assertEqual(mrequest.request_history[1].url,
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
+
+        worker.shutdown()
+        self.assertEqual(mrequest.call_count, 2)
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_edr_ids_queue_loop_exit(self, mrequest, gevent_sleep):
+        """ Test LoopExit for retry_edr_ids_queue """
+        gevent_sleep.side_effect = custom_sleep
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        local_edr_ids = get_random_edr_ids(2)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url,
+                                         id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url,
+                                         id=local_edr_ids[1]),
+                     json={'data': {}}, status_code=200)
+
+        edrpou_codes_queue = Queue(1)
+        edr_ids_queue = Queue(1)
+        check_queue = Queue(10)
+
+        expected_result = []
+        for i in range(2):
+            tender_id = uuid.uuid4().hex
+            award_id = uuid.uuid4().hex
+            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {}))  # result
+
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+        worker.retry_edr_ids_queue = MagicMock()
+        worker.retry_edr_ids_queue.get.side_effect = generate_answers(
+            answers=[LoopExit(),
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content=None),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content=None)],
+            default=LoopExit())
+
+        for result in expected_result:
+            self.assertEqual(check_queue.get(), result)
+
+        self.assertEqual(mrequest.request_history[0].url,
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
+        self.assertEqual(mrequest.request_history[1].url,
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
+
+        worker.shutdown()
+        self.assertEqual(mrequest.call_count, 2)
 
