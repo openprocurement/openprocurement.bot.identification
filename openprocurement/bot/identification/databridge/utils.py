@@ -4,6 +4,7 @@ import io
 
 from uuid import uuid4
 from collections import namedtuple
+
 id_passport_len = 9
 
 Data = namedtuple('Data', [
