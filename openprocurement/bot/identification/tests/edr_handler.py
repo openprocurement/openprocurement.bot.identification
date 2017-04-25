@@ -929,8 +929,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         worker.retry_edr_ids_queue = MagicMock()
         worker.retry_edr_ids_queue.get.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content=None),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content=None)],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'meta': {'id': 123}, 'data': {}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'meta': {'id': 123}, 'data': {}})],
             default=LoopExit())
 
         for result in expected_result:
@@ -945,4 +945,3 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 2)
-

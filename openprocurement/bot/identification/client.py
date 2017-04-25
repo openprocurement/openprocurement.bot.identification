@@ -20,10 +20,11 @@ class ProxyClient(object):
 
         return response
 
-    def details(self, id):
+    def details(self, id, details_id=0):
         """ Send request to Proxy server to get details."""
         url = '{url}/{id}'.format(url=self.details_url, id=id)
-        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
+        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout,
+                                    headers={'X-Client-Request-ID': str(details_id)})
 
         return response
 
@@ -38,8 +39,9 @@ class DocServiceClient(object):
         self.password = password
         self.timeout = timeout
 
-    def upload(self, filename, in_file, content_type):
+    def upload(self, filename, in_file, content_type, details_id=0):
         files = {'file': (filename, in_file, content_type)}
-        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files)
+        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files,
+                                     headers={'X-Client-Request-ID': str(details_id)})
 
         return response

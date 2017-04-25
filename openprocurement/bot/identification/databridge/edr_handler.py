@@ -71,7 +71,7 @@ class EdrHandler(Greenlet):
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code)
             logger.warn("RESPONSE DATA: {0}".format(response))
             details_id = uuid.uuid4().hex
-            logger.warn("RESPONSE JSON DATA: {0} for reference {1}".format(response.json(), details_id))
+            logger.warn("RESPONSE JSON DATA: {0} for details_id {1}".format(response.json(), details_id))
             if response.status_code == 404 and response.json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
                 logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
@@ -172,7 +172,7 @@ class EdrHandler(Greenlet):
                                                                                    tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_id_request(self, param, code):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code)
@@ -195,7 +195,7 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             for edr_id in tender_data.edr_ids:
-                response = self.proxyClient.details(edr_id)
+                response = self.proxyClient.details(edr_id, tender_data.file_content['meta']['id'])
                 logger.info('TESTING DETAILS_ID: {0}'.format(tender_data.file_content))
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
@@ -240,7 +240,7 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             for edr_id in tender_data.edr_ids:
                 try:
-                    response = self.get_edr_details_request(edr_id)
+                    response = self.get_edr_details_request(edr_id, tender_data.file_content['meta']['id'])
                     details_id = uuid.uuid4()
                     logger.info('TESTING DETAILS_ID: {0}'.format(details_id),
                                 extra={'details_id': details_id})
@@ -270,10 +270,10 @@ class EdrHandler(Greenlet):
                                                   params={"TENDER_ID": tender_data.tender_id}))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
-    def get_edr_details_request(self, edr_id):
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    def get_edr_details_request(self, edr_id, details_id=0):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
-        response = self.proxyClient.details(edr_id)
+        response = self.proxyClient.details(edr_id, details_id)
         if response.status_code != 200:
             raise RetryException('Unsuccessful retry request to EDR.', response)
         return response
