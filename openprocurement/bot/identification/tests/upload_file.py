@@ -60,7 +60,7 @@ class TestUploadFileWorker(unittest.TestCase):
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': '123'}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
@@ -102,7 +102,7 @@ class TestUploadFileWorker(unittest.TestCase):
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': '123'}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
@@ -143,7 +143,7 @@ class TestUploadFileWorker(unittest.TestCase):
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': '123'}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
@@ -175,7 +175,7 @@ class TestUploadFileWorker(unittest.TestCase):
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(10)
         worker.shutdown()

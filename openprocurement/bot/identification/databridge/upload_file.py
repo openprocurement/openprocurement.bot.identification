@@ -58,7 +58,8 @@ class UploadFile(Greenlet):
                 continue
             try:
                 response = self.doc_service_client.upload('edr_request.yaml', create_file(tender_data.file_content),
-                                                          'application/yaml', details_id=tender_data.file_content['meta']['id'])
+                                                          'application/yaml',
+                                                          extra_headers={'X-Client-Request-ID': tender_data.file_content.get('meta').get('id')})
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
                                'Put tender_data to retry queue '.format(tender_data.tender_id, tender_data.item_name,
@@ -71,7 +72,8 @@ class UploadFile(Greenlet):
             else:
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids, response.json().get('data', {}))
+                                tender_data.item_name, tender_data.edr_ids,
+                                dict(response.json(), **{'meta': {'id': tender_data.file_content.get('meta', {}).get('id')}}))
                     self.upload_to_tender_queue.put(data)
                     logger.info('Successfully uploaded file to doc service {} {} {}'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id),
@@ -97,9 +99,8 @@ class UploadFile(Greenlet):
                 continue
             try:
                 # create patch request to award/qualification with document to upload
-                self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {'id':0}).get('id')})
+                self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
                 response = self.client_upload_to_doc_service(tender_data)
-                self.client.headers.pop('X-Client-Request-ID', None)
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
                                'Lost tender_data'.format(tender_data.tender_id, tender_data.item_name,
@@ -112,7 +113,8 @@ class UploadFile(Greenlet):
             else:
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids, response.json().get('data', {}))
+                                tender_data.item_name, tender_data.edr_ids,
+                                dict(response.json(), **{'meta':{'id':tender_data.file_content.get('meta', {}).get('id')}}))
                     self.upload_to_tender_queue.put(data)
                     logger.info('Successfully uploaded file to doc service {} {} {}'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id),
@@ -131,7 +133,8 @@ class UploadFile(Greenlet):
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
         return self.doc_service_client.upload('edr_request.yaml', create_file(tender_data.file_content),
-                                              'application/yaml', details_id=tender_data.file_content.get('meta', {'id':0}).get('id'))
+                                              'application/yaml',
+                                              extra_headers={'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
 
     def upload_to_tender(self):
         """Get data from upload_to_tender_queue; Upload get_Url and documentType;
@@ -143,15 +146,14 @@ class UploadFile(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            document_data = tender_data.file_content
+            document_data = tender_data.file_content.get('data', {})
             document_data["documentType"] = "registerExtract"
             try:
-                self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {'id': 0}).get('id')})
+                self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
                 self.client._create_tender_resource_item(munchify({'data': {'id': tender_data.tender_id}}),
                                                          {'data': document_data},
                                                          '{}/{}/documents'.format(tender_data.item_name,
                                                                                   tender_data.item_id))
-                self.client.headers.pop('X-Client-Request-ID', None)
             except ResourceError as re:
                 if re.status_int == 422:  # WARNING and don't retry
                     logger.warn("Accept 422, skip tender {} {} {}.".format(tender_data.tender_id, tender_data.item_name, tender_data.item_id),
@@ -186,9 +188,8 @@ class UploadFile(Greenlet):
                 gevent.sleep(0)
                 continue
             try:
-                self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {'id': 0}).get('id')})
+                self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
                 self.client_upload_to_tender(tender_data)
-                self.client.headers.pop('X-Client-Request-ID', None)
             except ResourceError as re:
                 if re.status_int == 422:  # WARNING and don't retry
                     logger.warn("Accept 422, skip tender {} {} {}.".format(tender_data.tender_id, tender_data.item_name,
@@ -223,14 +224,13 @@ class UploadFile(Greenlet):
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def client_upload_to_tender(self, tender_data):
         """Process upload to tender request for retry queue objects."""
-        document_data = tender_data.file_content
+        document_data = tender_data.file_content.get('data', {})
         document_data["documentType"] = "registerExtract"
-        self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {'id': 0}).get('id')})
+        self.client.headers.update({'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
         self.client._create_tender_resource_item(munchify({'data': {'id': tender_data.tender_id}}),
                                                  {'data': document_data},
                                                  '{}/{}/documents'.format(tender_data.item_name,
                                                                           tender_data.item_id))
-        self.client.headers.pop('X-Client-Request-ID', None)
 
     def update_processing_items(self, tender_id, item_id):
         key = '{}_{}'.format(tender_id, item_id)
