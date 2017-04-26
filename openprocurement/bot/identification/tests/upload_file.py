@@ -15,7 +15,7 @@ from restkit import ResourceError
 
 from openprocurement.bot.identification.client import DocServiceClient
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
-from openprocurement.bot.identification.databridge.utils import Data
+from openprocurement.bot.identification.databridge.utils import Data, generate_req_id
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 
 
@@ -56,11 +56,12 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': '123'}, 'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
@@ -70,6 +71,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertItemsEqual(processing_items.keys(), [])  # test that item removed from processing_items
         self.assertEqual(client._create_tender_resource_item.call_count, 1)  # check upload to tender
 
@@ -98,11 +100,12 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': '123'}, 'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
@@ -112,6 +115,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 7)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertItemsEqual(processing_items.keys(), [])  # test that item removed from processing_items
         self.assertEqual(client._create_tender_resource_item.call_count, 1)  # check upload to tender
 
@@ -139,11 +143,12 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': '123'}, 'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
@@ -153,6 +158,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(processing_items, {})  # test that item removed from processing_items
         self.assertEqual(client._create_tender_resource_item.call_count, 7)  # check upload to tender
 
@@ -171,11 +177,12 @@ class TestUploadFileWorker(unittest.TestCase):
         client._create_tender_resource_item.side_effect = ResourceError(http_code=422)
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {}, 'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(10)
         worker.shutdown()
@@ -183,6 +190,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(processing_items, {})
         self.assertEqual(client._create_tender_resource_item.call_count, 1)  # check that processed just 1 request
 
@@ -206,11 +214,12 @@ class TestUploadFileWorker(unittest.TestCase):
                                                            ResourceError(http_code=422)]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(60)
         worker.shutdown()
@@ -218,6 +227,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(processing_items, {})
         self.assertEqual(client._create_tender_resource_item.call_count, 6)  # check that processed just 1 request
 
@@ -249,17 +259,20 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
+        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
                                   doc_service_client)
         sleep(10)
         worker.shutdown()
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(processing_items, {})
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
 
@@ -294,17 +307,21 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = MagicMock()
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.get.side_effect = generate_answers(
-            answers=[LoopExit(), Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}), Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'})],
+            answers=[LoopExit(), Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}),
+                     Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
             default=LoopExit())
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(10)
         worker.shutdown()
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(processing_items, {})
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
 
@@ -326,6 +343,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(1)
@@ -336,6 +354,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
+                              'meta': {'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -344,6 +363,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
+                              'meta': {'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -353,6 +373,9 @@ class TestUploadFileWorker(unittest.TestCase):
         sleep(10)
         worker.shutdown()
         self.assertEqual(processing_items, {})
+        # self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(client.request_history[0].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(client.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
 
     @requests_mock.Mocker()
@@ -374,6 +397,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(1)
@@ -386,6 +410,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
+                              'meta': {'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -394,6 +419,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
+                              'meta': {'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -403,6 +429,8 @@ class TestUploadFileWorker(unittest.TestCase):
         sleep(10)
         worker.shutdown()
         self.assertEqual(processing_items, {})
+        self.assertIsNotNone(client.request_history[0].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(client.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
 
     @requests_mock.Mocker()
@@ -436,6 +464,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        document_id = generate_req_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_tender_queue = Queue(1)
@@ -444,11 +473,13 @@ class TestUploadFileWorker(unittest.TestCase):
         worker.retry_upload_to_doc_service_queue = MagicMock()
         worker.retry_upload_to_doc_service_queue.get.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'}),
-                     Data(tender_id, award_id, '123', 'awards', None, {'test_data': 'test_data'})],
+                     Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}),
+                     Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
             default=LoopExit())
         sleep(10)
         worker.shutdown()
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(processing_items, {})
+        self.assertIsNotNone(client.request_history[0].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(client.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request

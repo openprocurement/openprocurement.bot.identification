@@ -28,8 +28,10 @@ def get_random_edr_ids(count=1):
 
 class TestEdrHandlerWorker(unittest.TestCase):
 
-    def assertEqualNoContentComparison(self, obj, example):
+    def checkEqualNoContentComparison(self, obj, example):
         self.assertIsNotNone(obj.file_content['meta']['id'])
+        if 'data' in example:
+            self.assertEqual(obj.file_content['data'], example.file_content['data'])
         self.assertEqual(obj.tender_id, example.tender_id)
         self.assertEqual(obj.item_id, example.item_id)
         self.assertEqual(obj.code, example.code)
@@ -81,11 +83,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
-        for e_result in expected_result:
-            self.assertEqualNoContentComparison(check_queue.get(), e_result)
+        for result in expected_result:
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/{edr_code}'.format(edr_code=expected_result[0].edr_ids[0]))
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -120,8 +125,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
-        for e_result in expected_result:
-            self.assertEqualNoContentComparison(check_queue.get(),e_result)
+        for result in expected_result:
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -135,7 +140,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'text': '', 'status_code': 429, 'headers': {'Retry-After': '10'}},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]},'status_code': 200},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
                      json={'data': {}}, status_code=200)
@@ -156,8 +161,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
-        for e_result in expected_result:
-            self.assertEqualNoContentComparison(check_queue.get(), e_result)
+        for result in expected_result:
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -191,15 +196,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
-
-        for e_result in expected_result:
-            res = check_queue.get()
-            self.assertIsNotNone(res.file_content['meta']['id'])
-            self.assertEqual(res.tender_id, e_result.tender_id)
-            self.assertEqual(res.item_id, e_result.item_id)
-            self.assertEqual(res.code, e_result.code)
-            self.assertEqual(res.item_name, e_result.item_name)
-            self.assertEqual(res.edr_ids, e_result.edr_ids)
+        for result in expected_result:
+            self.checkEqualNoContentComparison(check_queue.get(), result)
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[4].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -229,13 +229,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
             reference_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
-                                        {'meta': {'id': reference_id}, 'data': {}}))  # data
+                                        {'data': {}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
-                                        {'meta': {'id': reference_id}, 'data': {}}))  # result
+                                        {'data': {}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
-        self.assertEqualNoContentComparison(check_queue.get(), expected_result[0])
+        self.checkEqualNoContentComparison(check_queue.get(), expected_result[0])
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
@@ -258,12 +259,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        res = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(res,
-                         Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[], file_content={'data': {'error': "Couldn't find this code in EDR."}}))
-        self.assertEqual(res.file_content['data'], {'error': "Couldn't find this code in EDR."})
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -271,8 +270,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.call_count, 1)  # Requests must call proxy once
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
 
-
-    #TODO: Start from here, reminder: rework tests to use custom assert
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -297,12 +294,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        res = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(res,
-                         Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[], file_content={'data': {'error': "Couldn't find this code in EDR."}}))
-        self.assertEqual(res.file_content['data'], {'error': "Couldn't find this code in EDR."})
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
@@ -328,20 +323,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        res = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(res,
-                         Data(tender_id=tender_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id,
                               item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[u'321', u'322'], file_content={'data': {}}))
-        self.assertEqual(res.file_content['data'], {})
-        res = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(res,
-                         Data(tender_id=tender_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id,
                               item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[u'321', u'322'], file_content={'data': {'some': 'data'}}))
-        self.assertEqual(res.file_content['data'], {'some': 'data'})
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -349,7 +340,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.call_count, 3)  # 1 request to /verify and two requests to /details
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -372,28 +365,27 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        res = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(res,
-                         Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[u'321', u'322'],
                               file_content={'data': {}}))
-        self.assertEqual(res.file_content['data'], {})
-        res = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(res,
-                         Data(tender_id=tender_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id,
                               item_id=award_id,
                               code='123', item_name='awards', edr_ids=[u'322'],
                               file_content={'data': {}}))
-        self.assertEqual(res.file_content['data'], {})
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)  # processed 4 requests
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/322')
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -413,12 +405,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                         Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[u'321'], file_content={'data': {}}))
-        self.assertEqual(queued_data.file_content['data'], {})
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -426,6 +416,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -446,12 +437,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                         Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[u'321'], file_content={'data': {}}))
-        self.assertEqual(queued_data.file_content['data'], {})
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -461,6 +450,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -480,19 +470,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                                            Data(tender_id=tender_id, item_id=award_id,
-                                                 code='123', item_name='awards',
-                                                 edr_ids=[u'321'], file_content={'data': {}}))
-        self.assertEqual(queued_data.file_content['data'], {})
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
+                                                code='123', item_name='awards',
+                                                edr_ids=[u'321'], file_content={'data': {}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -513,20 +503,21 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                                            Data(tender_id=tender_id, item_id=award_id,
-                                                 code='123', item_name='awards',
-                                                 edr_ids=[u'321'], file_content={'data': {}}))
-        self.assertEqual(queued_data.file_content['data'], {})
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
+                                                code='123', item_name='awards',
+                                                edr_ids=[u'321'], file_content={'data': {}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -551,19 +542,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                                            Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                                                  code='123', item_name='awards',
                                                  edr_ids=[u'321'], file_content={'data': {}}))
-        self.assertEqual(queued_data.file_content['data'], {})
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 8)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -587,12 +578,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         upload_to_doc_service_queue = Queue(10)
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                                            Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                                                  code='123', item_name='awards',
                                                  edr_ids=[u'321'], file_content={'data': {}}))
-        self.assertEqual(queued_data.file_content['data'], {})
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -600,6 +589,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')  # check first url
         self.assertEqual(mrequest.request_history[6].url, u'127.0.0.1:80/api/1.0/verify?id=123')  # check 7th url
         self.assertEqual(mrequest.request_history[7].url, u'127.0.0.1:80/api/1.0/details/321')  # check 8th url
+        self.assertIsNotNone(mrequest.request_history[7].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -621,12 +611,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         upload_to_doc_service_queue = Queue(10)
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                                            Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                                                  code='123', item_name='awards',
                                                  edr_ids=[321], file_content={'data': {u'id': 321}}))
-        self.assertEqual(queued_data.file_content['data'], {u'id': 321})
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -634,7 +622,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
 
     @requests_mock.Mocker()
@@ -672,17 +662,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
         filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                                            Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                                                  code='14360570', item_name='awards',
                                                  edr_ids=[321], file_content={'data': {u'id': 321}}))
-        self.assertEqual(queued_data.file_content['data'], {u'id': 321})
         worker.shutdown()
         filter_tenders_worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(filtered_tender_ids_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -721,15 +710,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                   upload_to_doc_service, processing_items)
 
         for data in [first_data, first_data, second_data]:
-            queued_data = upload_to_doc_service.get()
-            self.assertEqualNoContentComparison(queued_data, data)
-            self.assertEqual(queued_data.file_content['data'], data.file_content['data'])
+            self.checkEqualNoContentComparison(upload_to_doc_service.get(), data)
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(processing_items[award_key], 2)
         self.assertEqual(processing_items[qualification_key], 3)
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[4].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[5].headers['X-Client-Request-ID'])
+        self.assertIsNotNone(mrequest.request_history[6].headers['X-Client-Request-ID'])
+
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -749,12 +742,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         upload_to_doc_service_queue = Queue(10)
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, {})
-        queued_data = upload_to_doc_service_queue.get()
-        self.assertEqualNoContentComparison(queued_data,
-                         Data(tender_id=tender_id, item_id=award_id,
+        self.checkEqualNoContentComparison(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[321], file_content={'data': {u'id': 321}}))
-        self.assertEqual(queued_data.file_content['data'], {u'id': 321})
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -763,7 +754,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -799,14 +792,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
         for result in expected_result:
-            queued_data = check_queue.get()
-            self.assertEqualNoContentComparison(queued_data, result)
-            self.assertEqual(queued_data.file_content['data'], result.file_content['data'])
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url,
                          u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url,
                          u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 4)
@@ -845,12 +838,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                            default=LoopExit())
 
         for result in expected_result:
-            queued_data = check_queue.get()
-            self.assertEqualNoContentComparison(queued_data, result)
-            self.assertEqual(queued_data.file_content['data'], result.file_content['data'])
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 4)
@@ -887,14 +880,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
         for result in expected_result:
-            queued_data = check_queue.get()
-            self.assertEqualNoContentComparison(queued_data, result)
-            self.assertEqual(queued_data.file_content['data'], result.file_content['data'])
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url,
                          u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[1].url,
                          u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 2)
@@ -934,14 +927,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
             default=LoopExit())
 
         for result in expected_result:
-            queued_data = check_queue.get()
-            self.assertEqualNoContentComparison(queued_data, result)
-            self.assertEqual(queued_data.file_content['data'], result.file_content['data'])
+            self.checkEqualNoContentComparison(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url,
                          u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
+        self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[1].url,
                          u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
+        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 2)
