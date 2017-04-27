@@ -381,7 +381,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             with patch('openprocurement.bot.identification.databridge.edr_handler.generate_doc_id', return_value='111') as generate_doc_id:
                 worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue,
                                       MagicMock())
-                sleep(1)
+                sleep(61)
                 self.assertTrue(generate_doc_id.called)
                 mock_logger.info.assert_called_with('Empty response for tender {}.{}.'.format(tender_id, document_id),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
