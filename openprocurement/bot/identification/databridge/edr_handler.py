@@ -162,9 +162,7 @@ class EdrHandler(Greenlet):
                                                                                    tender_data.item_id))
             gevent.sleep(0)
 
-# TODO: Try to write test for this specific method and see whether it affects the 122-163 LOC coverage gap
-
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_id_request(self, param, code):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code)
@@ -256,7 +254,7 @@ class EdrHandler(Greenlet):
                                                   params={"TENDER_ID": tender_data.tender_id,  "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from openprocurement.bot.identification.databridge.journal_msg_ids import DATABRIDGE_EMPTY_RESPONSE
+
 monkey.patch_all()
 
 import uuid
@@ -17,13 +19,17 @@ from munch import munchify
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data, validate_param, RetryException
+from openprocurement.bot.identification.databridge.utils import Data, validate_param, RetryException, generate_doc_id, \
+    journal_context
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 from openprocurement.bot.identification.client import ProxyClient
 
 
 def get_random_edr_ids(count=1):
     return [str(random.randrange(10000000, 99999999)) for _ in range(count)]
+
+def pseudo_generate_doc_id():
+    return '111'
 
 
 class TestEdrHandlerWorker(unittest.TestCase):
@@ -230,11 +236,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
                                         {'data': {}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
-                                        {'data': {}}))  # result
-
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
-
-        self.checkEqualNoContentComparison(check_queue.get(), expected_result[0])
+                                        {'meta': {'id': '111'}, 'data': {}}))  # result
+        with patch('openprocurement.bot.identification.databridge.edr_handler.generate_doc_id', return_value='111') as generate_doc_id:
+            worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+            self.assertEqual(check_queue.get(), expected_result[0])
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
@@ -342,6 +347,50 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                            Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[], file_content={'data': {'error': "Couldn't find this code in EDR."}}))
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
+        self.assertEqual(mrequest.call_count, 6)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[5].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_get_edr_id_logger(self, mrequest, gevent_sleep):
+        """Accept 5 times response with status code 403 and error, then accept response with status code 404 and
+                message 'EDRPOU not found'"""
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = pseudo_generate_doc_id()
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, 'status_code': 404}])
+
+        edrpou_codes_queue = Queue(10)
+        edrpou_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
+        with patch('openprocurement.bot.identification.databridge.edr_handler.logger') as mock_logger:
+            with patch('openprocurement.bot.identification.databridge.edr_handler.generate_doc_id', return_value='111') as generate_doc_id:
+                worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue,
+                                      MagicMock())
+                sleep(1)
+                self.assertTrue(generate_doc_id.called)
+                mock_logger.info.assert_called_with('Empty response for tender {}.{}.'.format(tender_id, document_id),
+                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
+                                                          params={"TENDER_ID": tender_id, "DOCUMENT_ID": document_id}))
+        self.assertEqual(upload_to_doc_service_queue.get(),
+                                           Data(tender_id=tender_id, item_id=award_id,
+                                                code='123', item_name='awards',
+                                                edr_ids=[],
+                                                file_content={'meta': {'id': '111'}, 'data': {'error': "Couldn't find this code in EDR."}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
