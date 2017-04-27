@@ -18,8 +18,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_EMPTY_RESPONSE
 )
 from openprocurement.bot.identification.databridge.utils import (
-    Data, journal_context, validate_param, RetryException,
-    generate_req_id)
+    Data, journal_context, validate_param, RetryException, generate_doc_id)
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +69,11 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code)
             if response.status_code == 404 and response.json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
-                document_id = generate_req_id()
-                logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
+                document_id = generate_doc_id()
+                logger.info('Empty response for tender {} {}.'.format(tender_data.tender_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
-                                                  params={"TENDER_ID": tender_data.tender_id}))
+                                                  params={"TENDER_ID": tender_data.tender_id,
+                                                          "DOCUMENT_ID": document_id}))
                 file_content = dict(self.error_details, **{'meta': {'id': document_id}})
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                             tender_data.item_name, [], file_content)
@@ -89,13 +89,11 @@ class EdrHandler(Greenlet):
                                 [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], None)
                     self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                 except TypeError as e:
-                    logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
-                                                                      tender_data.item_id, e))
+                    logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name, tender_data.item_id, e))
                     self.retry_edrpou_codes_queue.put(tender_data)
                 else:
                     self.edr_ids_queue.put(data)
-                    logger.info('Put tender {} {} {} to edr_ids_queue.'.format(tender_data.tender_id,
-                                                                               tender_data.item_name,
+                    logger.info('Put tender {} {} {} to edr_ids_queue.'.format(tender_data.tender_id, tender_data.item_name,
                                                                                tender_data.item_id))
             else:
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
@@ -123,8 +121,8 @@ class EdrHandler(Greenlet):
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code)
             except RetryException as re:
                 if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
-                    document_id = generate_req_id()
-                    logger.info('Empty response for tender {}. Document_ID: {}.'.format(tender_data.tender_id, document_id),
+                    document_id = generate_doc_id()
+                    logger.info('Empty response for tender {}.{}.'.format(tender_data.tender_id, document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
@@ -149,10 +147,9 @@ class EdrHandler(Greenlet):
                 # List because EDR can return 0, 1 or 2 values to our request
                 if response.status_code == 200:
                     try:
-                        document_id = generate_req_id()
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, [obj['x_edrInternalId'] for obj in response.json().get('data', [])],
-                                    {'meta': {'id': document_id}})
+                                    None)
                         self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                     except TypeError as e:
                         logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
@@ -165,7 +162,9 @@ class EdrHandler(Greenlet):
                                                                                    tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+# TODO: Try to write test for this specific method and see whether it affects the 122-163 LOC coverage gap
+
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
     def get_edr_id_request(self, param, code):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code)
@@ -187,30 +186,30 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             for edr_id in tender_data.edr_ids:
-                document_id = generate_req_id()
+                document_id = generate_doc_id()
                 response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
                 if response.status_code == 200:
                     file_content = dict(response.json(), **{'meta': {'id': document_id}})
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, tender_data.edr_ids, file_content)
                     if not isinstance(response.json(), dict):
-                        logger.info('Document_ID: {}. Error data type {} {} {}. Message {}'.format(
-                            document_id, tender_data.tender_id, tender_data.item_name, tender_data.item_id, "Not a dictionary"),
+                        logger.info('Error data type {} {} {} {}. Message {}'.format(
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, "Not a dictionary"),
                             extra=journal_context({"DOCUMENT_ID": document_id}))
                         self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                           tender_data.item_name, [edr_id], tender_data.file_content))
                     else:
                         self.upload_to_doc_service_queue.put(data)
-                        logger.info('Document_ID: {}. Successfully created file for tender {} {} {}'.format(
-                            document_id, tender_data.tender_id, tender_data.item_name, tender_data.item_id),
+                        logger.info('Successfully created file for tender {} {} {} {}.'.format(
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                 else:
                     self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                       tender_data.item_name, [edr_id], tender_data.file_content))
                     self.handle_status_response(response, tender_data.tender_id)
-                    logger.info('Document_ID: {}. Put tender {} with {} id {} to retry_edr_ids_queue'.format(
-                                document_id, tender_data.tender_id, tender_data.item_name, tender_data.item_id),
+                    logger.info('Put tender {} with {} id {} {}  to retry_edr_ids_queue'.format(
+                                tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
             self.edr_ids_queue.get()
             gevent.sleep(0)
@@ -230,13 +229,13 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             for edr_id in tender_data.edr_ids:
-                document_id = generate_req_id()
+                document_id = generate_doc_id()
                 try:
                     response = self.get_edr_details_request(edr_id, document_id)
                 except RetryException:
                     self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                        tender_data.item_name, [edr_id], tender_data.file_content)))
-                    logger.info('Put tender {} with {} id {} to retry_edr_ids_queue. Docuemnt_ID: {}'.format(
+                    logger.info('Put tender {} with {} id {} {} to retry_edr_ids_queue. '.format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     gevent.sleep(0)
@@ -245,13 +244,13 @@ class EdrHandler(Greenlet):
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, tender_data.edr_ids, file_content)
                     if not isinstance(response.json(), dict):
-                        logger.info('Error data type {} {} {}. Message {}. Document_ID: {}'.format(
+                        logger.info('Error data type {} {} {} {}. Message {}.'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, "Not a dictionary", document_id))
                         self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                            tender_data.item_name, [edr_id], tender_data.file_content)))
                     else:
                         self.upload_to_doc_service_queue.put(data)
-                        logger.info('Successfully created file for tender {} {} {} in retry. Document_ID: {}'.format(
+                        logger.info('Successfully created file for tender {} {} {} {} in retry.'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                   params={"TENDER_ID": tender_data.tender_id,  "DOCUMENT_ID": document_id}))

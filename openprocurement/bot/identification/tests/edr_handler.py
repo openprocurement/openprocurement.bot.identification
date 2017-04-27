@@ -17,7 +17,7 @@ from munch import munchify
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data
+from openprocurement.bot.identification.databridge.utils import Data, validate_param, RetryException
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 from openprocurement.bot.identification.client import ProxyClient
 
@@ -226,7 +226,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for i in range(1):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
-            reference_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
                                         {'data': {}}))  # data
@@ -240,6 +239,52 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_get_edr_id_request(self, mrequest, gevent_sleep):
+        """test execution of get_edr_id_request, test that response is returned"""
+        gevent_sleep.side_effect = custom_sleep
+        local_edr_ids = get_random_edr_ids(1)
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                         {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
+        edr_ids = get_random_edr_ids(1)
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        check_queue = Queue(10)
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+        res = worker.get_edr_id_request(validate_param(edr_ids[0]), edr_ids[0])
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_get_edr_id_request_retry_exception(self, mrequest, gevent_sleep):
+        """test execution of get_edr_id_request, test that RetryException is raised"""
+        gevent_sleep.side_effect = custom_sleep
+        local_edr_ids = get_random_edr_ids(1)
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                         {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
+                     json={'data': {}}, status_code=200)
+        edr_ids = get_random_edr_ids(1)
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        check_queue = Queue(10)
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
+        with self.assertRaises(RetryException) as context:
+            res = worker.get_edr_id_request(validate_param(edr_ids[0]), edr_ids[0])
+        self.assertTrue('Unsuccessful retry request to EDR.' in context.exception)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -269,7 +314,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edr_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
         self.assertEqual(mrequest.call_count, 1)  # Requests must call proxy once
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
-
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -722,7 +766,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertIsNotNone(mrequest.request_history[4].headers['X-Client-Request-ID'])
         self.assertIsNotNone(mrequest.request_history[5].headers['X-Client-Request-ID'])
         self.assertIsNotNone(mrequest.request_history[6].headers['X-Client-Request-ID'])
-
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')

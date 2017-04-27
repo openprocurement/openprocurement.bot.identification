@@ -15,7 +15,7 @@ from restkit import ResourceError
 
 from openprocurement.bot.identification.client import DocServiceClient
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
-from openprocurement.bot.identification.databridge.utils import Data, generate_req_id
+from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 
 
@@ -56,7 +56,7 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
@@ -100,7 +100,7 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
@@ -143,7 +143,7 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
@@ -177,7 +177,7 @@ class TestUploadFileWorker(unittest.TestCase):
         client._create_tender_resource_item.side_effect = ResourceError(http_code=422)
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
@@ -214,7 +214,7 @@ class TestUploadFileWorker(unittest.TestCase):
                                                            ResourceError(http_code=422)]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
         upload_to_doc_service_queue = Queue(10)
@@ -259,7 +259,7 @@ class TestUploadFileWorker(unittest.TestCase):
                                                                      'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(10)
@@ -307,7 +307,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = MagicMock()
@@ -343,7 +343,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(1)
@@ -373,7 +373,6 @@ class TestUploadFileWorker(unittest.TestCase):
         sleep(10)
         worker.shutdown()
         self.assertEqual(processing_items, {})
-        # self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertIsNotNone(client.request_history[0].headers['X-Client-Request-ID'])
         self.assertIsNotNone(client.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(client._create_tender_resource_item.call_count, 2)  # check that processed just 1 request
@@ -397,7 +396,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(1)
@@ -464,7 +463,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       'url': 'url'}}]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
-        document_id = generate_req_id()
+        document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
         upload_to_tender_queue = Queue(1)

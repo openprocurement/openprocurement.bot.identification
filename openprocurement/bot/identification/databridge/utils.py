@@ -27,6 +27,10 @@ def generate_req_id():
     return b'edr-api-data-bridge-req-' + str(uuid4()).encode('ascii')
 
 
+def generate_doc_id():
+    return uuid4().hex
+
+
 def validate_param(code):
     return 'id' if code.isdigit() and len(code) != id_passport_len else 'passport'
 
