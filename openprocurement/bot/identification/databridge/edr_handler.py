@@ -11,8 +11,7 @@ from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
 
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
-    DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_START_EDR_HANDLER,
-    DATABRIDGE_UNAUTHORIZED_EDR, DATABRIDGE_SUCCESS_CREATE_FILE,
+    DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_START_EDR_HANDLER, DATABRIDGE_SUCCESS_CREATE_FILE,
     DATABRIDGE_EMPTY_RESPONSE
 )
 from openprocurement.bot.identification.databridge.utils import (
@@ -258,12 +257,9 @@ class EdrHandler(Greenlet):
 
     def handle_status_response(self, response, tender_id):
         """Process unsuccessful request"""
-        if response.status_code == 401:
-            logger.warning('Not Authorized (invalid token) for tender {}'.format(tender_id),
-                           extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNAUTHORIZED_EDR}, {"TENDER_ID": tender_id}))
-        elif response.status_code == 429:
-            self.until_too_many_requests_event.wait(response.headers.get('Retry-After', self.delay))
-        elif response.status_code == 402:
+        if response.status_code == 403 and response.headers.get('Retry-After'):
+            self.until_too_many_requests_event.wait(response.headers['Retry-After'])
+        elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
                            extra=journal_context(params={"TENDER_ID": tender_id}))
