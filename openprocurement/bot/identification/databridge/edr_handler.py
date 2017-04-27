@@ -72,11 +72,9 @@ class EdrHandler(Greenlet):
                 document_id = generate_doc_id()
                 logger.info('Empty response for tender {} {}.'.format(tender_data.tender_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
-                                                  params={"TENDER_ID": tender_data.tender_id,
-                                                          "DOCUMENT_ID": document_id}))
-                file_content = dict(self.error_details, **{'meta': {'id': document_id}})
+                                                  params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                            tender_data.item_name, [], file_content)
+                            tender_data.item_name, [], dict(self.error_details, **{'meta': {'id': document_id}}))
                 self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                 self.edrpou_codes_queue.get()
                 continue
@@ -85,15 +83,15 @@ class EdrHandler(Greenlet):
                 # List because EDR can return 0, 1 or 2 values to our request
                 try:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name,
-                                [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], None)
+                                tender_data.item_name, [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], None)
                     self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                 except TypeError as e:
                     logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name, tender_data.item_id, e))
                     self.retry_edrpou_codes_queue.put(tender_data)
                 else:
                     self.edr_ids_queue.put(data)
-                    logger.info('Put tender {} {} {} to edr_ids_queue.'.format(tender_data.tender_id, tender_data.item_name,
+                    logger.info('Put tender {} {} {} to edr_ids_queue.'.format(tender_data.tender_id,
+                                                                               tender_data.item_name,
                                                                                tender_data.item_id))
             else:
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
@@ -148,8 +146,7 @@ class EdrHandler(Greenlet):
                 if response.status_code == 200:
                     try:
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, [obj['x_edrInternalId'] for obj in response.json().get('data', [])],
-                                    None)
+                                    tender_data.item_name, [obj['x_edrInternalId'] for obj in response.json().get('data', [])], None)
                         self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
                     except TypeError as e:
                         logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
@@ -187,9 +184,8 @@ class EdrHandler(Greenlet):
                 document_id = generate_doc_id()
                 response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
                 if response.status_code == 200:
-                    file_content = dict(response.json(), **{'meta': {'id': document_id}})
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids, file_content)
+                                tender_data.item_name, tender_data.edr_ids, dict(response.json(), **{'meta': {'id': document_id}}))
                     if not isinstance(response.json(), dict):
                         logger.info('Error data type {} {} {} {}. Message {}'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, "Not a dictionary"),
@@ -238,9 +234,8 @@ class EdrHandler(Greenlet):
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     gevent.sleep(0)
                 else:
-                    file_content = dict(response.json(), **{'meta': {'id': document_id}})
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids, file_content)
+                                tender_data.item_name, tender_data.edr_ids, dict(response.json(), **{'meta': {'id': document_id}}))
                     if not isinstance(response.json(), dict):
                         logger.info('Error data type {} {} {} {}. Message {}.'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, "Not a dictionary", document_id))

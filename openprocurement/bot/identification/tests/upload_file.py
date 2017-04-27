@@ -313,8 +313,7 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_doc_service_queue = MagicMock()
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.get.side_effect = generate_answers(
-            answers=[LoopExit(), Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}),
-                     Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
+            answers=[LoopExit(), Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}), Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
             default=LoopExit())
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(10)
