@@ -230,7 +230,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'data': {}}))  # data
-            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'meta': {'id': '111'}, 'data': {}}))  # result
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'data': {}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -859,12 +859,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'meta': {'id': 123}, 'data': {}}))  # result
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'data': {}}))  # result
 
         edr_ids_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'meta': {'id': 123}, 'data': {}}),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'meta': {'id': 123}, 'data': {}})],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}})],
             default=LoopExit())
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -905,14 +905,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'meta': {'id': 123}, 'data': {}}))  # result
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'data': {}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
         worker.retry_edr_ids_queue = MagicMock()
         worker.retry_edr_ids_queue.get.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'meta': {'id': 123}, 'data': {}}),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'meta': {'id': 123}, 'data': {}})],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}})],
             default=LoopExit())
 
         for result in expected_result:
