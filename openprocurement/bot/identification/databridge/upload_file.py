@@ -72,8 +72,7 @@ class UploadFile(Greenlet):
             else:
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids,
-                                dict(response.json(), **{'meta': {'id': document_id}}))
+                                tender_data.item_name, tender_data.edr_ids, dict(response.json(), **{'meta': {'id': document_id}}))
                     self.upload_to_tender_queue.put(data)
                     logger.info('Successfully uploaded file to doc service {} {} {} {}'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
@@ -156,7 +155,7 @@ class UploadFile(Greenlet):
                                                                                   tender_data.item_id))
             except ResourceError as re:
                 if re.status_int == 422:  # WARNING and don't retry
-                    logger.warn("Accept 422, skip tender {} {} {} {}.".format(tender_data.tender_id,
+                    logger.warning("Accept 422, skip tender {} {} {} {}.".format(tender_data.tender_id,
                                                                               tender_data.item_name,
                                                                               tender_data.item_id, document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
@@ -195,7 +194,7 @@ class UploadFile(Greenlet):
                 self.client_upload_to_tender(tender_data)
             except ResourceError as re:
                 if re.status_int == 422:  # WARNING and don't retry
-                    logger.warn("Accept 422, skip tender {} {} {} {}.".format(tender_data.tender_id, tender_data.item_name,
+                    logger.warning("Accept 422, skip tender {} {} {} {}.".format(tender_data.tender_id, tender_data.item_name,
                                                                               tender_data.item_id, document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
                                                       {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))

@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import uuid
-
 from gevent import monkey
 from gevent.queue import Queue
 from retrying import retry
