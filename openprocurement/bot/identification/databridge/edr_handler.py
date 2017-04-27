@@ -222,11 +222,11 @@ class EdrHandler(Greenlet):
             for edr_id in tender_data.edr_ids:
                 try:
                     response = self.get_edr_details_request(edr_id)
-                except RetryException:
+                except RetryException as re:
                     self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                        tender_data.item_name, [edr_id], tender_data.file_content)))
-                    logger.info('Put tender {} with {} id {} to retry_edr_ids_queue'.format(
-                        tender_data.tender_id, tender_data.item_name, tender_data.item_id),
+                    logger.info('Put tender {} with {} id {} to retry_edr_ids_queue.Error response {}'.format(
+                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, re.args[1].json().get('errors')),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
                     gevent.sleep(0)
                 else:
