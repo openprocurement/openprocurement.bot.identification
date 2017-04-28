@@ -92,7 +92,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'Retry-After': '10'}},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10'}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),

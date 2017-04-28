@@ -222,7 +222,7 @@ class EdrHandler(Greenlet):
             for edr_id in tender_data.edr_ids:
                 try:
                     response = self.get_edr_details_request(edr_id)
-                except RetryException as re:
+                except RetryException:
                     self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                        tender_data.item_name, [edr_id], tender_data.file_content)))
                     logger.info('Put tender {} with {} id {} to retry_edr_ids_queue.Error response {}'.format(
@@ -257,7 +257,7 @@ class EdrHandler(Greenlet):
 
     def handle_status_response(self, response, tender_id):
         """Process unsuccessful request"""
-        if response.status_code == 403 and response.headers.get('Retry-After'):
+        if response.status_code == 429:
             self.until_too_many_requests_event.wait(response.headers['Retry-After'])
         elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
