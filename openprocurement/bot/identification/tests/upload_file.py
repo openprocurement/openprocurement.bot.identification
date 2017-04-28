@@ -353,7 +353,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
-                              'meta': {'id': document_id},
+                              u'meta': {u'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -362,7 +362,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
-                              'meta': {'id': document_id},
+                              u'meta': {u'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -408,7 +408,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
-                              'meta': {'id': document_id},
+                              u'meta': {u'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
@@ -417,7 +417,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
                           file_content={
-                              'meta': {'id': document_id},
+                              u'meta': {u'id': document_id},
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
