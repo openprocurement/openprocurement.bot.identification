@@ -258,7 +258,7 @@ class EdrHandler(Greenlet):
     def handle_status_response(self, response, tender_id):
         """Process unsuccessful request"""
         if response.status_code == 429:
-            self.until_too_many_requests_event.wait(response.headers['Retry-After'])
+            self.until_too_many_requests_event.wait(response.headers.get('Retry-After', self.delay))
         elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
