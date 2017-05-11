@@ -198,7 +198,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, status_code=404)
+                     json={'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                        "code": "notFound"}}]}]}, status_code=404)
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -232,7 +233,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': [{'message': 'EDRPOU not found'}]}]}, 'status_code': 404}])
+                      {'json': {'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                             "code": "notFound"}}]}]}, 'status_code': 404}])
 
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)

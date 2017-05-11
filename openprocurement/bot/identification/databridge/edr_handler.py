@@ -66,7 +66,8 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code)
-            if response.status_code == 404 and response.json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
+            if response.status_code == 404 and \
+                response.json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                 logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                   params={"TENDER_ID": tender_data.tender_id}))
@@ -116,7 +117,8 @@ class EdrHandler(Greenlet):
             try:
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code)
             except RetryException as re:
-                if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
+                if re.args[1].status_code == 404 and \
+                    re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                     logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id}))
