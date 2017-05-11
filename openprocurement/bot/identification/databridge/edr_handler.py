@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 class EdrHandler(Greenlet):
     """ Edr API Data Bridge """
-    error_details = {"data": {"error": {"errorDetails": "Couldn't find this code in EDR.", "code": "notFound"}}}
     identification_scheme = u"UA-EDR"
     activityKind_scheme = u'КВЕД'
 
