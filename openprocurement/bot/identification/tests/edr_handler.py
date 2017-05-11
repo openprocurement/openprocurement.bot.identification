@@ -126,8 +126,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'text': '', 'status_code': 429, 'headers': {'Retry-After': '10'}},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]},'status_code': 200},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10'}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
                      json={'data': {}}, status_code=200)
@@ -162,7 +162,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'text': '', 'status_code': 402},  # pay for me
+                     [{'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]},
+                       'status_code': 403},  # pay for me
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
@@ -193,13 +194,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_id(self, mrequest, gevent_sleep):
-        """First and second response returns 402 status code. Tests retry for get_edr_id worker"""
+        """First and second response returns 403 status code. Tests retry for get_edr_id worker"""
         gevent_sleep.side_effect = custom_sleep
         local_edr_ids = get_random_edr_ids(1)
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'text': '', 'status_code': 402},
-                      {'text': '', 'status_code': 402},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
                      json={'data': {}}, status_code=200)
@@ -325,7 +326,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_details_two_ids(self, mrequest, gevent_sleep):
-        """Accept two ids in /verify request. Then accept 200 response for first id, and 402 and 200
+        """Accept two ids in /verify request. Then accept 200 response for first id, and 403 and 200
         responses for second id. Check retry_get_edr_details job"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
@@ -335,7 +336,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                      json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
-                     [{'text': '', 'status_code': 402},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'data': {}}, 'status_code': 200}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -466,7 +467,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'text': '', 'status_code': 402},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': [], 'status_code': 200},  # list instead of dict in data
                       {'json': {'data': {}}, 'status_code': 200}])
         edrpou_codes_queue = Queue(10)
@@ -491,19 +492,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_details(self, mrequest, gevent_sleep):
-        """Accept 6 times errors (403 and 402 status codes) in response while requesting /details"""
+        """Accept 6 times errors in response while requesting /details"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}]}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'json': '', 'status_code': 403},
-                      {'json': '', 'status_code': 402},
-                      {'json': '', 'status_code': 402},
-                      {'json': '', 'status_code': 402},
-                      {'json': '', 'status_code': 402},
-                      {'json': '', 'status_code': 402},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'data': {}}, 'status_code': 200}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -526,7 +527,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_5_times_get_edr_id(self, mrequest, gevent_sleep):
-        """Accept 6 times errors (403 and 402 status codes) in response while requesting /verify"""
+        """Accept 6 times errors in response while requesting /verify"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
