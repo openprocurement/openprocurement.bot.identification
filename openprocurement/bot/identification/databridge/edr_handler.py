@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class EdrHandler(Greenlet):
     """ Edr API Data Bridge """
-    error_details = {'error': 'Couldn\'t find this code in EDR.'}
+    error_details = {'data': {'error': 'Couldn\'t find this code in EDR.'}}
     identification_scheme = u"UA-EDR"
     activityKind_scheme = u'КВЕД'
 
@@ -180,13 +180,12 @@ class EdrHandler(Greenlet):
             for edr_id in tender_data.edr_ids:
                 response = self.proxyClient.details(edr_id)
                 if response.status_code == 200:
-                    try:
-                        data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, tender_data.edr_ids,
-                                    response.json().get('data', {}))
-                    except AttributeError as e:
+                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                tender_data.item_name, tender_data.edr_ids,
+                                response.json())
+                    if not isinstance(response.json(), dict):
                         logger.info('Error data type {} {} {}. Message {}'.format(
-                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, e))
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, "Not a dictionary"))
                         self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                           tender_data.item_name, [edr_id], tender_data.file_content))
                     else:
@@ -230,13 +229,12 @@ class EdrHandler(Greenlet):
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
                     gevent.sleep(0)
                 else:
-                    try:
-                        data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, tender_data.edr_ids,
-                                    response.json().get('data', {}))
-                    except AttributeError as e:
+                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                tender_data.item_name, tender_data.edr_ids,
+                                response.json())
+                    if not isinstance(response.json(), dict):
                         logger.info('Error data type {} {} {}. Message {}'.format(
-                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, e))
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, "Not a dictionary"))
                         self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                            tender_data.item_name, [edr_id], tender_data.file_content)))
                     else:
