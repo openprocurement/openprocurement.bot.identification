@@ -85,41 +85,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_proxy_client_401(self, mrequest, gevent_sleep):
-        """ After 401 need restart worker """
-        local_edr_ids = get_random_edr_ids(2)
-        gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'text': '', 'status_code': 401},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}]}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}]}, 'status_code': 200}])
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}}, status_code=200)
-
-        edrpou_codes_queue = Queue(10)
-        edr_ids_queue = Queue(10)
-        check_queue = Queue(10)
-        expected_result = []
-        for i in range(2):
-            tender_id = uuid.uuid4().hex
-            award_id = uuid.uuid4().hex
-            edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, None))  # data
-            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]], {'data': {}}))  # result
-
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
-
-        for result in expected_result:
-            self.assertEqual(check_queue.get(), result)
-
-        worker.shutdown()
-        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
     def test_proxy_client_429(self, mrequest, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
         local_edr_ids = get_random_edr_ids(2)
@@ -157,7 +122,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_proxy_client_402(self, mrequest, gevent_sleep):
-        """First request returns 402 status code."""
+        """First request returns Edr API returns to proxy 402 status code with messages."""
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
