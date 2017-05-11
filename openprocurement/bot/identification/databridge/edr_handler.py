@@ -158,7 +158,7 @@ class EdrHandler(Greenlet):
                                                                                    tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_id_request(self, param, code):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code)
