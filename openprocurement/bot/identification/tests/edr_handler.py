@@ -199,7 +199,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
-                                                        "code": "notFound"}}]}]}, status_code=404)
+                                                                  "code": "notFound"},
+                                                        "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}]},
+                     status_code=404)
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -210,7 +212,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
-                              edr_ids=[], file_content={'data': {'error': "Couldn't find this code in EDR."}}))
+                              edr_ids=[], file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                                  "code": "notFound"},
+                                                        "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -234,18 +238,21 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
-                                                             "code": "notFound"}}]}]}, 'status_code': 404}])
+                                                                       "code": "notFound"},
+                                                             "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}]}, 'status_code': 404}])
 
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, None))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
-
         self.assertEqual(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id, item_id=award_id,
                               code='123', item_name='awards',
-                              edr_ids=[], file_content={'data': {'error': "Couldn't find this code in EDR."}}))
+                              edr_ids=[],
+                              file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                      "code": "notFound"},
+                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
