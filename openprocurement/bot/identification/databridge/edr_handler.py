@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 class EdrHandler(Greenlet):
     """ Edr API Data Bridge """
-    error_details = {'data': {'error': 'Couldn\'t find this code in EDR.'}}
     identification_scheme = u"UA-EDR"
     activityKind_scheme = u'КВЕД'
 
@@ -66,12 +65,13 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code)
-            if response.status_code == 404 and response.json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
+            if response.status_code == 404 and \
+                response.json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                 logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                   params={"TENDER_ID": tender_data.tender_id}))
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                            tender_data.item_name, [], self.error_details)
+                            tender_data.item_name, [], response.json().get('errors')[0].get('description')[0])
                 self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                 self.edrpou_codes_queue.get()
                 continue
@@ -116,12 +116,13 @@ class EdrHandler(Greenlet):
             try:
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code)
             except RetryException as re:
-                if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description') == [{"message": "EDRPOU not found"}]:
+                if re.args[1].status_code == 404 and \
+                    re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                     logger.info('Empty response for tender {}.'.format(tender_data.tender_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id}))
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, [], self.error_details)
+                                tender_data.item_name, [], re.args[1].json().get('errors')[0].get('description')[0])
                     self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                     continue
                 logger.info("RetryException error message {}".format(re.args[0]))
