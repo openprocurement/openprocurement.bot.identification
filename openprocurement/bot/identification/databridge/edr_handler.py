@@ -20,17 +20,6 @@ from openprocurement.bot.identification.databridge.utils import (
 logger = logging.getLogger(__name__)
 
 
-# def data_builder(tender_data, stage, response=None, document_id=None):
-#     try:
-#         if stage == 'get_edr_id':
-#             return  Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-#                                 tender_data.item_name, [], dict(response.json().get('errors')[0].get('description')[0], **{'meta': {'id': document_id}}))
-#         elif stage == 'get_edr_details_id':
-#             return
-#     except AttributeError as e:
-
-
-
 class EdrHandler(Greenlet):
     """ Edr API Data Bridge """
     error_details = {'data': {'error': 'Couldn\'t find this code in EDR.'}}
@@ -81,9 +70,8 @@ class EdrHandler(Greenlet):
                 logger.info('Empty response for tender {} {}.'.format(tender_data.tender_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                   params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                file_content = response.json()
-                file_content.update({'meta': {'id': document_id}})
-                logger.info("FILE CONTENT: {}".format(file_content))
+                file_content = response.json().get('errors')[0].get('description')[0]
+                file_content['meta'].update({'id': document_id})
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code, tender_data.item_name, [], file_content)
                 self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                 self.edrpou_codes_queue.get()
@@ -133,9 +121,8 @@ class EdrHandler(Greenlet):
                     logger.info('Empty response for tender {}.{}.'.format(tender_data.tender_id, document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                    file_content = re.args[1].json()
-                    file_content.update({'meta': {'id': document_id}})
-                    logger.info("FILE CONTENT: {}".format(file_content))
+                    file_content = re.args[1].json().get('errors')[0].get('description')[0]
+                    file_content['meta'].update({'id': document_id})
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, [], file_content)
                     self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
@@ -205,7 +192,7 @@ class EdrHandler(Greenlet):
                                                           tender_data.item_name, [edr_id], tender_data.file_content))
                     else:
                         file_content = response.json()
-                        file_content.update({'meta': {'id': document_id}})
+                        file_content['meta'].update({'id': document_id})
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
@@ -256,8 +243,7 @@ class EdrHandler(Greenlet):
                                                            tender_data.item_name, [edr_id], tender_data.file_content)))
                     else:
                         file_content = response.json()
-                        file_content.update({'meta': {'id': document_id}})
-                        logger.info("FILE CONTENT: {}".format(file_content))
+                        file_content['meta'].update({'id': document_id})
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
