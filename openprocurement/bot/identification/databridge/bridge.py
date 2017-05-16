@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from requests import RequestException
-
 from gevent import monkey
 monkey.patch_all()
 
@@ -14,6 +12,7 @@ from functools import partial
 from yaml import load
 from gevent.queue import Queue
 from restkit import request, RequestError
+from requests import RequestException
 
 from openprocurement_client.client import TendersClientSync, TendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
