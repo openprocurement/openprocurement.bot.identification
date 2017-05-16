@@ -17,6 +17,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
 from openprocurement.bot.identification.databridge.utils import (
     Data, journal_context, validate_param, RetryException, check_add_suffix
 )
+from openprocurement.bot.identification.databridge.constants import version
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,8 @@ class EdrHandler(Greenlet):
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                   params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                 file_content = response.json().get('errors')[0].get('description')[0]
-                file_content['meta'].update(tender_data.file_content['meta'])
+                file_content['meta'].update(tender_data.file_content['meta'])  # add meta.id to file_content
+                file_content['meta'].update({"version": version})  # add filed meta.version
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code, tender_data.item_name, [], file_content)
                 self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                 self.edrpou_codes_queue.get()
@@ -123,6 +125,7 @@ class EdrHandler(Greenlet):
                                                       params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     file_content = re.args[1].json().get('errors')[0].get('description')[0]
                     file_content['meta'].update(tender_data.file_content['meta'])
+                    file_content['meta'].update({"version": version})  # add filed meta.version
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, [], file_content)
                     self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
@@ -196,6 +199,7 @@ class EdrHandler(Greenlet):
                     else:
                         file_content = response.json()
                         file_content['meta'].update(tender_data.file_content['meta'])
+                        file_content['meta'].update({"version": version})  # add filed meta.version
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
@@ -247,6 +251,7 @@ class EdrHandler(Greenlet):
                     else:
                         file_content = response.json()
                         file_content['meta'].update(tender_data.file_content['meta'])
+                        file_content['meta'].update({"version": version})  # add filed meta.version
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
