@@ -13,18 +13,17 @@ class ProxyClient(object):
         self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
         self.timeout = timeout
 
-    def verify(self, param, code):
+    def verify(self, param, code, headers):
         """Send request to Proxy server to verify EDRPOU code"""
         url = '{url}?{param}={code}'.format(url=self.verify_url, param=param, code=code)
-        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
+        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)
 
         return response
 
-    def details(self, id):
+    def details(self, id, headers):
         """ Send request to Proxy server to get details."""
         url = '{url}/{id}'.format(url=self.details_url, id=id)
-        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
-
+        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)
         return response
 
 
@@ -38,8 +37,7 @@ class DocServiceClient(object):
         self.password = password
         self.timeout = timeout
 
-    def upload(self, filename, in_file, content_type):
+    def upload(self, filename, in_file, content_type, headers):
         files = {'file': (filename, in_file, content_type)}
-        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files)
-
+        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files, headers=headers)
         return response
