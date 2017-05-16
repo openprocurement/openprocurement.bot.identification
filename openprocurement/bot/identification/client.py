@@ -11,6 +11,7 @@ class ProxyClient(object):
         self.password = password
         self.verify_url = '{host}:{port}/api/{version}/verify'.format(host=host, port=port, version=version)
         self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
+        self.health_url = '{host}:{port}/api/{version}/health'.format(host=host, port=port, version=version)
         self.timeout = timeout
 
     def verify(self, param, code):
@@ -25,6 +26,12 @@ class ProxyClient(object):
         url = '{url}/{id}'.format(url=self.details_url, id=id)
         response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
 
+        return response
+
+    def health(self):
+        """Send request to the Proxy server to get whether its active"""
+        response = self.session.get(url=self.health_url, auth=(self.user, self.password), timeout=self.timeout)
+        response.raise_for_status()
         return response
 
 

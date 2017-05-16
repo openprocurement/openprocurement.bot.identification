@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from requests import RequestException
+
 from gevent import monkey
 monkey.patch_all()
 
@@ -21,8 +23,8 @@ from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
 from openprocurement.bot.identification.databridge.utils import journal_context
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
-    DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR
-)
+    DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
+    DATABRIDGE_PROXY_SERVER_CONN_ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -111,11 +113,31 @@ class EdrDataBridge(object):
         return self.config.get('main').get(name)
 
     def check_services(self):
+        """Wrapper around checks of two services, made because of most common usage"""
+        return self.check_proxy() and self.check_doc_service()
+
+    def check_doc_service(self):
+        """Makes request to the doc_service, returns True if it's up, raises RequestError otherwise
+                Separated to allow for possible granular checks         
+        """
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
         except RequestError as e:
             logger.info('DocService connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
+            raise e
+        else:
+            return True
+
+    def check_proxy(self):
+        """Makes request to the EDR proxy, returns True if it's up, raises RequestError otherwise
+                Separated to allow for possible granular checks         
+        """
+        try:
+            self.proxyClient.health()
+        except RequestException as e:
+            logger.info('Proxy server connection error, message {}'.format(e),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
             raise e
         else:
             return True
