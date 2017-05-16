@@ -2,6 +2,9 @@
 
 import unittest
 import os
+
+from requests import RequestException
+
 from mock import patch, MagicMock
 from restkit import RequestError
 
@@ -94,6 +97,10 @@ def response_spore():
 
 
 def doc_response():
+    return response
+
+
+def proxy_response():
     return response
 
 
@@ -193,12 +200,29 @@ class TestBridgeWorker(BaseServersTest):
 
     def test_check_service(self):
         setup_routing(self.api_server_bottle, response_spore)
+        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.doc_server.stop()
         self.worker = EdrDataBridge(config)
-
         with self.assertRaises(RequestError):
             self.worker.check_services()
-
         self.doc_server.start()
-
         self.worker.check_services()
+
+    def test_proxy_server(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
+        self.proxy_server.stop()
+        self.worker = EdrDataBridge(config)
+        with self.assertRaises(RequestException):
+            self.worker.check_proxy()
+        self.proxy_server.start()
+        self.worker.check_proxy()
+
+    def test_doc_service(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        self.doc_server.stop()
+        self.worker = EdrDataBridge(config)
+        with self.assertRaises(RequestError):
+            self.worker.check_doc_service()
+        self.doc_server.start()
+        self.worker.check_doc_service()

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from requests import RequestException
+
 from gevent import monkey
 monkey.patch_all()
 
@@ -21,8 +23,8 @@ from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
 from openprocurement.bot.identification.databridge.utils import journal_context
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
-    DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR
-)
+    DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
+    DATABRIDGE_PROXY_SERVER_CONN_ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -133,9 +135,9 @@ class EdrDataBridge(object):
         """
         try:
             self.proxyClient.health()
-        except RequestError as e:
+        except RequestException as e:
             logger.info('Proxy server connection error, message {}'.format(e),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
             raise e
         else:
             return True

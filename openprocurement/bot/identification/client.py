@@ -29,8 +29,9 @@ class ProxyClient(object):
         return response
 
     def health(self):
-        """Send request to the Proxy servr to get whether its active"""
+        """Send request to the Proxy server to get whether its active"""
         response = self.session.get(url=self.health_url, auth=(self.user, self.password), timeout=self.timeout)
+        response.raise_for_status()
         return response
 
 
