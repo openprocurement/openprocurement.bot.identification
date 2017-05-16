@@ -64,9 +64,12 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server_bottle = Bottle()
         cls.doc_server_bottle = Bottle()
         cls.api_server = WSGIServer(('127.0.0.1', 20604), cls.api_server_bottle, log=None)
+        setup_routing(cls.api_server_bottle, response_spore)
         cls.public_api_server = WSGIServer(('127.0.0.1', 20605), cls.api_server_bottle, log=None)
         cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
+        setup_routing(cls.doc_server_bottle, doc_response, path='/')
         cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
+        setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
 
         # start servers
         cls.api_server.start()
@@ -107,7 +110,7 @@ def proxy_response():
 class TestBridgeWorker(BaseServersTest):
 
     def test_init(self):
-        setup_routing(self.api_server_bottle, response_spore)
+        # setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, 15)
         self.assertEqual(self.worker.increment_step, 1)
@@ -158,7 +161,7 @@ class TestBridgeWorker(BaseServersTest):
                           'version': config['main']['proxy_version']})
 
     def test_start_jobs(self):
-        setup_routing(self.api_server_bottle, response_spore)
+        # setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
 
         scanner, filter_tender, edr_handler, upload_file = [MagicMock(return_value=i) for i in range(4)]
@@ -181,8 +184,6 @@ class TestBridgeWorker(BaseServersTest):
 
     @patch('gevent.sleep')
     def test_run(self, sleep):
-        setup_routing(self.api_server_bottle, response_spore)
-        setup_routing(self.doc_server_bottle, doc_response, path='/')
         self.worker = EdrDataBridge(config)
         # create mocks
         scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
@@ -199,8 +200,6 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(upload_file.call_count, 1)
 
     def test_check_services_failure(self):
-        setup_routing(self.api_server_bottle, response_spore)
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.doc_server.stop()
         self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
@@ -215,14 +214,10 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.check_services(), True)
 
     def check_services_success(self):
-        setup_routing(self.api_server_bottle, response_spore)
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.check_services(), True)
 
     def test_proxy_server_failure(self):
-        setup_routing(self.api_server_bottle, response_spore)
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.proxy_server.stop()
         self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestException):
@@ -231,13 +226,10 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.check_proxy(), True)
 
     def test_proxy_server_success(self):
-        setup_routing(self.api_server_bottle, response_spore)
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.check_proxy(), True)
 
     def test_doc_service_failure(self):
-        setup_routing(self.api_server_bottle, response_spore)
         self.doc_server.stop()
         self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
@@ -246,6 +238,5 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.check_doc_service(), True)
 
     def test_doc_service_success(self):
-        setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.check_doc_service(), True)
