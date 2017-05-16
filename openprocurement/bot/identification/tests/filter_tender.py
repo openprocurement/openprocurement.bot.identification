@@ -5,7 +5,7 @@ import datetime
 from gevent.hub import LoopExit
 from gevent.queue import Queue
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data
+from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id
 from openprocurement.bot.identification.tests.utils import custom_sleep
 from mock import patch, MagicMock
 from time import sleep
@@ -14,6 +14,15 @@ from restkit.errors import Unauthorized
 
 
 class TestFilterWorker(unittest.TestCase):
+
+    def check_data_objects(self, obj, example):
+        """Checks that two data objects are equal and Data.file_content.meta.id is not none """
+        self.assertEqual(obj.tender_id, example.tender_id)
+        self.assertEqual(obj.item_id, example.item_id)
+        self.assertEqual(obj.code, example.code)
+        self.assertEqual(obj.item_name, example.item_name)
+        self.assertEqual(obj.edr_ids, example.edr_ids)
+        self.assertIsNotNone(obj.file_content['meta']['id'])
 
     def test_init(self):
         worker = FilterTenders.spawn(None, None, None, None)
@@ -97,7 +106,7 @@ class TestFilterWorker(unittest.TestCase):
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
 
         for data in [first_data, second_data, third_data]:
-            self.assertEqual(edrpou_codes_queue.get(), data)
+            self.check_data_objects(edrpou_codes_queue.get(), data)
 
         worker.shutdown()
         del worker
@@ -163,7 +172,7 @@ class TestFilterWorker(unittest.TestCase):
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
 
         for edrpou in [first_data, second_data, third_data]:
-            self.assertEqual(edrpou_codes_queue.get(), edrpou)
+            self.check_data_objects(edrpou_codes_queue.get(), edrpou)
 
         worker.shutdown()
         del worker
@@ -231,7 +240,7 @@ class TestFilterWorker(unittest.TestCase):
         data = Data(tender_id, first_award_id, '14360570', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
 
-        self.assertEqual(edrpou_codes_queue.get(), data)
+        self.check_data_objects(edrpou_codes_queue.get(), data)
 
         worker.shutdown()
         del worker
@@ -284,9 +293,9 @@ class TestFilterWorker(unittest.TestCase):
         second_data = Data(tender_id, second_award_id, '14360570', 'awards', None, None)
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue,
                                      edrpou_codes_queue, processing_items)
-        self.assertEqual(edrpou_codes_queue.get(), first_data)
+        self.check_data_objects(edrpou_codes_queue.get(), first_data)
         worker.job.kill(timeout=1)
-        self.assertEqual(edrpou_codes_queue.get(), second_data)
+        self.check_data_objects(edrpou_codes_queue.get(), second_data)
 
         worker.shutdown()
         del worker
@@ -321,11 +330,9 @@ class TestFilterWorker(unittest.TestCase):
                                               'id': '14360570'}}]
                           }]}})
         ]
-        first_data = Data(tender_id, first_award_id, '14360570', 'awards',
-                          None, None)
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue,
-                                     edrpou_codes_queue, processing_items)
-        self.assertEqual(edrpou_codes_queue.get(), first_data)
+        first_data = Data(tender_id, first_award_id, '14360570', 'awards', None, None)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        self.check_data_objects(edrpou_codes_queue.get(), first_data)
 
         worker.shutdown()
         del worker
