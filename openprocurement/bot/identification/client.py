@@ -13,10 +13,10 @@ class ProxyClient(object):
         self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
         self.timeout = timeout
 
-    def verify(self, param, code):
+    def verify(self, param, code, headers):
         """Send request to Proxy server to verify EDRPOU code"""
         url = '{url}?{param}={code}'.format(url=self.verify_url, param=param, code=code)
-        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
+        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)
 
         return response
 

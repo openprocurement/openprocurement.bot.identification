@@ -47,3 +47,11 @@ def create_file(details):
 
 class RetryException(Exception):
     pass
+
+
+def check_add_suffix(list_ids, document_id, number):
+    """Check if EDR API returns list of edr ids with more then 1 element add suffix to document id"""
+    len_list_ids = len(list_ids)
+    if len_list_ids > 1:
+        return '{document_id}.{amount}.{number}'.format(document_id=document_id, amount=len_list_ids,number=number)
+    return document_id

@@ -9,7 +9,7 @@ from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
 
 from openprocurement.bot.identification.databridge.utils import (
-    generate_req_id, journal_context, Data
+    generate_req_id, journal_context, Data, generate_doc_id
 )
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_TENDER_PROCESS,
@@ -72,7 +72,9 @@ class FilterTenders(Greenlet):
                                 # check first identification scheme, if yes then check if item is already in process or not
                                 if supplier['identifier']['scheme'] == self.identification_scheme and self.check_processing_item(tender['id'], award['id']):
                                     self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
-                                    tender_data = Data(tender['id'], award['id'], str(supplier['identifier']['id']), 'awards', None, None)
+                                    document_id= generate_doc_id()
+                                    tender_data = Data(tender['id'], award['id'], str(supplier['identifier']['id']),
+                                                       'awards', None, {'meta': {'id': document_id}})
                                     self.edrpou_codes_queue.put(tender_data)
                                 else:
                                     logger.info('Tender {} award {} identifier schema isn\'t UA-EDR or tender is already in process.'.format(tender['id'],  award['id']),
@@ -91,8 +93,10 @@ class FilterTenders(Greenlet):
                             # check first identification scheme, if yes then check if item is already in process or not
                             if appropriate_bid['tenderers'][0]['identifier']['scheme'] == self.identification_scheme and self.check_processing_item(tender['id'], qualification['id']):
                                 self.processing_items['{}_{}'.format(tender['id'], qualification['id'])] = 0
+                                document_id = generate_doc_id()
                                 tender_data = Data(tender['id'], qualification['id'],
-                                                   str(appropriate_bid['tenderers'][0]['identifier']['id']), 'qualifications', None, None)
+                                                   str(appropriate_bid['tenderers'][0]['identifier']['id']),
+                                                   'qualifications', None, {'meta': {'id': document_id}})
                                 self.edrpou_codes_queue.put(tender_data)
                                 logger.info('Processing tender {} bid {}'.format(tender['id'], appropriate_bid['id']),
                                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
