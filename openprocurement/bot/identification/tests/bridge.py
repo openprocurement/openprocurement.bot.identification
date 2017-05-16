@@ -198,7 +198,7 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(edr_handler.call_count, 1)
         self.assertEqual(upload_file.call_count, 1)
 
-    def test_check_service(self):
+    def test_check_services_failure(self):
         setup_routing(self.api_server_bottle, response_spore)
         setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.doc_server.stop()
@@ -206,9 +206,21 @@ class TestBridgeWorker(BaseServersTest):
         with self.assertRaises(RequestError):
             self.worker.check_services()
         self.doc_server.start()
-        self.worker.check_services()
+        self.assertEqual(self.worker.check_services(), True)
+        self.proxy_server.stop()
+        self.worker = EdrDataBridge(config)
+        with self.assertRaises(RequestException):
+            self.worker.check_services()
+        self.proxy_server.start()
+        self.assertEqual(self.worker.check_services(), True)
 
-    def test_proxy_server(self):
+    def check_services_success(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.check_services(), True)
+
+    def test_proxy_server_failure(self):
         setup_routing(self.api_server_bottle, response_spore)
         setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         self.proxy_server.stop()
@@ -216,13 +228,24 @@ class TestBridgeWorker(BaseServersTest):
         with self.assertRaises(RequestException):
             self.worker.check_proxy()
         self.proxy_server.start()
-        self.worker.check_proxy()
+        self.assertEqual(self.worker.check_proxy(), True)
 
-    def test_doc_service(self):
+    def test_proxy_server_success(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.check_proxy(), True)
+
+    def test_doc_service_failure(self):
         setup_routing(self.api_server_bottle, response_spore)
         self.doc_server.stop()
         self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
             self.worker.check_doc_service()
         self.doc_server.start()
-        self.worker.check_doc_service()
+        self.assertEqual(self.worker.check_doc_service(), True)
+
+    def test_doc_service_success(self):
+        setup_routing(self.api_server_bottle, response_spore)
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.check_doc_service(), True)
