@@ -25,14 +25,14 @@ class ProxyClient(object):
         """ Send request to Proxy server to get details."""
         url = '{url}/{id}'.format(url=self.details_url, id=id)
         response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout)
-
         return response
 
     def health(self):
         """Send request to the Proxy server to get whether its active"""
         response = self.session.get(url=self.health_url, auth=(self.user, self.password), timeout=self.timeout)
-        response.raise_for_status()
-        return response
+        if response.status_code == 200:
+            return response
+        raise requests.RequestException("{} {} {}".format(response.url, response.status_code, response.reason), response=response)
 
 
 class DocServiceClient(object):
