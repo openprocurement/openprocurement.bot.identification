@@ -1,1 +1,4 @@
-version = '0.0.1'  # major.minor.bugfix
+major = 0
+minor = 0
+bugfix = 1
+version = '{}.{}.{}'.format(major, minor, bugfix)  # major.minor.bugfix
