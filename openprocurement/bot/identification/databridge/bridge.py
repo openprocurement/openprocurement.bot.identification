@@ -181,8 +181,7 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_doc_service()
-        bridge.check_proxy()
+        bridge.check_proxy() and bridge.check_doc_service()
         bridge.run()
     else:
         logger.info('Invalid configuration file. Exiting...')
