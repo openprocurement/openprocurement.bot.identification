@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from requests import RequestException
-
 import requests
 
 
@@ -34,7 +32,7 @@ class ProxyClient(object):
         response = self.session.get(url=self.health_url, auth=(self.user, self.password), timeout=self.timeout)
         if response.status_code == 200:
             return response
-        raise RequestException("{} {} {}".format(response.url, response.status_code, response.reason), response=response)
+        raise requests.RequestException("{} {} {}".format(response.url, response.status_code, response.reason), response=response)
 
 
 class DocServiceClient(object):
