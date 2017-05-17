@@ -4,6 +4,7 @@ import unittest
 import datetime
 from gevent.hub import LoopExit
 from gevent.queue import Queue
+from openprocurement.bot.identification.databridge.constants import author
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id
 from openprocurement.bot.identification.tests.utils import custom_sleep
@@ -16,13 +17,17 @@ from restkit.errors import Unauthorized
 class TestFilterWorker(unittest.TestCase):
 
     def check_data_objects(self, obj, example):
-        """Checks that two data objects are equal and Data.file_content.meta.id is not none """
+        """Checks that two data objects are equal, 
+                  that Data.file_content.meta.id is not none and
+                  that Data.file_content.meta.author exists and is equal to IdentificationBot
+         """
         self.assertEqual(obj.tender_id, example.tender_id)
         self.assertEqual(obj.item_id, example.item_id)
         self.assertEqual(obj.code, example.code)
         self.assertEqual(obj.item_name, example.item_name)
         self.assertEqual(obj.edr_ids, example.edr_ids)
         self.assertIsNotNone(obj.file_content['meta']['id'])
+        self.assertEqual(obj.file_content['meta']['author'], author)
 
     def test_init(self):
         worker = FilterTenders.spawn(None, None, None, None)

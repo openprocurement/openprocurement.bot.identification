@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from openprocurement.bot.identification.databridge.constants import version, author
+
 monkey.patch_all()
 
 import uuid
@@ -67,10 +69,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id, 'author': author}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {"data": {}, 'meta': {'sourceDate': '2017-04-25T11:56:36+00:00',
-                                                              'id': document_id, "version": '0.0.1'}}))  # result
+                                                              'id': document_id, "version": version, 'author': author}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -113,11 +115,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,  {'meta': {'id': document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,  {'meta': {'id': document_id, 'author': author}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {"data": {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                               "id": document_id,
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -154,11 +156,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id, 'author': author}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                               "id": document_id,
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -194,11 +196,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'data': {}, "meta": {"id": document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'data': {}, "meta": {"id": document_id, "author": author}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                               "id": document_id,
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -225,7 +227,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edr_ids_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
@@ -235,7 +237,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               edr_ids=[], file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                   "code": "notFound"},
                                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                 "id": document_id, "version": "0.0.1"}}))
+                                                                 "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
@@ -265,7 +267,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
         self.assertEquals(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id, item_id=award_id,
@@ -273,7 +275,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               edr_ids=[],
                               file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                       "code": "notFound"},
-                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id, "version": "0.0.1"}}))
+                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
@@ -297,7 +299,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
@@ -306,14 +308,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[u'321', u'322'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                   "id": "{}.{}.{}".format(document_id, 2, 1),
-                                                                                                  "version": "0.0.1"}}))
+                                                                                                  "version": version, 'author': author}}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id,
                               item_id=award_id,
                               code='123', item_name='awards',
                               edr_ids=[u'321', u'322'], file_content={'data': {'some': 'data'}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                          "id": "{}.{}.{}".format(document_id, 2, 2),
-                                                                                                         "version": "0.0.1"}}))
+                                                                                                         "version": version, 'author': author}}))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -344,7 +346,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
@@ -352,14 +354,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[u'321', u'322'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                   "id": '{}.{}.{}'.format(document_id, 2, 1),
-                                                                                                  "version": "0.0.1"}}))
+                                                                                                  "version": version, 'author': author}}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id,
                                      item_id=award_id,
                                      code='123', item_name='awards', edr_ids=[u'322'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": '{}.{}.{}'.format(document_id, 2, 2),
-                                                                        "version": "0.0.1"}}))
+                                                                        "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -388,14 +390,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -422,14 +424,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": version, 'author': author}}))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -457,14 +459,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -492,14 +494,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -533,14 +535,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -572,13 +574,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -607,13 +609,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[321], file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                "id": document_id, "version": "0.0.1"}}))
+                                                                                                "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -669,7 +671,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(obj.file_content['data'], {'id': 321})
         self.assertEqual(obj.file_content['meta']['sourceDate'], "2017-04-25T11:56:36+00:00")
         self.assertIsNotNone(obj.file_content['meta']['id'])
-        self.assertEqual(obj.file_content['meta']['version'], "0.0.1")
+        self.assertEqual(obj.file_content['meta']['version'], version)
+        self.assertEqual(obj.file_content['meta']['author'], author)
 
         worker.shutdown()
         filter_tenders_worker.shutdown()
@@ -692,19 +695,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
         qualification_key = '{}_{}'.format(tender_id, qualification_id)
         data_1 = Data(tender_id, award_id, '123', "awards", [321, 322], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                               "id": "{}.{}.{}".format(document_ids[0], 2, 1),
-                                                                                              "version": "0.0.1"}})
+                                                                                              "version": version, 'author': author}})
         data_2 = Data(tender_id, award_id, '123', "awards", [321, 322], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                               "id": "{}.{}.{}".format(document_ids[0], 2, 2),
-                                                                                              "version": "0.0.1"}})
+                                                                                              "version": version, 'author': author}})
         data_3 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 1),
-                                                                                                                   "version": "0.0.1"}})
+                                                                                                                   "version": version, 'author': author}})
         data_4 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 2),
-                                                                                                                   "version": "0.0.1"}})
+                                                                                                                   "version": version, 'author': author}})
         data_5 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 3),
-                                                                                                                   "version": "0.0.1"}})
+                                                                                                                   "version": version, 'author': author}})
 
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
@@ -720,8 +723,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_ids[0]}}))
-        edrpou_codes_queue.put(Data(tender_id, qualification_id, '124', 'qualifications', None, {'meta': {'id': document_ids[1]}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_ids[0], 'author': author}}))
+        edrpou_codes_queue.put(Data(tender_id, qualification_id, '124', 'qualifications', None, {'meta': {'id': document_ids[1], 'author': author}}))
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue,
                                   upload_to_doc_service, processing_items)
@@ -757,13 +760,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'author': author}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, {})
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[321], file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                "id": document_id, "version": "0.0.1"}}))
+                                                                                                "id": document_id, "version": version, 'author': author}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -801,10 +804,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_ids[i]}}))  # data
+            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_ids[i], 'author': author}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list,
                                                                default=LoopExit())
@@ -850,10 +853,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, {"meta": {"id": document_ids[i]}}))  # data
+            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, {"meta": {"id": document_ids[i], 'author': author}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
         worker.retry_edrpou_codes_queue = MagicMock()
@@ -895,12 +898,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         edr_ids_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0]}}),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1]}})],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]],
+                          file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0], 'author': author}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]],
+                          file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1], 'author': author}})],
             default=LoopExit())
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -944,14 +949,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": version, 'author': author}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
         worker.retry_edr_ids_queue = MagicMock()
         worker.retry_edr_ids_queue.get.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0]}}),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1]}})],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]],
+                          file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0], 'author': author}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]],
+                          file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1], 'author': author}})],
             default=LoopExit())
 
         for result in expected_result:
