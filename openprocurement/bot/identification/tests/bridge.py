@@ -2,6 +2,9 @@
 
 import unittest
 import os
+
+from requests import RequestException
+
 from mock import patch, MagicMock
 from restkit import RequestError
 
@@ -61,9 +64,12 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server_bottle = Bottle()
         cls.doc_server_bottle = Bottle()
         cls.api_server = WSGIServer(('127.0.0.1', 20604), cls.api_server_bottle, log=None)
+        setup_routing(cls.api_server_bottle, response_spore)
         cls.public_api_server = WSGIServer(('127.0.0.1', 20605), cls.api_server_bottle, log=None)
         cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
+        setup_routing(cls.doc_server_bottle, doc_response, path='/')
         cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
+        setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
 
         # start servers
         cls.api_server.start()
@@ -97,10 +103,14 @@ def doc_response():
     return response
 
 
+def proxy_response():
+    return response
+
+
 class TestBridgeWorker(BaseServersTest):
 
     def test_init(self):
-        setup_routing(self.api_server_bottle, response_spore)
+        # setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, 15)
         self.assertEqual(self.worker.increment_step, 1)
@@ -151,7 +161,7 @@ class TestBridgeWorker(BaseServersTest):
                           'version': config['main']['proxy_version']})
 
     def test_start_jobs(self):
-        setup_routing(self.api_server_bottle, response_spore)
+        # setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
 
         scanner, filter_tender, edr_handler, upload_file = [MagicMock(return_value=i) for i in range(4)]
@@ -174,8 +184,6 @@ class TestBridgeWorker(BaseServersTest):
 
     @patch('gevent.sleep')
     def test_run(self, sleep):
-        setup_routing(self.api_server_bottle, response_spore)
-        setup_routing(self.doc_server_bottle, doc_response, path='/')
         self.worker = EdrDataBridge(config)
         # create mocks
         scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
@@ -191,14 +199,26 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(edr_handler.call_count, 1)
         self.assertEqual(upload_file.call_count, 1)
 
-    def test_check_service(self):
-        setup_routing(self.api_server_bottle, response_spore)
+    def test_proxy_server_failure(self):
+        self.proxy_server.stop()
+        self.worker = EdrDataBridge(config)
+        with self.assertRaises(RequestException):
+            self.worker.check_proxy()
+        self.proxy_server.start()
+        self.assertEqual(self.worker.check_proxy(), True)
+
+    def test_proxy_server_success(self):
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.check_proxy(), True)
+
+    def test_doc_service_failure(self):
         self.doc_server.stop()
         self.worker = EdrDataBridge(config)
-
         with self.assertRaises(RequestError):
-            self.worker.check_services()
-
+            self.worker.check_doc_service()
         self.doc_server.start()
+        self.assertEqual(self.worker.check_doc_service(), True)
 
-        self.worker.check_services()
+    def test_doc_service_success(self):
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.check_doc_service(), True)
