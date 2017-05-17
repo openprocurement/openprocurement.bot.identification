@@ -47,7 +47,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                                     'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.yaml'}},
+                                    'title': 'edr_information.yaml'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
@@ -91,7 +91,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       {'json': {'data': {'url': 'test url',
                                          'format': 'application/yaml',
                                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                         'title': 'edr_request.yaml'}},
+                                         'title': 'edr_information.yaml'}},
                        'status_code': 200}])
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
@@ -128,7 +128,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                                     'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.yaml'}},
+                                    'title': 'edr_information.yaml'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [Unauthorized(http_code=403),
@@ -171,7 +171,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                                     'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.yaml'}},
+                                    'title': 'edr_information.yaml'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = ResourceError(http_code=422)
@@ -203,7 +203,7 @@ class TestUploadFileWorker(unittest.TestCase):
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                                     'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.yaml'}},
+                                    'title': 'edr_information.yaml'}},
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [ResourceError(http_code=425),
@@ -241,13 +241,13 @@ class TestUploadFileWorker(unittest.TestCase):
                       [{'json': {'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                                     'format': 'application/yaml',
                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': 'edr_request.yaml'}},
+                                    'title': 'edr_information.yaml'}},
                        'status_code': 200},
                        {'json': {'data': {
                            'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                            'format': 'application/yaml',
                            'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                           'title': 'edr_request.yaml'}},
+                           'title': 'edr_information.yaml'}},
                         'status_code': 200}])
         client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
                                                                      'documentOf': 'tender',
@@ -288,13 +288,13 @@ class TestUploadFileWorker(unittest.TestCase):
                           'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                           'format': 'application/yaml',
                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                          'title': 'edr_request.yaml'}},
+                          'title': 'edr_information.yaml'}},
                         'status_code': 200},
                        {'json': {'data': {
                            'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                            'format': 'application/yaml',
                            'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                           'title': 'edr_request.yaml'}},
+                           'title': 'edr_information.yaml'}},
                            'status_code': 200}])
         client._create_tender_resource_item.side_effect = [
             {'data': {'id': uuid.uuid4().hex,
@@ -357,7 +357,7 @@ class TestUploadFileWorker(unittest.TestCase):
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                              u'title': u'edr_request.yaml'}),
+                              u'title': u'edr_information.yaml'}),
                      Data(tender_id=tender_id,
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
@@ -366,7 +366,7 @@ class TestUploadFileWorker(unittest.TestCase):
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                              u'title': u'edr_request.yaml'})],
+                              u'title': u'edr_information.yaml'})],
             default=LoopExit())
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(10)
@@ -412,7 +412,7 @@ class TestUploadFileWorker(unittest.TestCase):
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                              u'title': u'edr_request.yaml'}),
+                              u'title': u'edr_information.yaml'}),
                      Data(tender_id=tender_id,
                           item_id=award_id,
                           code='123', item_name='awards', edr_ids=None,
@@ -421,7 +421,7 @@ class TestUploadFileWorker(unittest.TestCase):
                               u'url': u'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               u'format': u'application/yaml',
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                              u'title': u'edr_request.yaml'})],
+                              u'title': u'edr_information.yaml'})],
             default=LoopExit())
 
         sleep(10)
@@ -443,13 +443,13 @@ class TestUploadFileWorker(unittest.TestCase):
                           'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                           'format': 'application/yaml',
                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                          'title': 'edr_request.yaml'}},
+                          'title': 'edr_information.yaml'}},
                           'status_code': 200},
                           {'json': {'data': {
                               'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
                               'format': 'application/yaml',
                               'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                              'title': 'edr_request.yaml'}},
+                              'title': 'edr_information.yaml'}},
                               'status_code': 200}])
         client._create_tender_resource_item.side_effect = [
             {'data': {'id': uuid.uuid4().hex,
