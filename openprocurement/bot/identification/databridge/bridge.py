@@ -111,10 +111,6 @@ class EdrDataBridge(object):
     def config_get(self, name):
         return self.config.get('main').get(name)
 
-    def check_services(self):
-        """Wrapper around checks of two services, made because of most common usage"""
-        return self.check_proxy() and self.check_doc_service()
-
     def check_doc_service(self):
         """Makes request to the doc_service, returns True if it's up, raises RequestError otherwise
                 Separated to allow for possible granular checks         
@@ -185,7 +181,8 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_services()
+        bridge.check_doc_service()
+        bridge.check_proxy()
         bridge.run()
     else:
         logger.info('Invalid configuration file. Exiting...')
