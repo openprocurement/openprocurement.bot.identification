@@ -45,8 +45,7 @@ class DocServiceClient(object):
         self.password = password
         self.timeout = timeout
 
-    def upload(self, filename, in_file, content_type):
+    def upload(self, filename, in_file, content_type, headers):
         files = {'file': (filename, in_file, content_type)}
-        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files)
-
+        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files, headers=headers)
         return response
