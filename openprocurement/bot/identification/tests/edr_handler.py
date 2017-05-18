@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from openprocurement.bot.identification.databridge.constants import version
-
 monkey.patch_all()
 
 import uuid
