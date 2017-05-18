@@ -22,7 +22,7 @@ from openprocurement.bot.identification.databridge.constants import version
 
 
 def get_random_edr_ids(count=1):
-    return [str(1) for _ in range(count)]
+    return [str(random.randrange(10000000, 99999999)) for _ in range(count)]
 
 
 class TestEdrHandlerWorker(unittest.TestCase):
