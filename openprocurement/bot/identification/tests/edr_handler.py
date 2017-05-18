@@ -22,7 +22,7 @@ from openprocurement.bot.identification.databridge.constants import version
 
 
 def get_random_edr_ids(count=1):
-    return [str(random.randrange(10000000, 99999999)) for _ in range(count)]
+    return [str(1) for _ in range(count)]
 
 
 class TestEdrHandlerWorker(unittest.TestCase):
@@ -48,7 +48,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_proxy_client(self, mrequest, gevent_sleep):
         """ Test that proxy return json with id """
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
@@ -78,10 +78,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for result in expected_result:
             self.assertEquals(check_queue.get(), result)
 
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/{edr_code}'.format(edr_code=expected_result[0].edr_ids[0]))
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/{edr_code}'.format(edr_code=expected_result[0].edr_ids[0]))
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
@@ -94,7 +94,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 429 status code in first request with header 'Retry-After'"""
         local_edr_ids = get_random_edr_ids(2)
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10'}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
@@ -133,7 +133,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_proxy_client_402(self, mrequest, gevent_sleep):
         """First request returns Edr API returns to proxy 402 status code with messages."""
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]},
@@ -177,7 +177,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """First and second response returns 403 status code. Tests retry for get_edr_id worker"""
         gevent_sleep.side_effect = custom_sleep
         local_edr_ids = get_random_edr_ids(1)
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -217,7 +217,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                   "code": "notFound"},
@@ -241,7 +241,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
         self.assertEqual(mrequest.call_count, 1)  # Requests must call proxy once
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -252,7 +252,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         document_id = generate_doc_id()
         award_id = uuid.uuid4().hex
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -279,8 +279,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
         self.assertEqual(mrequest.call_count, 6)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[5].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[5].url, u'127.0.0.1:80/api/1.0/verify?id=123')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -290,7 +290,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
@@ -320,10 +320,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)  # 1 request to /verify and two requests to /details
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/322')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -335,7 +335,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
@@ -365,12 +365,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)  # processed 4 requests
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/322')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[3].url, u'http://127.0.0.1:80/api/1.0/details/322')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/322')
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -381,7 +381,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
                       {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
@@ -401,9 +401,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -414,7 +414,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
@@ -436,10 +436,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[3].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -450,7 +450,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': [], 'status_code': 200},  # list instead of dict in data
@@ -470,10 +470,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 3)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -484,7 +484,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -505,12 +505,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -521,7 +521,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -546,10 +546,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 8)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -560,7 +560,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
@@ -584,9 +584,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 8)  # processing 8 requests
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')  # check first url
-        self.assertEqual(mrequest.request_history[6].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')  # check 7th url
-        self.assertEqual(mrequest.request_history[7].url, u'http://127.0.0.1:80/api/1.0/details/321')  # check 8th url
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')  # check first url
+        self.assertEqual(mrequest.request_history[6].url, u'127.0.0.1:80/api/1.0/verify?id=123')  # check 7th url
+        self.assertEqual(mrequest.request_history[7].url, u'127.0.0.1:80/api/1.0/details/321')  # check 8th url
         self.assertIsNotNone(mrequest.request_history[7].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -598,7 +598,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403},
                       {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
@@ -619,11 +619,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[3].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -655,7 +655,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                              'scheme': 'UA-EDR',
                                              'id': 14360570}  # int instead of str type
                                          }]}, ]}}), ]
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), [{'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
         filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
@@ -707,7 +707,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 3),
                                                                                                                    "version": version}})
 
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': 321}, {'x_edrInternalId': 322}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
                       {'json': {'data': [{'x_edrInternalId': 323}, {'x_edrInternalId': 324}, {'x_edrInternalId': 325}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
@@ -748,7 +748,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403},
                       {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
@@ -769,11 +769,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(mrequest.call_count, 4)
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'http://127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[3].url, u'http://127.0.0.1:80/api/1.0/details/321')
+        self.assertEqual(mrequest.request_history[3].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
@@ -782,7 +782,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """ Test LoopExit for edrpou_codes_queue """
         document_ids = [generate_doc_id(), generate_doc_id()]
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
@@ -816,10 +816,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             self.assertEquals(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url,
-                         u'http://127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+                         u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url,
-                         u'http://127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+                         u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
@@ -831,7 +831,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """ Test LoopExit for retry_edrpou_codes_queue """
         document_ids = [generate_doc_id(), generate_doc_id()]
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
@@ -864,9 +864,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for result in expected_result:
             self.assertEquals(check_queue.get(), result)
 
-        self.assertEqual(mrequest.request_history[0].url, u'http://127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[0].code))
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[2].url, u'http://127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
+        self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/verify?id={edr_code}'.format(edr_code=expected_result[1].code))
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
 
         worker.shutdown()
@@ -877,7 +877,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_edr_ids_queue_loop_exit(self, mrequest, gevent_sleep):
         """ Test LoopExit for edr_ids_queue """
         gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         document_ids = [generate_doc_id(), generate_doc_id()]
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
@@ -910,10 +910,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             self.assertEquals(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url,
-                         u'http://127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[1].url,
-                         u'http://127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
         worker.shutdown()
@@ -925,7 +925,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """ Test LoopExit for retry_edr_ids_queue """
         gevent_sleep.side_effect = custom_sleep
         document_ids = [generate_doc_id(), generate_doc_id()]
-        proxy_client = ProxyClient(host='http://127.0.0.1', port='80', user='', password='')
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url,
                                          id=local_edr_ids[0]),
@@ -959,10 +959,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             self.assertEquals(check_queue.get(), result)
 
         self.assertEqual(mrequest.request_history[0].url,
-                         u'http://127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[0]))
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[1].url,
-                         u'http://127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
+                         u'127.0.0.1:80/api/1.0/details/{id}'.format(id=local_edr_ids[1]))
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
         worker.shutdown()
