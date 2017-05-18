@@ -9,9 +9,9 @@ class ProxyClient(object):
         self.session = requests.Session()
         self.user = user
         self.password = password
-        self.verify_url = 'http://{host}:{port}/api/{version}/verify'.format(host=host, port=port, version=version)
-        self.details_url = 'http://{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
-        self.health_url = 'http://{host}:{port}/api/{version}/health'.format(host=host, port=port, version=version)
+        self.verify_url = '{host}:{port}/api/{version}/verify'.format(host=host, port=port, version=version)
+        self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
+        self.health_url = '{host}:{port}/api/{version}/health'.format(host=host, port=port, version=version)
         self.timeout = timeout
 
     def verify(self, param, code, headers):
