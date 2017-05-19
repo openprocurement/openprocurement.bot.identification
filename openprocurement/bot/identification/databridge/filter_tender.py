@@ -7,6 +7,8 @@ import gevent
 from datetime import datetime
 from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
+from munch import munchify
+from simplejson import loads
 
 from openprocurement.bot.identification.databridge.utils import (
     generate_req_id, journal_context, Data, generate_doc_id
@@ -16,6 +18,8 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_START_FILTER_TENDER, DATABRIDGE_RESTART_FILTER_TENDER,
     DATABRIDGE_TENDER_NOT_PROCESS
 )
+from openprocurement_client.exceptions import InvalidResponse
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +52,10 @@ class FilterTenders(Greenlet):
                 gevent.sleep(0)
                 continue
             try:
-                tender = self.tenders_sync_client.get_tender(tender_id,
-                                                             extra_headers={'X-Client-Request-ID': generate_req_id()})['data']
+                response = self.tenders_sync_client.request("GET", path='{}/{}'.format(self.tenders_sync_client.prefix_path, tender_id),
+                                                            headers={'X-Client-Request-ID': generate_req_id()})
+                if response.status_int == 200:
+                    tender = munchify(loads(response.body_string()))['data']
                 logger.info('Get tender {} from filtered_tender_ids_queue'.format(tender_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                             params={"TENDER_ID": tender['id']}))
@@ -74,7 +80,7 @@ class FilterTenders(Greenlet):
                                     self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
                                     document_id= generate_doc_id()
                                     tender_data = Data(tender['id'], award['id'], str(supplier['identifier']['id']),
-                                                       'awards', None, {'meta': {'id': document_id}})
+                                                       'awards', None, {'meta': {'id': document_id, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                     self.edrpou_codes_queue.put(tender_data)
                                 else:
                                     logger.info('Tender {} award {} identifier schema isn\'t UA-EDR or tender is already in process.'.format(tender['id'],  award['id']),
@@ -96,7 +102,7 @@ class FilterTenders(Greenlet):
                                 document_id = generate_doc_id()
                                 tender_data = Data(tender['id'], qualification['id'],
                                                    str(appropriate_bid['tenderers'][0]['identifier']['id']),
-                                                   'qualifications', None, {'meta': {'id': document_id}})
+                                                   'qualifications', None, {'meta': {'id': document_id, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                 self.edrpou_codes_queue.put(tender_data)
                                 logger.info('Processing tender {} bid {}'.format(tender['id'], appropriate_bid['id']),
                                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
