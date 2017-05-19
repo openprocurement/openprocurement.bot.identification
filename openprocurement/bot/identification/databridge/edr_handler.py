@@ -75,7 +75,8 @@ class EdrHandler(Greenlet):
                 file_content = response.json().get('errors')[0].get('description')[0]
                 file_content['meta'].update(tender_data.file_content['meta'])  # add meta.id to file_content
                 file_content['meta'].update({"version": version})  # add filed meta.version
-                file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])  # add unique request id
+                if response.headers.get('X-Request-ID'):
+                    file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])  # add unique request id
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code, tender_data.item_name, [], file_content)
                 self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                 self.edrpou_codes_queue.get()
@@ -84,7 +85,7 @@ class EdrHandler(Greenlet):
                 # Create new Data object. Write to Data.code list of edr ids from EDR.
                 # List because EDR can return 0, 1 or 2 values to our request
                 try:
-                    tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
+                    tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])  # add unique request id
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code, tender_data.item_name,
                                 [edr_ids['x_edrInternalId'] for edr_ids in response.json().get('data', [])], tender_data.file_content)
                     self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(data.edr_ids)
@@ -97,7 +98,8 @@ class EdrHandler(Greenlet):
                                                                                tender_data.item_name,
                                                                                tender_data.item_id))
             else:
-                tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
+                if response.headers.get('X-Request-ID'):
+                    tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
                 self.handle_status_response(response, tender_data.tender_id)
                 logger.info('Put tender {} with {} id {} to retry_edrpou_codes_queue'.format(
@@ -121,9 +123,9 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             try:
-                response, headers = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id,
-                                                            tender_data.file_content['meta']['sourceRequests'])
-                tender_data.file_content['meta']['sourceRequests'] = headers
+                response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id)
+                if response.headers.get('X-Request-ID'):
+                    tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
             except RetryException as re:
                 if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                     logger.info('Empty response for tender {}.{}.'.format(tender_data.tender_id, document_id),
@@ -169,13 +171,14 @@ class EdrHandler(Greenlet):
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
-    def get_edr_id_request(self, param, code, document_id, headers):
+    def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
-        headers.append(response.headers['X-Request-ID'])
         if response.status_code != 200:
+            logger.info(
+                'Get unsuccessful response {} in get_edr_id_request, header {}'.format(response.status_code, response.headers.get('X-Request-ID')))
             raise RetryException('Unsuccessful retry request to EDR.', response)
-        return response, headers
+        return response
 
     def get_edr_details(self):
         """Get data from edr_ids_queue; make request to EDR Api for detailed info; Required fields is put to
@@ -218,8 +221,10 @@ class EdrHandler(Greenlet):
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                 else:
+
                     file_content = tender_data.file_content
-                    file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
+                    if response.headers.get('X-Request-ID'):
+                        file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                     self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                       tender_data.item_name, [edr_id], file_content))
                     self.handle_status_response(response, tender_data.tender_id)
@@ -246,8 +251,9 @@ class EdrHandler(Greenlet):
             document_id = tender_data.file_content['meta']['id']
             for edr_id in tender_data.edr_ids:
                 try:
-                    response, headers = self.get_edr_details_request(edr_id, document_id, tender_data.file_content['meta']['sourceRequests'])
-                    tender_data.file_content['meta']['sourceRequests'] = headers
+                    response = self.get_edr_details_request(edr_id, document_id)
+                    if response.headers.get('X-Request-ID'):
+                        tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
                     self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                        tender_data.item_name, [edr_id], tender_data.file_content)))
@@ -275,13 +281,15 @@ class EdrHandler(Greenlet):
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
-    def get_edr_details_request(self, edr_id, document_id, headers):
+    def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
-        headers.append(response.headers['X-Request-ID'])
         if response.status_code != 200:
+            logger.info(
+                'Get unsuccessful response {} in get_edr_details_request, header {}'.format(response.status_code, response.headers.get('X-Request-ID')))
             raise RetryException('Unsuccessful retry request to EDR.', response)
-        return response, headers
+
+        return response
 
     def handle_status_response(self, response, tender_id):
         """Process unsuccessful request"""
