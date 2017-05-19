@@ -73,7 +73,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                         {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {"data": {}, 'meta': {'sourceDate': '2017-04-25T11:56:36+00:00',
-                                                              'id': document_id, "version": '0.0.1',
+                                                              'id': document_id, "version": "0.1.1",
                                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_ids[i], edr_details_req_ids[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -128,7 +128,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                         {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {"data": {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                              "id": document_id, "version": "0.0.1",
+                                                              "id": document_id, "version": "0.1.1",
                                                               "sourceRequests": ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_ids[i], edr_req_ids[i], edr_details_req_ids[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -171,7 +171,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[0]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                              "id": document_id, "version": "0.0.1",
+                                                              "id": document_id, "version": "0.1.1",
                                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_req_id, edr_details_req_id]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -215,7 +215,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                         {"meta": {"id": document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                              "id": document_id, "version": "0.0.1",
+                                                              "id": document_id, "version": "0.1.1",
                                                               "sourceRequests": ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_req_id, edr_req_id, edr_details_req_id]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -253,7 +253,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               edr_ids=[], file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                   "code": "notFound"},
                                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                 "id": document_id, "version": "0.0.1",
+                                                                 "id": document_id, "version": "0.1.1",
                                                                  "sourceRequests": ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -295,7 +295,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                       "code": "notFound"},
                                             "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id,
-                                                     "version": "0.0.1",  'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}))
+                                                     "version": "0.1.1",  'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
@@ -335,7 +335,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      edr_ids=[u'321', u'322'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": "{}.{}.{}".format(document_id, 2, 1),
-                                                                        "version": "0.0.1",
+                                                                        "version": "0.1.1",
                                                                         'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0]]}}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id,
@@ -344,7 +344,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               edr_ids=[u'321', u'322'],
                               file_content={'data': {'some': 'data'}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                "id": "{}.{}.{}".format(document_id, 2, 2),
-                                                                               "version": "0.0.1",
+                                                                               "version": "0.1.1",
                                                                                'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[1]]}}))
 
         worker.shutdown()
@@ -389,14 +389,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      edr_ids=[u'321', u'322'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": '{}.{}.{}'.format(document_id, 2, 1),
-                                                                        "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0]]}}))
+                                                                        "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0]]}}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id,
                                      item_id=award_id,
                                      code='123', item_name='awards', edr_ids=[u'322'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": '{}.{}.{}'.format(document_id, 2, 2),
-                                                                        "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[1], edr_details_req_id[2]]}}))
+                                                                        "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[1], edr_details_req_id[2]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -435,7 +435,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1",
+                                                                                          "id": document_id, "version": "0.1.1",
                                                                                           'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_req_id[1], edr_details_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -473,7 +473,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1",
+                                                                                          "id": document_id, "version": "0.1.1",
                                                                                           'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_req_id[1], edr_req_id[2], edr_details_req_id]}}))
 
         worker.shutdown()
@@ -512,7 +512,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                        "id": document_id, "version": "0.0.1",
+                                                                        "id": document_id, "version": "0.1.1",
                                                                         'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0], edr_details_req_id[1]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -552,7 +552,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                        "id": document_id, "version": "0.0.1",
+                                                                        "id": document_id, "version": "0.1.1",
                                                                         'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0], edr_details_req_id[1], edr_details_req_id[2]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -597,7 +597,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                        "id": document_id, "version": "0.0.1",
+                                                                        "id": document_id, "version": "0.1.1",
                                                                         'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
                                                                                            edr_req_id, edr_details_req_id[0],
                                                                                            edr_details_req_id[1],
@@ -648,7 +648,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                        "id": document_id, "version": "0.0.1",
+                                                                        "id": document_id, "version": "0.1.1",
                                                                         'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
                                                                                            edr_req_id[0], edr_req_id[1],
                                                                                            edr_req_id[2], edr_req_id[3],
@@ -691,7 +691,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      code='123', item_name='awards',
                                      edr_ids=[321],
                                      file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                 "id": document_id, "version": "0.0.1",
+                                                                                 "id": document_id, "version": "0.1.1",
                                                                                  'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
                                                                                                     edr_req_id[0], edr_req_id[1],
                                                                                                     edr_details_req_id[0], edr_details_req_id[1]]}}))
@@ -754,7 +754,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(obj.file_content['data'], {'id': 321})
         self.assertEqual(obj.file_content['meta']['sourceDate'], "2017-04-25T11:56:36+00:00")
         self.assertIsNotNone(obj.file_content['meta']['id'])
-        self.assertEqual(obj.file_content['meta']['version'], "0.0.1")
+        self.assertEqual(obj.file_content['meta']['version'], "0.1.1")
         self.assertEqual(obj.file_content['meta']['sourceRequests'], ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id])
 
         worker.shutdown()
@@ -780,19 +780,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
         qualification_key = '{}_{}'.format(tender_id, qualification_id)
         data_1 = Data(tender_id, award_id, '123', "awards", [321, 322], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                               "id": "{}.{}.{}".format(document_ids[0], 2, 1),
-                                                                                              "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_details_req_id[0]]}})
+                                                                                              "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_details_req_id[0]]}})
         data_2 = Data(tender_id, award_id, '123', "awards", [321, 322], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                               "id": "{}.{}.{}".format(document_ids[0], 2, 2),
-                                                                                              "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_details_req_id[1]]}})
+                                                                                              "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_details_req_id[1]]}})
         data_3 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 1),
-                                                                                                                   "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[2]]}})
+                                                                                                                   "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[2]]}})
         data_4 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 2),
-                                                                                                                   "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[3]]}})
+                                                                                                                   "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[3]]}})
         data_5 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 3),
-                                                                                                                   "version": "0.0.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[4]]}})
+                                                                                                                   "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[4]]}})
 
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
@@ -855,7 +855,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                      edr_ids=[321],
                                      file_content={'data': {'id': 321},
                                                    "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                            "id": document_id, "version": "0.0.1",
+                                                            "id": document_id, "version": "0.1.1",
                                                             'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_req_id[1], edr_details_req_id[0], edr_details_req_id[1]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -900,7 +900,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                     {'meta': {'id': document_ids[i], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1",
+                                                              "version": "0.1.1",
                                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[i], edr_details_req_id[i]]}}))  # result
 
         edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list,
@@ -958,7 +958,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {},
                                          "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                  "version": "0.0.1",
+                                                  "version": "0.1.1",
                                                   'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[i], edr_details_req_id[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -1005,7 +1005,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1",
+                                                              "version": "0.1.1",
                                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[i]]}}))  # result
 
         edr_ids_queue.peek.side_effect = generate_answers(
@@ -1059,7 +1059,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1",
+                                                              "version": "0.1.1",
                                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
