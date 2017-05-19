@@ -38,7 +38,7 @@ def validate_param(code):
 def create_file(details):
     """ Return temp file with details """
     temporary_file = io.BytesIO()
-    temporary_file.name = 'edr_request.yaml'
+    temporary_file.name = 'edr_identification.yaml'
     temporary_file.write(yaml.safe_dump(details, allow_unicode=True, default_flow_style=False))
     temporary_file.seek(0)
 
