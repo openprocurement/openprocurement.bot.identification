@@ -18,7 +18,6 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_START_FILTER_TENDER, DATABRIDGE_RESTART_FILTER_TENDER,
     DATABRIDGE_TENDER_NOT_PROCESS
 )
-from openprocurement_client.exceptions import InvalidResponse
 
 
 logger = logging.getLogger(__name__)
