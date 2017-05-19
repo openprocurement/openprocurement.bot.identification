@@ -16,7 +16,7 @@ from munch import munchify
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id
-from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, generate_request_id, ResponseMock
 from openprocurement.bot.identification.client import ProxyClient
 
 
@@ -49,13 +49,15 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
+        edr_req_ids = [generate_request_id(), generate_request_id()]
+        edr_details_req_ids = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,  'headers': {'X-Request-ID': edr_req_ids[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_ids[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_ids[1]})
 
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -67,10 +69,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
+                                        {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {"data": {}, 'meta': {'sourceDate': '2017-04-25T11:56:36+00:00',
-                                                              'id': document_id, "version": '0.0.1'}}))  # result
+                                                              'id': document_id, "version": "0.1.1",
+                                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_ids[i], edr_details_req_ids[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -93,15 +97,22 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 429 status code in first request with header 'Retry-After'"""
         local_edr_ids = get_random_edr_ids(2)
         gevent_sleep.side_effect = custom_sleep
+        edr_req_ids = [generate_request_id(), generate_request_id()]
+        edr_details_req_ids = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10'}},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[1]}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,
+                     headers={'X-Request-ID': edr_details_req_ids[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,
+                     headers={'X-Request-ID': edr_details_req_ids[1]})
 
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -113,11 +124,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,  {'meta': {'id': document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
+                                        {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {"data": {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                              "id": document_id,
-                                                              "version": "0.0.1"}}))  # result
+                                                              "id": document_id, "version": "0.1.1",
+                                                              "sourceRequests": ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_ids[i], edr_req_ids[i], edr_details_req_ids[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -134,15 +146,17 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
+        edr_req_id = [generate_request_id(), generate_request_id()]
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]},
-                       'status_code': 403},  # pay for me
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},  # pay for me
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},  # pay for me
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,  headers={'X-Request-ID': edr_details_req_id[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,  headers={'X-Request-ID': edr_details_req_id[1]})
 
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -154,11 +168,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                              "id": document_id,
-                                                              "version": "0.0.1"}}))  # result
+                                                              "id": document_id, "version": "0.1.1",
+                                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[i], edr_req_id[i], edr_details_req_id[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
 
@@ -176,13 +190,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """First and second response returns 403 status code. Tests retry for get_edr_id worker"""
         gevent_sleep.side_effect = custom_sleep
         local_edr_ids = get_random_edr_ids(1)
+        edr_req_id = generate_request_id()
+        edr_details_req_id = generate_request_id()
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id})
 
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -194,14 +211,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
             award_id = uuid.uuid4().hex
             document_id = generate_doc_id()
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None, {'data': {}, "meta": {"id": document_id}}))  # data
+            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
+                                        {"meta": {"id": document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                              "id": document_id,
-                                                              "version": "0.0.1"}}))  # result
+                                                              "id": document_id, "version": "0.1.1",
+                                                              "sourceRequests": ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_req_id, edr_details_req_id]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
-
         self.assertEquals(check_queue.get(), expected_result[0])
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
         worker.shutdown()
@@ -215,17 +232,18 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        edr_req_id = generate_request_id()
         document_id = generate_doc_id()
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      json={'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                   "code": "notFound"},
                                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}]},
-                     status_code=404)
+                     status_code=404, headers={'X-Request-ID': edr_req_id})
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
         edr_ids_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
@@ -235,7 +253,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               edr_ids=[], file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                   "code": "notFound"},
                                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                 "id": document_id, "version": "0.0.1"}}))
+                                                                 "id": document_id, "version": "0.1.1",
+                                                                 "sourceRequests": ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
@@ -251,21 +270,23 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         document_id = generate_doc_id()
         award_id = uuid.uuid4().hex
+        edr_req_id = generate_request_id()
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
                       {'json': {'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                                        "code": "notFound"},
-                                                             "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}]}, 'status_code': 404}])
+                                                             "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}]},
+                       'status_code': 404,  'headers': {'X-Request-ID': edr_req_id}}])
 
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id,  'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
         self.assertEquals(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id, item_id=award_id,
@@ -273,7 +294,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                               edr_ids=[],
                               file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                       "code": "notFound"},
-                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id, "version": "0.0.1"}}))
+                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id,
+                                                     "version": "0.1.1",  'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edrpou_ids_queue.qsize(), 0)  # check that data not in edr_ids_queue
@@ -289,31 +311,41 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322), json={'data': {'some': 'data'}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                     status_code=200, headers={'X-Request-ID': edr_req_id})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                     status_code=200, headers={'X-Request-ID': edr_details_req_id[0]})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322), json={'data': {'some': 'data'}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                     status_code=200, headers={'X-Request-ID': edr_details_req_id[1]})
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
+                                    {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id,
                                      item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[u'321', u'322'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                  "id": "{}.{}.{}".format(document_id, 2, 1),
-                                                                                                  "version": "0.0.1"}}))
+                                     edr_ids=[u'321', u'322'],
+                                     file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                        "id": "{}.{}.{}".format(document_id, 2, 1),
+                                                                        "version": "0.1.1",
+                                                                        'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0]]}}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                          Data(tender_id=tender_id,
                               item_id=award_id,
                               code='123', item_name='awards',
-                              edr_ids=[u'321', u'322'], file_content={'data': {'some': 'data'}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                         "id": "{}.{}.{}".format(document_id, 2, 2),
-                                                                                                         "version": "0.0.1"}}))
+                              edr_ids=[u'321', u'322'],
+                              file_content={'data': {'some': 'data'}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                               "id": "{}.{}.{}".format(document_id, 2, 2),
+                                                                               "version": "0.1.1",
+                                                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[1]]}}))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -334,32 +366,37 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}],
+                           "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[1]}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[2]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[u'321', u'322'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                  "id": '{}.{}.{}'.format(document_id, 2, 1),
-                                                                                                  "version": "0.0.1"}}))
+                                     edr_ids=[u'321', u'322'],
+                                     file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                        "id": '{}.{}.{}'.format(document_id, 2, 1),
+                                                                        "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0]]}}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id,
                                      item_id=award_id,
                                      code='123', item_name='awards', edr_ids=[u'322'],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": '{}.{}.{}'.format(document_id, 2, 2),
-                                                                        "version": "0.0.1"}}))
+                                                                        "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[1], edr_details_req_id[2]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -380,22 +417,26 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = [generate_request_id(), generate_request_id()]
+        edr_details_req_id = generate_request_id()
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
-                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     [{'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},  # data contains dict, instead of list
+                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id})
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id,
+                                                                                          'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": "0.1.1",
+                                                                                          'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_req_id[1], edr_details_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -413,23 +454,27 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
+        edr_details_req_id = generate_request_id()
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200},  # data contains dict, instead of list
-                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': {'x_edrInternalId': '321'}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}},  # data contains dict, instead of list
+                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[2]}}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id})
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id,
+                                                                                          'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
                                      edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                                                                          "id": document_id, "version": "0.1.1",
+                                                                                          'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_req_id[1], edr_req_id[2], edr_details_req_id]}}))
 
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -449,22 +494,26 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'json': [], 'status_code': 200},  # list instead of dict in data
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': [], 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[0]}},  # list instead of dict in data
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[1]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                     edr_ids=[u'321'],
+                                     file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                        "id": document_id, "version": "0.1.1",
+                                                                        'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0], edr_details_req_id[1]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -483,23 +532,28 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}],
+                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': [], 'status_code': 200},  # list instead of dict in data
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[0]}},
+                      {'json': [], 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[1]}},  # list instead of dict in data
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[2]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                     edr_ids=[u'321'],
+                                     file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                        "id": document_id, "version": "0.1.1",
+                                                                        'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[0], edr_details_req_id[1], edr_details_req_id[2]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -520,27 +574,33 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id(), generate_request_id(), generate_request_id(), generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+        mrequest.get("{url}".format(url=proxy_client.verify_url), json={'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,  headers={'X-Request-ID': edr_req_id})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[0]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[1]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[2]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[3]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[4]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[5]}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[6]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                     edr_ids=[u'321'],
+                                     file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                        "id": document_id, "version": "0.1.1",
+                                                                        'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
+                                                                                           edr_req_id, edr_details_req_id[0],
+                                                                                           edr_details_req_id[6]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -559,26 +619,33 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_details_req_id = generate_request_id()
+        edr_req_id = [generate_request_id(), generate_request_id(), generate_request_id(),
+                      generate_request_id(), generate_request_id(), generate_request_id(),
+                      generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403},
-                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[2]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[3]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[4]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[5]}},
+                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[6]}}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id})
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[u'321'], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                          "id": document_id, "version": "0.0.1"}}))
+                                     edr_ids=[u'321'],
+                                     file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                        "id": document_id, "version": "0.1.1",
+                                                                        'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
+                                                                                           edr_req_id[0], edr_req_id[6], edr_details_req_id]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -597,23 +664,29 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_details_req_id = [generate_request_id(), generate_doc_id()]
+        edr_req_id = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403},
-                      {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403},
-                      {'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[0]}},
+                      {'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[1]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[321], file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                "id": document_id, "version": "0.0.1"}}))
+                                     edr_ids=[321],
+                                     file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                                 "id": document_id, "version": "0.1.1",
+                                                                                 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
+                                                                                                    edr_req_id[0], edr_req_id[1],
+                                                                                                    edr_details_req_id[0], edr_details_req_id[1]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -632,6 +705,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        edr_details_req_id = generate_request_id()
+        edr_req_id = generate_request_id()
 
         #  create queues
         filtered_tender_ids_queue = Queue(10)
@@ -642,7 +717,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         # create workers and responses
         client = MagicMock()
-        client.get_tender.side_effect = [
+        client.request.return_value = ResponseMock({'X-Request-ID': 'req-db3ed1c6-9843-415f-92c9-7d4b08d39220'},
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': {'status': "active.pre-qualification",
@@ -653,10 +728,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                            'suppliers': [{'identifier': {
                                              'scheme': 'UA-EDR',
                                              'id': 14360570}  # int instead of str type
-                                         }]}, ]}}), ]
+                                         }]}, ]}}))
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), [{'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+        mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': {'data': [{'x_edrInternalId': 321}],
+                     "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), [{'json': {'data': {'id': 321},
+                     "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id}}])
         filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
@@ -669,7 +746,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(obj.file_content['data'], {'id': 321})
         self.assertEqual(obj.file_content['meta']['sourceDate'], "2017-04-25T11:56:36+00:00")
         self.assertIsNotNone(obj.file_content['meta']['id'])
-        self.assertEqual(obj.file_content['meta']['version'], "0.0.1")
+        self.assertEqual(obj.file_content['meta']['version'], "0.1.1")
+        self.assertEqual(obj.file_content['meta']['sourceRequests'], ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id])
 
         worker.shutdown()
         filter_tenders_worker.shutdown()
@@ -687,41 +765,43 @@ class TestEdrHandlerWorker(unittest.TestCase):
         award_id = uuid.uuid4().hex
         qualification_id = uuid.uuid4().hex
         document_ids = [generate_doc_id(), generate_doc_id()]
+        edr_req_id = [generate_request_id(), generate_request_id()]
+        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id(), generate_request_id(), generate_request_id()]
         processing_items = {}
         award_key = '{}_{}'.format(tender_id, award_id)
         qualification_key = '{}_{}'.format(tender_id, qualification_id)
         data_1 = Data(tender_id, award_id, '123', "awards", [321, 322], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                               "id": "{}.{}.{}".format(document_ids[0], 2, 1),
-                                                                                              "version": "0.0.1"}})
+                                                                                              "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_details_req_id[0]]}})
         data_2 = Data(tender_id, award_id, '123', "awards", [321, 322], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                               "id": "{}.{}.{}".format(document_ids[0], 2, 2),
-                                                                                              "version": "0.0.1"}})
+                                                                                              "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_details_req_id[1]]}})
         data_3 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 1),
-                                                                                                                   "version": "0.0.1"}})
+                                                                                                                   "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[2]]}})
         data_4 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 2),
-                                                                                                                   "version": "0.0.1"}})
+                                                                                                                   "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[3]]}})
         data_5 = Data(tender_id, qualification_id, '124', 'qualifications', [323, 324, 325], {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                                                    "id": "{}.{}.{}".format(document_ids[1], 3, 3),
-                                                                                                                   "version": "0.0.1"}})
+                                                                                                                   "version": "0.1.1", 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[1], edr_details_req_id[4]]}})
 
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': {'data': [{'x_edrInternalId': 321}, {'x_edrInternalId': 322}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': 323}, {'x_edrInternalId': 324}, {'x_edrInternalId': 325}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=323), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=324), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=325), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     [{'json': {'data': [{'x_edrInternalId': 321}, {'x_edrInternalId': 322}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{'x_edrInternalId': 323}, {'x_edrInternalId': 324}, {'x_edrInternalId': 325}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[0]})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[1]})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=323), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[2]})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=324), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[3]})
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=325), json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[4]})
 
         #  create queues
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_ids[0]}}))
-        edrpou_codes_queue.put(Data(tender_id, qualification_id, '124', 'qualifications', None, {'meta': {'id': document_ids[1]}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_ids[0], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
+        edrpou_codes_queue.put(Data(tender_id, qualification_id, '124', 'qualifications', None, {'meta': {'id': document_ids[1], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue,
                                   upload_to_doc_service, processing_items)
@@ -747,23 +827,28 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_req_id = [generate_request_id(), generate_request_id()]
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403},
-                      {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]},'status_code': 403},
-                      {'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[0]}},
+                      {'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[1]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id}}))
+        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None, {'meta': {'id': document_id, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, {})
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=[321], file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                                                                "id": document_id, "version": "0.0.1"}}))
+                                     edr_ids=[321],
+                                     file_content={'data': {'id': 321},
+                                                   "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                            "id": document_id, "version": "0.1.1",
+                                                            'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[0], edr_req_id[1], edr_details_req_id[0], edr_details_req_id[1]]}}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
@@ -783,13 +868,15 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
+        edr_req_id = [generate_request_id(), generate_request_id()]
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[1]})
 
         edrpou_codes_queue = MagicMock()
         edr_ids_queue = Queue(10)
@@ -801,10 +888,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, {'meta': {'id': document_ids[i]}}))  # data
+            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None,
+                    {'meta': {'id': document_ids[i], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": "0.1.1",
+                                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[i], edr_details_req_id[i]]}}))  # result
 
         edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list,
                                                                default=LoopExit())
@@ -832,13 +921,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
+        edr_req_id = [generate_request_id(), generate_request_id()]
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200},
-                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200}])
+                     [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,
+                     headers={'X-Request-ID': edr_details_req_id[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,
+                     headers={'X-Request-ID': edr_details_req_id[1]})
 
         edrpou_codes_queue = Queue(1)
         edr_ids_queue = Queue(10)
@@ -850,10 +945,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None, {"meta": {"id": document_ids[i]}}))  # data
+            edrpou_codes_queue_list.append(Data(tender_id, award_id, edr_ids[i], "awards", None,
+                                                {"meta": {"id": document_ids[i], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
-                                        {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                        {'data': {},
+                                         "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
+                                                  "version": "0.1.1",
+                                                  'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id[i], edr_details_req_id[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
         worker.retry_edrpou_codes_queue = MagicMock()
@@ -879,10 +977,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         document_ids = [generate_doc_id(), generate_doc_id()]
         local_edr_ids = get_random_edr_ids(2)
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,
+                     headers={'X-Request-ID': edr_details_req_id[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200,
+                     headers={'X-Request-ID': edr_details_req_id[1]})
 
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = MagicMock()
@@ -895,12 +997,15 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": "0.1.1",
+                                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[i]]}}))  # result
 
         edr_ids_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0]}}),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1]}})],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code,
+                          item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code,
+                          item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}})],
             default=LoopExit())
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
@@ -926,12 +1031,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         document_ids = [generate_doc_id(), generate_doc_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         local_edr_ids = get_random_edr_ids(2)
+        edr_req_id = generate_request_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url,
                                          id=local_edr_ids[0]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[0]})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url,
                                          id=local_edr_ids[1]),
-                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200)
+                     json={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_details_req_id[1]})
 
         edrpou_codes_queue = Queue(1)
         edr_ids_queue = Queue(1)
@@ -944,14 +1051,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
             expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
-                                                              "version": "0.0.1"}}))  # result
+                                                              "version": "0.1.1",
+                                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id, edr_details_req_id[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
         worker.retry_edr_ids_queue = MagicMock()
         worker.retry_edr_ids_queue.get.side_effect = generate_answers(
             answers=[LoopExit(),
-                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code, item_name='awards', edr_ids=[local_edr_ids[0]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0]}}),
-                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code, item_name='awards', edr_ids=[local_edr_ids[1]], file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1]}})],
+                     Data(tender_id=expected_result[0].tender_id, item_id=expected_result[0].item_id, code=expected_result[0].code,
+                          item_name='awards', edr_ids=[local_edr_ids[0]],
+                          file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[0], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}}),
+                     Data(tender_id=expected_result[1].tender_id, item_id=expected_result[1].item_id, code=expected_result[1].code,
+                          item_name='awards', edr_ids=[local_edr_ids[1]],
+                          file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[1], 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_req_id]}})],
             default=LoopExit())
 
         for result in expected_result:
