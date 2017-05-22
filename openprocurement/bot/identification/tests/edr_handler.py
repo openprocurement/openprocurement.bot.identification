@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from openprocurement.bot.identification.databridge.constants import version, author
 
 monkey.patch_all()
 
@@ -20,7 +19,7 @@ from openprocurement.bot.identification.databridge.filter_tender import FilterTe
 from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, generate_request_id, ResponseMock
 from openprocurement.bot.identification.client import ProxyClient
-from openprocurement.bot.identification.databridge.constants import version
+from openprocurement.bot.identification.databridge.constants import version, author
 
 
 def get_random_edr_ids(count=1):
