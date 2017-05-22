@@ -17,6 +17,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
     DATABRIDGE_422_UPLOAD_TO_TENDER
 )
+from openprocurement.bot.identification.databridge.constants import file_name
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class UploadFile(Greenlet):
                 gevent.sleep(0)
                 continue
             try:
-                response = self.doc_service_client.upload('edr_identification.yaml', create_file(tender_data.file_content), 'application/yaml',
+                response = self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
                                                           headers={'X-Client-Request-ID': document_id})
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {} {} {}. Message: {}. '
@@ -131,7 +132,7 @@ class UploadFile(Greenlet):
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
-        return self.doc_service_client.upload('edr_identification.yaml', create_file(tender_data.file_content), 'application/yaml',
+        return self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
                                               headers={'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
 
     def upload_to_tender(self):
