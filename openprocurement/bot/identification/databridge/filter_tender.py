@@ -18,6 +18,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_START_FILTER_TENDER, DATABRIDGE_RESTART_FILTER_TENDER,
     DATABRIDGE_TENDER_NOT_PROCESS
 )
+from openprocurement.bot.identification.databridge.constants import author
 
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ class FilterTenders(Greenlet):
                                     self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
                                     document_id= generate_doc_id()
                                     tender_data = Data(tender['id'], award['id'], str(supplier['identifier']['id']),
-                                                       'awards', None, {'meta': {'id': document_id, 'sourceRequests': [response.headers['X-Request-ID']]}})
+                                                       'awards', None, {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                     self.edrpou_codes_queue.put(tender_data)
                                 else:
                                     logger.info('Tender {} award {} identifier schema isn\'t UA-EDR or tender is already in process.'.format(tender['id'],  award['id']),
@@ -101,7 +102,7 @@ class FilterTenders(Greenlet):
                                 document_id = generate_doc_id()
                                 tender_data = Data(tender['id'], qualification['id'],
                                                    str(appropriate_bid['tenderers'][0]['identifier']['id']),
-                                                   'qualifications', None, {'meta': {'id': document_id, 'sourceRequests': [response.headers['X-Request-ID']]}})
+                                                   'qualifications', None, {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                 self.edrpou_codes_queue.put(tender_data)
                                 logger.info('Processing tender {} bid {}'.format(tender['id'], appropriate_bid['id']),
                                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
