@@ -15,8 +15,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE,
     DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER,
     DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
-    DATABRIDGE_422_UPLOAD_TO_TENDER
-)
+    DATABRIDGE_422_UPLOAD_TO_TENDER, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING)
 from openprocurement.bot.identification.databridge.constants import file_name
 
 logger = logging.getLogger(__name__)
@@ -163,6 +162,13 @@ class UploadFile(Greenlet):
                                                       {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
+                elif re.status_int == 403 and "Can't add document in current qualification status" in re.message:
+                    logger.warning("Tender {} {} {} doc_id: {} changed status while processing and is no longer a valid target for the upload".format(
+                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
+                                              {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id})
+                    )
+                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                 else:
                     self.retry_upload_to_tender_queue.put(tender_data)
             except Exception as e:
@@ -199,6 +205,14 @@ class UploadFile(Greenlet):
                                                                               tender_data.item_id, document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
                                                       {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
+                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    continue
+                elif re.status_int == 403 and "Can't add document in current qualification status" in re.message:
+                    logger.warning("Tender {} {} {} doc_id: {} changed status while processing and is no longer a valid target for the upload".format(
+                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
+                                              {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id})
+                    )
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
                 else:
