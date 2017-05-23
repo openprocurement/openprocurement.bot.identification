@@ -129,7 +129,7 @@ class FilterTenders(Greenlet):
         """Check if related lot not in status cancelled"""
         lot_id = award.get('lotID')
         if lot_id:
-            if [l['status'] for l in tender.get('lots', []) if l['id'] == lot_id][0] == 'cancelled':
+            if [l['status'] for l in tender.get('lots', []) if l['id'] == lot_id][0] != 'active':
                 return False
         return True
 
