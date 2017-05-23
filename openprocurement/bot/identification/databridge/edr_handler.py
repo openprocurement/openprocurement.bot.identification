@@ -67,6 +67,11 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
+            if not tender_data.code.isdigit():  # check that edrpou code is valid
+                self.edrpou_codes_queue.get()
+                del self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)]
+                continue
+            # remove tender from queue, because edrpou value is not valid
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code, headers={'X-Client-Request-ID': document_id})
             if response.status_code == 404 and response.json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                 logger.info('Empty response for tender {} {}.'.format(tender_data.tender_id, document_id),
@@ -123,6 +128,10 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             try:
+                if not tender_data.code.isdigit():  # check that edrpou code is valid
+                    self.retry_edrpou_codes_queue.get()
+                    del self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)]
+                    continue
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id)
                 if response.headers.get('X-Request-ID'):
                     tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
