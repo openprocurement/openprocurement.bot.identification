@@ -9,14 +9,15 @@ from datetime import datetime
 from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
 from restkit import ResourceError
+from simplejson import loads
 
-from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file
+from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file, RetryException
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE,
     DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER,
     DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
     DATABRIDGE_422_UPLOAD_TO_TENDER, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING)
-from openprocurement.bot.identification.databridge.constants import file_name
+from openprocurement.bot.identification.databridge.constants import file_name, upload_file_error_messages
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,7 @@ class UploadFile(Greenlet):
         while not self.exit:
             try:
                 tender_data = self.upload_to_tender_queue.get()
+                gevent.sleep(20)
             except LoopExit:
                 gevent.sleep(0)
                 continue
@@ -162,7 +164,7 @@ class UploadFile(Greenlet):
                                                       {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
-                elif re.status_int == 403 and "Can't add document in current qualification status" in re.message:
+                elif re.status_int == 403 and re.msg and loads(re.msg).get('errors')[0].get('description') in upload_file_error_messages:
                     logger.warning("Tender {} {} {} doc_id: {} changed status while processing and is no longer a valid target for the upload".format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
@@ -207,7 +209,8 @@ class UploadFile(Greenlet):
                                                       {"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
-                elif re.status_int == 403 and "Can't add document in current qualification status" in re.message:
+                elif re.status_int == 403 and loads(re.msg).get('errors')[0].get('description') in upload_file_error_messages:
+                    logger.exception(re)
                     logger.warning("Tender {} {} {} doc_id: {} changed status while processing and is no longer a valid target for the upload".format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
@@ -220,7 +223,6 @@ class UploadFile(Greenlet):
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.message),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
                                               params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                    logger.exception(re)
                     self.retry_upload_to_tender_queue.put(tender_data)
             except Exception as e:
                 logger.info('Exception while retry uploading file to tender {} {} {} {}. Message: {}'.format(
