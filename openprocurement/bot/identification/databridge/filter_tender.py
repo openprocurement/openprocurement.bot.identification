@@ -75,13 +75,19 @@ class FilterTenders(Greenlet):
                         if award['status'] == 'pending' and not [document for document in award.get('documents', [])
                                                                  if document.get('documentType') == 'registerExtract']:
                             for supplier in award['suppliers']:
+                                code = str(supplier['identifier']['id'])
+                                if not code.isdigit():
+                                    self.filtered_tender_ids_queue.get()
+                                    logger.info('Tender {} award {} identifier id {} is not valid.'.format(tender['id'], award['id'], code),
+                                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS}, params={"TENDER_ID": tender['id']}))
+                                    continue
                                 # check first identification scheme, if yes then check if item is already in process or not
                                 if supplier['identifier']['scheme'] == self.identification_scheme and \
                                         self.check_related_lot_status(tender, award) and \
                                         self.check_processing_item(tender['id'], award['id']):
                                     self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
-                                    document_id= generate_doc_id()
-                                    tender_data = Data(tender['id'], award['id'], str(supplier['identifier']['id']),
+                                    document_id = generate_doc_id()
+                                    tender_data = Data(tender['id'], award['id'], code,
                                                        'awards', None, {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                     self.edrpou_codes_queue.put(tender_data)
                                 else:
@@ -98,12 +104,17 @@ class FilterTenders(Greenlet):
                                 not [document for document in qualification.get('documents', [])
                                      if document.get('documentType') == 'registerExtract']:
                             appropriate_bid = [b for b in tender['bids'] if b['id'] == qualification['bidID']][0]
+                            code = str(appropriate_bid['tenderers'][0]['identifier']['id'])
+                            if not code.isdigit():
+                                self.filtered_tender_ids_queue.get()
+                                logger.info('Tender {} award {} identifier id {} is not valid.'.format(tender['id'], qualification['id'], code),
+                                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS}, params={"TENDER_ID": tender['id']}))
+                                continue
                             # check first identification scheme, if yes then check if item is already in process or not
                             if appropriate_bid['tenderers'][0]['identifier']['scheme'] == self.identification_scheme and self.check_processing_item(tender['id'], qualification['id']):
                                 self.processing_items['{}_{}'.format(tender['id'], qualification['id'])] = 0
                                 document_id = generate_doc_id()
-                                tender_data = Data(tender['id'], qualification['id'],
-                                                   str(appropriate_bid['tenderers'][0]['identifier']['id']),
+                                tender_data = Data(tender['id'], qualification['id'], code,
                                                    'qualifications', None, {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                 self.edrpou_codes_queue.put(tender_data)
                                 logger.info('Processing tender {} bid {}'.format(tender['id'], appropriate_bid['id']),

@@ -13,7 +13,6 @@ from gevent.queue import Queue
 from gevent.hub import LoopExit
 from mock import patch, MagicMock
 from munch import munchify
-from time import sleep
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
@@ -1182,34 +1181,3 @@ class TestEdrHandlerWorker(unittest.TestCase):
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 2)
 
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_not_valid_identifier_id(self, mrequest, gevent_sleep):
-        """ Check that not valid identifier.id removes from queue """
-        gevent_sleep.side_effect = custom_sleep
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        edr_ids = ['', 'test@test.com']
-
-        edrpou_codes_queue = Queue(10)
-        edr_ids_queue = Queue(10)
-        check_queue = Queue(10)
-        for i in range(2):
-            tender_id = uuid.uuid4().hex
-            award_id = uuid.uuid4().hex
-            document_id = generate_doc_id()
-            edrpou_codes_queue.put(Data(tender_id, award_id, edr_ids[i], "awards", None,
-                                        {'meta': {'id': document_id, 'author': author,
-                                                  'sourceRequests': [
-                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}),
-                                   Data(tender_id, award_id, edr_ids[i], "qualifications", None,
-                                        {'meta': {'id': document_id, 'author': author,
-                                                  'sourceRequests': [
-                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
-        sleep(2)
-        self.assertEqual(edrpou_codes_queue.qsize(), 0)
-
-        worker.shutdown()
-        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(mrequest.call_count, 0)

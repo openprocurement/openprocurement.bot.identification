@@ -399,3 +399,89 @@ class TestFilterWorker(unittest.TestCase):
         del worker
 
         self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, second_award_id)])
+
+
+    @patch('gevent.sleep')
+    def test_qualification_not_valid_identifier_id(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        filtered_tender_ids_queue = Queue(10)
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        request_id = generate_request_id()
+        tender_id = uuid.uuid4().hex
+        filtered_tender_ids_queue.put(tender_id)
+        first_bid_id, second_bid_id = [uuid.uuid4().hex for i in range(2)]
+        first_qualification_id, second_qualification_id = [uuid.uuid4().hex for i in range(2)]
+        client = MagicMock()
+        client.request.return_value = ResponseMock({'X-Request-ID': request_id},
+                                                    munchify(
+                                                        {'prev_page': {'offset': '123'},
+                                                         'next_page': {'offset': '1234'},
+                                                         'data': {'status': "active.pre-qualification",
+                                                               'id': tender_id,
+                                                               'procurementMethodType': 'aboveThresholdEU',
+                                                               'bids': [{'id': first_bid_id,
+                                                                         'tenderers': [{'identifier': {
+                                                                             'scheme': 'UA-EDR',
+                                                                             'id': 'test@test.com'}
+                                                                         }]},
+                                                                        {'id': second_bid_id,
+                                                                         'tenderers': [{'identifier': {
+                                                                             'scheme': 'UA-EDR',
+                                                                             'id': ''}
+                                                                         }]}
+                                                                        ],
+                                                               'qualifications': [{'status': 'pending',
+                                                                                   'id': first_qualification_id,
+                                                                                   'bidID': first_bid_id},
+                                                                                  {'status': 'pending',
+                                                                                   'id': second_qualification_id,
+                                                                                   'bidID': second_bid_id}]}}))
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+
+        sleep(1)
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertItemsEqual(processing_items, {})
+
+        worker.shutdown()
+        del worker
+
+    @patch('gevent.sleep')
+    def test_award_not_valid_identifier_id(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        filtered_tender_ids_queue = Queue(10)
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        tender_id = uuid.uuid4().hex
+        request_id = generate_request_id()
+        filtered_tender_ids_queue.put(tender_id)
+        first_award_id, second_award_id = [uuid.uuid4().hex for i in range(2)]
+        client = MagicMock()
+        client.request.return_value = ResponseMock({'X-Request-ID': request_id},
+                                                   munchify({'prev_page': {'offset': '123'},
+                                                             'next_page': {'offset': '1234'},
+                                                             'data': {'status': "active.pre-qualification",
+                                                                      'id': tender_id,
+                                                                      'procurementMethodType': 'aboveThresholdEU',
+                                                                      'awards': [{'id': first_award_id,
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': ''}
+                                                                                  }]},
+                                                                                 {'id': second_award_id,
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': 'test@test.com'}
+                                                                                  }]}]
+                                                                      }}))
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+
+        sleep(1)
+
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertItemsEqual(processing_items, {})
+
+        worker.shutdown()
+        del worker
