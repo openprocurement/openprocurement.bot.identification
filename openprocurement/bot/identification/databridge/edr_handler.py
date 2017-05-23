@@ -67,7 +67,6 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
-            # remove tender from queue, because edrpou value is not valid
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code, headers={'X-Client-Request-ID': document_id})
             if response.status_code == 404 and response.json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                 logger.info('Empty response for tender {} {}.'.format(tender_data.tender_id, document_id),

@@ -1180,4 +1180,3 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         worker.shutdown()
         self.assertEqual(mrequest.call_count, 2)
-
