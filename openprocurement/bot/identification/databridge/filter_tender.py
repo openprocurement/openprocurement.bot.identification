@@ -76,7 +76,9 @@ class FilterTenders(Greenlet):
                                                                  if document.get('documentType') == 'registerExtract']:
                             for supplier in award['suppliers']:
                                 # check first identification scheme, if yes then check if item is already in process or not
-                                if supplier['identifier']['scheme'] == self.identification_scheme and self.check_processing_item(tender['id'], award['id']):
+                                if supplier['identifier']['scheme'] == self.identification_scheme and \
+                                        self.check_related_lot_status(tender, award) and \
+                                        self.check_processing_item(tender['id'], award['id']):
                                     self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
                                     document_id= generate_doc_id()
                                     tender_data = Data(tender['id'], award['id'], str(supplier['identifier']['id']),
@@ -122,6 +124,14 @@ class FilterTenders(Greenlet):
     def check_processing_item(self, tender_id, item_id):
         """Check if current tender_id, item_id is processing"""
         return '{}_{}'.format(tender_id, item_id) not in self.processing_items.keys()
+
+    def check_related_lot_status(self, tender, award):
+        """Check if related lot not in status cancelled"""
+        lot_id = award.get('lotID')
+        if lot_id:
+            if [l['status'] for l in tender.get('lots', []) if l['id'] == lot_id][0] != 'active':
+                return False
+        return True
 
     def _run(self):
         logger.info('Start Filter Tenders', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_FILTER_TENDER}, {}))

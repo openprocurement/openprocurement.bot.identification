@@ -349,3 +349,53 @@ class TestFilterWorker(unittest.TestCase):
 
         self.assertItemsEqual(processing_items.keys(),
                               ['{}_{}'.format(tender_id, first_award_id)])
+
+    @patch('gevent.sleep')
+    def test_worker_award_with_cancelled_lot(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        filtered_tender_ids_queue = Queue(10)
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        tender_id = uuid.uuid4().hex
+        request_id = generate_request_id()
+        filtered_tender_ids_queue.put(tender_id)
+        first_award_id, second_award_id = [uuid.uuid4().hex for i in range(2)]
+        client = MagicMock()
+        client.request.return_value = ResponseMock({'X-Request-ID': request_id},
+            munchify({'prev_page': {'offset': '123'},
+                      'next_page': {'offset': '1234'},
+                      'data': {'status': "active.pre-qualification",
+                               'id': tender_id,
+                               'procurementMethodType': 'aboveThresholdEU',
+                               'lots': [{'status': 'cancelled',
+                                         'id': '123456789'},
+                                        {'status': 'active',
+                                         'id': '12345678'}
+                                        ],
+                               'awards': [{'id': first_award_id,
+                                           'status': 'pending',
+                                           'suppliers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': '14360570'}
+                                         }],
+                                           'lotID': '123456789'},
+                                        {'id': second_award_id,
+                                         'status': 'pending',
+                                         'suppliers': [{'identifier': {
+                                             'scheme': 'UA-EDR',
+                                             'id': '0013823'}
+                                         }],
+                                         'lotID': '12345678'}
+                                        ]
+                               }}))
+
+        data = Data(tender_id, second_award_id, '0013823', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+
+        for edrpou in [data]:
+            self.check_data_objects(edrpou_codes_queue.get(), edrpou)
+
+        worker.shutdown()
+        del worker
+
+        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, second_award_id)])
