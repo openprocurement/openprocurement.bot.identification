@@ -429,6 +429,16 @@ class TestFilterWorker(unittest.TestCase):
                                                                          'tenderers': [{'identifier': {
                                                                              'scheme': 'UA-EDR',
                                                                              'id': ''}
+                                                                         }]},
+                                                                        {'id': second_bid_id,
+                                                                         'tenderers': [{'identifier': {
+                                                                             'scheme': 'UA-EDR',
+                                                                             'id': 'абв'}
+                                                                         }]},
+                                                                        {'id': second_bid_id,
+                                                                         'tenderers': [{'identifier': {
+                                                                             'scheme': 'UA-EDR',
+                                                                             'id': u'абв'}
                                                                          }]}
                                                                         ],
                                                                'qualifications': [{'status': 'pending',
@@ -468,6 +478,18 @@ class TestFilterWorker(unittest.TestCase):
                                                                                   'suppliers': [{'identifier': {
                                                                                       'scheme': 'UA-EDR',
                                                                                       'id': ''}
+                                                                                  }]},
+                                                                                 {'id': first_award_id,
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': u'абв'}
+                                                                                  }]},
+                                                                                 {'id': first_award_id,
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': 'абв'}
                                                                                   }]},
                                                                                  {'id': second_award_id,
                                                                                   'status': 'pending',
