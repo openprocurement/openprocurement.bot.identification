@@ -271,7 +271,7 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_request_failed_in_retry_status(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        err_message = '{"status": "error", "errors": [{"location": "body", "name": "data", "description": "Can\'t add document in current qualification status"}]}'
+        err_message = '{"status": "error", "errors": [{"location": "body", "name": "data", "description": "Can\'t add document in current (active) award status"}]}'
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
