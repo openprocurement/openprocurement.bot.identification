@@ -141,7 +141,6 @@ class UploadFile(Greenlet):
         while not self.exit:
             try:
                 tender_data = self.upload_to_tender_queue.get()
-                gevent.sleep(20)
             except LoopExit:
                 gevent.sleep(0)
                 continue
