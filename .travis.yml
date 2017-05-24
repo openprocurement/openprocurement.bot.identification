@@ -13,7 +13,11 @@ before_install:
 install:
   - bin/buildout -N
 script:
-  - bin/nosetests
+  - bin/nosetests openprocurement/bot/identification/tests/bridge.py
+  - bin/nosetests openprocurement/bot/identification/tests/scanner.py
+  - bin/nosetests openprocurement/bot/identification/tests/filter_tender.py
+  - bin/nosetests openprocurement/bot/identification/tests/edr_handler.py
+  - bin/nosetests openprocurement/bot/identification/tests/upload_file.py
 after_success:
   - bin/coveralls
 
