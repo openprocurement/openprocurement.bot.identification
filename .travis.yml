@@ -14,20 +14,15 @@ install:
   - bin/buildout -N
 script:
   - bin/nosetests openprocurement/bot/identification/tests/bridge.py
-  - mv .coverage .coverage_bridge
+  - mv .coverage .coverage.bridge
   - bin/nosetests openprocurement/bot/identification/tests/scanner.py
-  - mv .coverage .coverage_scanner
+  - mv .coverage .coverage.scanner
   - bin/nosetests openprocurement/bot/identification/tests/filter_tender.py
-  - mv .coverage .coverage_filter
+  - mv .coverage .coverage.filter
   - bin/nosetests openprocurement/bot/identification/tests/edr_handler.py
-  - mv .coverage .coverage_edr
+  - mv .coverage .coverage.edr
   - bin/nosetests openprocurement/bot/identification/tests/upload_file.py
-  - mv .coverage .coverage_upload
-  - mv .coverage_bridge .coverage.bridge
-  - mv .coverage_scanner .coverage.scanner
-  - mv .coverage_filter .coverage.filter
-  - mv .coverage_edr .coverage.edr
-  - mv .coverage_upload .coverage.upload
+  - mv .coverage .coverage.upload
   - bin/coverage combine
 after_success:
   - bin/coveralls
