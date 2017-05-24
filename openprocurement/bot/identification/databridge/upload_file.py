@@ -9,7 +9,6 @@ from datetime import datetime
 from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
 from restkit import ResourceError
-from simplejson import loads
 
 from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file, RetryException
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
