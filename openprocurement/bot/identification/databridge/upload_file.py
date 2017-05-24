@@ -210,7 +210,6 @@ class UploadFile(Greenlet):
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     continue
                 elif re.status_int == 403 and any([i in re.msg for i in upload_file_error_messages]):
-                    logger.exception(re)
                     logger.warning("Tender {} {} {} doc_id: {} changed status while processing and is no longer a valid target for the upload".format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
