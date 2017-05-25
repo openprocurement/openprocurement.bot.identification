@@ -66,7 +66,9 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(4)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -109,7 +111,9 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(7)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -131,11 +135,11 @@ class TestUploadFileWorker(unittest.TestCase):
                                     'title': file_name}},
                       status_code=200)
         client = MagicMock()
-        client._create_tender_resource_item.side_effect = [Unauthorized(http_code=403),
-                                                           Unauthorized(http_code=403),
-                                                           Unauthorized(http_code=403),
-                                                           Unauthorized(http_code=403),
-                                                           Unauthorized(http_code=403),
+        client._create_tender_resource_item.side_effect = [Unauthorized(http_code=401),
+                                                           Unauthorized(http_code=401),
+                                                           Unauthorized(http_code=401),
+                                                           Unauthorized(http_code=401),
+                                                           Unauthorized(http_code=401),
                                                            Exception(),
                                                            {'data': {'id': uuid.uuid4().hex,
                                                                      'documentOf': 'tender',
@@ -152,7 +156,9 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(60)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -184,7 +190,9 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(10)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -198,8 +206,6 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_request_failed_item_status_change(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        err_message = ['{"status": "error", "errors": [{"location": "body", "name": "data", "description": "Can\'t add document in current qualification status"}]}',
-                       '{"status": "error", "errors": [{"location": "body", "name": "data", "description": "Can\'t add document in current (active) award status"}]}']
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
@@ -208,8 +214,8 @@ class TestUploadFileWorker(unittest.TestCase):
                                     'title': file_name}},
                       status_code=200)
         client = MagicMock()
-        client._create_tender_resource_item.side_effect = [ResourceError(http_code=403, msg=err_message[0]),
-                                                           ResourceError(http_code=403, msg=err_message[1])]
+        client._create_tender_resource_item.side_effect = [ResourceError(http_code=403),
+                                                           ResourceError(http_code=403)]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         qualification_id = uuid.uuid4().hex
@@ -221,7 +227,9 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'qualifications', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         upload_to_doc_service_queue.put(Data(tender_id, qualification_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(10)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -261,7 +269,9 @@ class TestUploadFileWorker(unittest.TestCase):
             Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
                                   doc_service_client)
-        sleep(60)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -275,8 +285,6 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_request_failed_in_retry_item_status(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        err_message = ['{"status": "error", "errors": [{"location": "body", "name": "data", "description": "Can\'t add document in current qualification status"}]}',
-                       '{"status": "error", "errors": [{"location": "body", "name": "data", "description": "Can\'t add document in current (active) award status"}]}']
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
                       json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
@@ -286,17 +294,16 @@ class TestUploadFileWorker(unittest.TestCase):
                       status_code=200)
         client = MagicMock()
         client._create_tender_resource_item.side_effect = [ResourceError(http_code=425),
-                                                           ResourceError(http_code=403, msg=err_message[0]),
-                                                           ResourceError(http_code=403, msg=err_message[0]),
-                                                           ResourceError(http_code=403, msg=err_message[0]),
-                                                           ResourceError(http_code=403, msg=err_message[0]),
-                                                           ResourceError(http_code=403, msg=err_message[0]),
-                                                           # ResourceError(http_code=425, msg='lol'),
-                                                           ResourceError(http_code=403, msg=err_message[1]),
-                                                           ResourceError(http_code=403, msg=err_message[1]),
-                                                           ResourceError(http_code=403, msg=err_message[1]),
-                                                           ResourceError(http_code=403, msg=err_message[1]),
-                                                           ResourceError(http_code=403, msg=err_message[1]),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403),
                                                            ]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
@@ -309,7 +316,9 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         upload_to_doc_service_queue.put(Data(tender_id, qualification_id, '123', 'qualifications', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
-        sleep(60)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -356,7 +365,9 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
                                   doc_service_client)
-        sleep(10)
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+               worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
         worker.shutdown()
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
@@ -400,8 +411,10 @@ class TestUploadFileWorker(unittest.TestCase):
         processing_items = {key: 2}
         upload_to_doc_service_queue = MagicMock()
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.get.side_effect = generate_answers(
-            answers=[LoopExit(), Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}), Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
+        upload_to_doc_service_queue.peek.side_effect = generate_answers(
+            answers=[LoopExit(),
+                     Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}),
+                     Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
             default=LoopExit())
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         sleep(10)
@@ -435,7 +448,7 @@ class TestUploadFileWorker(unittest.TestCase):
         processing_items = {key: 2}
         upload_to_doc_service_queue = Queue(1)
         upload_to_tender_queue = MagicMock()
-        upload_to_tender_queue.get.side_effect = generate_answers(
+        upload_to_tender_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
                      Data(tender_id=tender_id,
                           item_id=award_id,
@@ -490,7 +503,7 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_tender_queue = Queue(1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         worker.retry_upload_to_tender_queue = MagicMock()
-        worker.retry_upload_to_tender_queue.get.side_effect = generate_answers(
+        worker.retry_upload_to_tender_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
                      Data(tender_id=tender_id,
                           item_id=award_id,
@@ -511,7 +524,6 @@ class TestUploadFileWorker(unittest.TestCase):
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
                               u'title': file_name})],
             default=LoopExit())
-
         sleep(10)
         worker.shutdown()
         self.assertEqual(processing_items, {})
@@ -557,7 +569,7 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_to_doc_service_queue = Queue(1)
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         worker.retry_upload_to_doc_service_queue = MagicMock()
-        worker.retry_upload_to_doc_service_queue.get.side_effect = generate_answers(
+        worker.retry_upload_to_doc_service_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
                      Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}),
                      Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
