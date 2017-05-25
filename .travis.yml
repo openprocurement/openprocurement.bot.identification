@@ -13,7 +13,7 @@ before_install:
 install:
   - bin/buildout -N
 script:
-   - bin/nosetests
+  - bin/nosetests
 after_success:
   - bin/coveralls
 
