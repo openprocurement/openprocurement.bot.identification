@@ -152,8 +152,8 @@ class EdrDataBridge(object):
                 gevent.sleep(self.delay)
                 if counter == 20:
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
-                                'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Upload to tender {}; '
-                                'Retry upload to doc service {}; Retry upload to tender {}'.format(
+                                'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
+                                'Upload to tender {}; Retry upload to tender {}'.format(
                                     self.filtered_tender_ids_queue.qsize(),
                                     self.edrpou_codes_queue.qsize(),
                                     self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
