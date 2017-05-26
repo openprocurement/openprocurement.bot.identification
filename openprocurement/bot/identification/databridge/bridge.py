@@ -151,12 +151,19 @@ class EdrDataBridge(object):
             while True:
                 gevent.sleep(self.delay)
                 if counter == 20:
-                    logger.info('Current state: filtered tenders {}; edrpou codes queue {}; edr ids queue {}; Upload to doc service {}; Upload to tender {}'.format(
-                        self.filtered_tender_ids_queue.qsize(),
-                        self.edrpou_codes_queue.qsize(),
-                        self.edr_ids_queue.qsize(),
-                        self.upload_to_doc_service_queue.qsize(),
-                        self.upload_to_tender_queue.qsize()))
+                    logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
+                                'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Upload to tender {}; '
+                                'Retry upload to doc service {}; Retry upload to tender {}'.format(
+                                    self.filtered_tender_ids_queue.qsize(),
+                                    self.edrpou_codes_queue.qsize(),
+                                    self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
+                                    self.edr_ids_queue.qsize(),
+                                    self.jobs['edr_handler'].retry_edr_ids_queue.qsize() if self.jobs['edr_handler'] else 0,
+                                    self.upload_to_doc_service_queue.qsize(),
+                                    self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
+                                    self.upload_to_tender_queue.qsize(),
+                                    self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
+                                ))
                     counter = 0
                 counter += 1
                 for name, job in self.jobs.items():
