@@ -13,12 +13,12 @@ from copy import deepcopy
 
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_START_EDR_HANDLER, DATABRIDGE_SUCCESS_CREATE_FILE,
-    DATABRIDGE_EMPTY_RESPONSE
-)
+    DATABRIDGE_EMPTY_RESPONSE, DATABRIDGE_PROXY_SERVER_CONN_ERROR)
 from openprocurement.bot.identification.databridge.utils import (
     Data, journal_context, validate_param, RetryException, check_add_suffix
 )
 from openprocurement.bot.identification.databridge.constants import version
+from requests import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class EdrHandler(Greenlet):
     def __init__(self, proxyClient, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, processing_items, delay=15):
         super(EdrHandler, self).__init__()
         self.exit = False
+        self.has_paid_requests = True
         self.start_time = datetime.now()
 
         # init clients
@@ -170,7 +171,7 @@ class EdrHandler(Greenlet):
                                                                                               tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
     def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
@@ -184,6 +185,7 @@ class EdrHandler(Greenlet):
         """Get data from edr_ids_queue; make request to EDR Api for detailed info; Required fields is put to
         Data.file_content variable, Data object is put to upload_to_doc_service_queue."""
         while not self.exit:
+            logger.info("get_edr_details iteration")
             try:
                 tender_data = self.edr_ids_queue.peek()
             except LoopExit:
@@ -195,11 +197,14 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             meta_id = tender_data.file_content['meta']['id']
             for edr_id in tender_data.edr_ids:
+                logger.info("edr_id: {}".format(edr_id))
                 # if more then 1 instance add amount and number of document to document_id
                 document_id = check_add_suffix(tender_data.edr_ids, meta_id, tender_data.edr_ids.index(edr_id) + 1)
                 tender_data.file_content['meta']['id'] = document_id
                 response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
+                logger.info("Status: {}".format(response.status_code))
                 if response.status_code == 200:
+                    logger.info("response.json(): {}".format(response.json()))
                     if not isinstance(response.json(), dict):
                         file_content = tender_data.file_content
                         file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
@@ -220,6 +225,9 @@ class EdrHandler(Greenlet):
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
+                elif response.status_code == 402:
+                    logger.info("NOT ENOUGH MONEY")
+                    self.exit = True
                 else:
 
                     file_content = tender_data.file_content
@@ -280,7 +288,7 @@ class EdrHandler(Greenlet):
                                                   params={"TENDER_ID": tender_data.tender_id,  "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
@@ -304,6 +312,25 @@ class EdrHandler(Greenlet):
                            'Description: {err}'.format(err=response.text),
                            extra=journal_context(params={"TENDER_ID": tender_id}))
 
+    def check_proxy(self):
+        """Makes request to the EDR proxy, returns True if it's up, raises RequestError otherwise
+                Separated to allow for possible granular checks         
+        """
+        try:
+            self.proxyClient.health()
+        except RequestException as e:
+            logger.info('Proxy server connection error, message {}'.format(e),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
+            raise e
+        else:
+            return True
+
+    def check_edr_api(self):
+        try:
+            self.proxyClient.details(999186)
+        except RequestException as e:
+            logger.info("")
+
     def _run(self):
         logger.info('Start EDR Handler', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_EDR_HANDLER}, {}))
         self.immortal_jobs = {'get_edr_id': spawn(self.get_edr_id),
@@ -313,7 +340,15 @@ class EdrHandler(Greenlet):
 
         try:
             while not self.exit:
+                # if not(self.check_proxy() and self.check_edr_api()):
+                #     logger.warning("Waiting because one of the services is unavailable: Proxy: {}; EDR API: {}".format(
+                #         self.check_proxy(), self.check_edr_api()
+                #     ))
+                #     for name, job in self.immortal_jobs.items():
+                #         if not job.dead:
+                #             self.immortal_jobs[name].wait(self.delay)
                 gevent.sleep(self.delay)
+                logger.info("iteration of run")
                 for name, job in self.immortal_jobs.items():
                     if job.dead:
                         logger.warning("EDR handler worker {} dead try restart".format(name),

@@ -21,7 +21,7 @@ class ProxyClient(object):
 
         return response
 
-    def details(self, id, headers):
+    def details(self, id, headers={}):
         """ Send request to Proxy server to get details."""
         url = '{url}/{id}'.format(url=self.details_url, id=id)
         response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)

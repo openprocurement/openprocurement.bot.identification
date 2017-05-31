@@ -53,6 +53,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         local_edr_ids = get_random_edr_ids(2)
         edr_req_ids = [generate_request_id(), generate_request_id()]
         edr_details_req_ids = [generate_request_id(), generate_request_id()]
+        mrequest.get("{uri}".format(uri=proxy_client.health_url))
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,  'headers': {'X-Request-ID': edr_req_ids[1]}}])

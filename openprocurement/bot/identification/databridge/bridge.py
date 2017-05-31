@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from openprocurement.bot.identification.databridge.constants import test_x_edr_internal_id
+
 monkey.patch_all()
 
 import logging
@@ -11,7 +13,7 @@ import gevent
 from functools import partial
 from yaml import load
 from gevent.queue import Queue
-from restkit import request, RequestError
+from restkit import request, RequestError, ResourceError
 from requests import RequestException
 
 from openprocurement_client.client import TendersClientSync, TendersClient
@@ -36,7 +38,7 @@ class EdrDataBridge(object):
         self.config = config
 
         api_server = self.config_get('tenders_api_server')
-        api_version = self.config_get('tenders_api_version')
+        self.api_version = self.config_get('tenders_api_version')
         ro_api_server = self.config_get('public_tenders_api_server') or api_server
         buffers_size = self.config_get('buffers_size') or 500
         self.delay = self.config_get('delay') or 15
@@ -46,8 +48,8 @@ class EdrDataBridge(object):
         self.doc_service_port = self.config_get('doc_service_port') or 6555
 
         # init clients
-        self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
-        self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=api_version)
+        self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
+        self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=self.api_version)
         self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
                                        user=self.config_get('proxy_user'),
                                        password=self.config_get('proxy_password'),
@@ -107,6 +109,7 @@ class EdrDataBridge(object):
                                    processing_items=self.processing_items,
                                    doc_service_client=self.doc_service_client,
                                    delay=self.delay)
+        self.is_sleeping = False
 
     def config_get(self, name):
         return self.config.get('main').get(name)
@@ -116,9 +119,23 @@ class EdrDataBridge(object):
                 Separated to allow for possible granular checks         
         """
         try:
-            request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
+            r = request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
         except RequestError as e:
             logger.info('DocService connection error, message {}'.format(e),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
+            raise e
+        else:
+            return True
+
+    def check_openprocurement_api(self):
+        """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise
+                Separated to allow for possible granular checks         
+        """
+        try:
+            logger.debug("Checking status of openprocurement api")
+            self.client.head('/api/{}/spore'.format(self.api_version))
+        except RequestError as e:
+            logger.info('TendersServer connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
             raise e
         else:
@@ -129,6 +146,7 @@ class EdrDataBridge(object):
                 Separated to allow for possible granular checks         
         """
         try:
+            logger.debug("Checking status of proxy")
             self.proxyClient.health()
         except RequestException as e:
             logger.info('Proxy server connection error, message {}'.format(e),
@@ -136,6 +154,53 @@ class EdrDataBridge(object):
             raise e
         else:
             return True
+
+    def check_paid_requests(self):
+        """Makes request to the EDR proxy, returns True if we have paid requests, otherwise return False"""
+        response = self.proxyClient.details(id=test_x_edr_internal_id)
+        if response.status_code == 402: # status of not having paid requests
+            logger.info("Checking for paid requests failed")
+            raise RequestException("Not enough money")
+        return True
+
+    def set_exit_status(self, new_status):
+        for job in self.jobs.values():
+            job.exit = new_status
+
+    def check_services_and_start(self):
+        logger.info("Checking status of all services to try restarting")
+        try:
+            self.check_proxy() and self.check_paid_requests() and self.check_openprocurement_api() and self.check_doc_service()
+        except Exception as e:
+            logger.warning("Service is still unavailable")
+            return "Services are still unavailable"
+        else:
+            logger.warning("All services have become available, starting all workers")
+            self.set_exit_status(False)
+            self.is_sleeping = False
+            return "All services have become available, starting all workers"
+
+    def check_services_and_stop(self):
+        """
+        Check all services and workers; if at least one service is unavailable or at least one of the workers is 
+        sleeping (has self.exit=True), sleep all the workers and set self.is_sleeping to True
+        :return: True - Stopped, False = Not stopped
+        """
+        logger.info("Checking status of all services to stop bot if necessary")
+        try:
+            self.check_proxy() and self.check_doc_service() and self.check_openprocurement_api()
+        except Exception as e:
+            logger.info("Service is down, stopping all bots")
+            self.is_sleeping = True
+            self.set_exit_status(True)
+            return True
+        else:
+            for job in self.jobs.values():
+                if job.exit:
+                    self.is_sleeping = True
+                    self.set_exit_status(True)
+                    return True
+        return False
 
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),
@@ -150,7 +215,10 @@ class EdrDataBridge(object):
         try:
             while True:
                 gevent.sleep(self.delay)
-                if counter == 20:
+                self.check_services_and_stop()
+                if counter == 1:
+                    if self.is_sleeping:
+                        self.check_services_and_start()
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
                                 'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
                                 'Upload to tender {}; Retry upload to tender {}'.format(
@@ -188,7 +256,7 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_proxy() and bridge.check_doc_service()
+        bridge.check_proxy() and bridge.check_doc_service() and bridge.check_paid_requests() and bridge.check_openprocurement_api()
         bridge.run()
     else:
         logger.info('Invalid configuration file. Exiting...')
