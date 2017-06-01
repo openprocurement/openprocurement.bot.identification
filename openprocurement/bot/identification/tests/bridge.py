@@ -42,7 +42,7 @@ config = {
             'empty_stack_sync_delay': 101,
             'on_error_sleep_delay': 5,
             'api_token': "api_token",
-            'delay': 1
+            'delay': 15
         }
 }
 
@@ -762,7 +762,6 @@ class TestBridgeWorker(BaseServersTest):
     @patch('gevent.sleep')
     def test_run_mock_check_services_and_start(self, sleep):
         self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.delay, 1)
         # create mocks
         scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
         self.worker.scanner = scanner
