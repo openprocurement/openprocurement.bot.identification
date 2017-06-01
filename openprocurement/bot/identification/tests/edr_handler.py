@@ -53,7 +53,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         local_edr_ids = get_random_edr_ids(2)
         edr_req_ids = [generate_request_id(), generate_request_id()]
         edr_details_req_ids = [generate_request_id(), generate_request_id()]
-        mrequest.get("{uri}".format(uri=proxy_client.health_url))
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,  'headers': {'X-Request-ID': edr_req_ids[1]}}])
@@ -285,99 +284,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_retry_get_edr_id_mock_retry_exception(self, mrequest, gevent_sleep):
-        """Change get_edr_id_request to Mock which raises RetryException"""
-        gevent_sleep.side_effect = custom_sleep
-        tender_id = uuid.uuid4().hex
-        document_id = generate_doc_id()
-        award_id = uuid.uuid4().hex
-        edr_req_id = generate_request_id()
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}}])
-        edrpou_codes_queue = Queue(10)
-        edrpou_ids_queue = Queue(10)
-        upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
-                                    {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
-        worker.get_edr_id_request = MagicMock(side_effect=RetryException("Test exception", mock_response))
-        sleep(0.0000000001)
-        self.assertEqual((worker.get_edr_id_request.call_count > 1), True)
-        mock_response.status_code = 404
-        mock_response.json = MagicMock()
-        mock_response.json.return_value = {'errors': [
-            {'description':[ {'error': {"errorDetails": "Couldn't find this code in EDR.",'code': "notFound"}, 'meta': {"sourceDate": "2017-04-25T11:56:36+00:00"}} ]}
-        ]}
-        sleep(0.1)
-        self.assertEquals(upload_to_doc_service_queue.get(),
-                         Data(tender_id=tender_id, item_id=award_id,
-                              code='123', item_name='awards',
-                              edr_ids=[],
-                              file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
-                                                      "code": "notFound"},
-                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id, "version": version, 'author': author,
-                                                     'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                                        edr_req_id]}}))
-        worker.shutdown()
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_retry_get_edr_id_mock_retry_exception_404(self, mrequest, gevent_sleep):
-        """Change get_edr_id_request to Mock which raises RetryException"""
-        gevent_sleep.side_effect = custom_sleep
-        tender_id = uuid.uuid4().hex
-        document_id = generate_doc_id()
-        award_id = uuid.uuid4().hex
-        edr_req_id = generate_request_id()
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
-                      {'json': {'errors': [{'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
-                                                                       "code": "notFound"},
-                                                             "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}]},
-                       'status_code': 404,  'headers': {'X-Request-ID': edr_req_id}}])
-
-        edrpou_codes_queue = Queue(10)
-        edrpou_ids_queue = Queue(10)
-        upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
-                                    {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_response.json = MagicMock()
-        mock_response.json.return_value = {'errors': [
-            {'description': [{'error': {"errorDetails": "Couldn't find this code in EDR.", 'code': "notFound"},
-                              'meta': {"sourceDate": "2017-04-25T11:56:36+00:00"}}]}
-        ]}
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
-        worker.get_edr_id_request = MagicMock(side_effect=RetryException("Test exception", mock_response))
-        sleep(0.1)
-        self.assertEqual((worker.get_edr_id_request.call_count >= 1), True)
-        mock_response.status_code = 404
-        mock_response.json = MagicMock()
-        mock_response.json.return_value = {'errors': [
-            {'description':[ {'error': {"errorDetails": "Couldn't find this code in EDR.",'code': "notFound"}, 'meta': {"sourceDate": "2017-04-25T11:56:36+00:00"}} ]}
-        ]}
-        self.assertEquals(upload_to_doc_service_queue.get(),
-                         Data(tender_id=tender_id, item_id=award_id,
-                              code='123', item_name='awards',
-                              edr_ids=[],
-                              file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
-                                                      "code": "notFound"},
-                                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", 'id': document_id, "version": version, 'author': author,
-                                                     'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                                        edr_req_id]}}))
-        worker.shutdown()
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
     def test_retry_get_edr_id_empty_response(self, mrequest, gevent_sleep):
         """Accept 5 times response with status code 403 and error, then accept response with status code 404 and
         message 'EDRPOU not found'"""
@@ -486,13 +392,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'data': [{'x_edrInternalId': '321'}, {'x_edrInternalId': '322'}],
+                     json={'data': [{'x_edrInternalId': '321'}],
                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     json={'errors':{'error': {'description': 'Not enough money'},
-                                     "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}},
-                     status_code=402, headers={'X-Request-ID': edr_details_req_id[0]})
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
                      json={'errors':{'error': {'description': 'Not enough money'},
                                      "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}},
                      status_code=402, headers={'X-Request-ID': edr_details_req_id[0]})
@@ -502,7 +404,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
                                     {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
-        sleep(1)
+        while not worker.exit:
+            sleep(1)
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0) # This means that queue empties every outer loop, regardless of inner one
+        self.assertEqual(mrequest.call_count, 2)
+        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
+        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertEqual(worker.exit, True)
         worker.shutdown()
 
@@ -531,7 +439,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
                                     {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
-        sleep(1)
+        while not worker.exit:
+            sleep(1)
         self.assertEqual(worker.exit, True)
         worker.shutdown()
 

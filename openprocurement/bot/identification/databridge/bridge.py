@@ -119,7 +119,7 @@ class EdrDataBridge(object):
                 Separated to allow for possible granular checks         
         """
         try:
-            r = request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
+            request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
         except RequestError as e:
             logger.info('DocService connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
@@ -128,9 +128,7 @@ class EdrDataBridge(object):
             return True
 
     def check_openprocurement_api(self):
-        """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise
-                Separated to allow for possible granular checks         
-        """
+        """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:
             logger.debug("Checking status of openprocurement api")
             self.client.head('/api/{}/spore'.format(self.api_version))
@@ -142,9 +140,7 @@ class EdrDataBridge(object):
             return True
 
     def check_proxy(self):
-        """Makes request to the EDR proxy, returns True if it's up, raises RequestError otherwise
-                Separated to allow for possible granular checks         
-        """
+        """Makes request to the EDR proxy, returns True if it's up, raises RequestError otherwise"""
         try:
             logger.debug("Checking status of proxy")
             self.proxyClient.health()
@@ -173,34 +169,27 @@ class EdrDataBridge(object):
             self.check_proxy() and self.check_paid_requests() and self.check_openprocurement_api() and self.check_doc_service()
         except Exception as e:
             logger.warning("Service is still unavailable")
-            return "Services are still unavailable"
         else:
             logger.warning("All services have become available, starting all workers")
             self.set_exit_status(False)
             self.is_sleeping = False
-            return "All services have become available, starting all workers"
 
     def check_services_and_stop(self):
         """
         Check all services and workers; if at least one service is unavailable or at least one of the workers is 
         sleeping (has self.exit=True), sleep all the workers and set self.is_sleeping to True
-        :return: True - Stopped, False = Not stopped
         """
-        logger.info("Checking status of all services to stop bot if necessary")
+        logger.info("Checking status of all services to stop the bot if necessary")
         try:
             self.check_proxy() and self.check_doc_service() and self.check_openprocurement_api()
         except Exception as e:
-            logger.info("Service is down, stopping all bots")
+            logger.info("Service is down, stopping all workers")
             self.is_sleeping = True
             self.set_exit_status(True)
-            return True
         else:
-            for job in self.jobs.values():
-                if job.exit:
-                    self.is_sleeping = True
-                    self.set_exit_status(True)
-                    return True
-        return False
+            if any([job.exit for job in self.jobs.values()]):
+                self.is_sleeping = True
+                self.set_exit_status(True)
 
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),
@@ -216,22 +205,22 @@ class EdrDataBridge(object):
             while True:
                 gevent.sleep(self.delay)
                 self.check_services_and_stop()
-                if counter == 1:
+                if counter == 20:
                     if self.is_sleeping:
                         self.check_services_and_start()
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
                                 'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
                                 'Upload to tender {}; Retry upload to tender {}'.format(
-                                    self.filtered_tender_ids_queue.qsize(),
-                                    self.edrpou_codes_queue.qsize(),
-                                    self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
-                                    self.edr_ids_queue.qsize(),
-                                    self.jobs['edr_handler'].retry_edr_ids_queue.qsize() if self.jobs['edr_handler'] else 0,
-                                    self.upload_to_doc_service_queue.qsize(),
-                                    self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
-                                    self.upload_to_tender_queue.qsize(),
-                                    self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
-                                ))
+                        self.filtered_tender_ids_queue.qsize(),
+                        self.edrpou_codes_queue.qsize(),
+                        self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
+                        self.edr_ids_queue.qsize(),
+                        self.jobs['edr_handler'].retry_edr_ids_queue.qsize() if self.jobs['edr_handler'] else 0,
+                        self.upload_to_doc_service_queue.qsize(),
+                        self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
+                        self.upload_to_tender_queue.qsize(),
+                        self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
+                    ))
                     counter = 0
                 counter += 1
                 for name, job in self.jobs.items():

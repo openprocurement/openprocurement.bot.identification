@@ -18,7 +18,6 @@ from openprocurement.bot.identification.databridge.utils import (
     Data, journal_context, validate_param, RetryException, check_add_suffix
 )
 from openprocurement.bot.identification.databridge.constants import version
-from requests import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +112,6 @@ class EdrHandler(Greenlet):
         """Get data from retry_edrpou_codes_queue; Put data into edr_ids_queue if request is successful, otherwise put
         data back to retry_edrpou_codes_queue."""
         while not self.exit:
-            # logger.info("retry iteration ")
             try:
                 tender_data = self.retry_edrpou_codes_queue.get()
             except LoopExit:
@@ -172,7 +170,7 @@ class EdrHandler(Greenlet):
                                                                                               tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
@@ -186,7 +184,6 @@ class EdrHandler(Greenlet):
         """Get data from edr_ids_queue; make request to EDR Api for detailed info; Required fields is put to
         Data.file_content variable, Data object is put to upload_to_doc_service_queue."""
         while not self.exit:
-            logger.info("get_edr_details iteration")
             try:
                 tender_data = self.edr_ids_queue.peek()
             except LoopExit:
@@ -198,7 +195,6 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             meta_id = tender_data.file_content['meta']['id']
             for edr_id in tender_data.edr_ids:
-                logger.info("edr_id: {}".format(edr_id))
                 # if more then 1 instance add amount and number of document to document_id
                 document_id = check_add_suffix(tender_data.edr_ids, meta_id, tender_data.edr_ids.index(edr_id) + 1)
                 tender_data.file_content['meta']['id'] = document_id
@@ -225,8 +221,12 @@ class EdrHandler(Greenlet):
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                 elif response.status_code == 402:
-                    logger.info("NOT ENOUGH MONEY")
+                    logger.info("Payment required; received for tender {} {} {} {}.".format(
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
+                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
+                                                    params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     self.exit = True
+                    break
                 else:
 
                     file_content = tender_data.file_content
@@ -263,8 +263,16 @@ class EdrHandler(Greenlet):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
                     if re.args[1].status_code == 402:
-                        logger.info("NOT ENOUGH MONEY")
+                        logger.info("Payment required; received for tender {} {} {} {}.".format(
+                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
+                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
+                                                  params={"TENDER_ID": tender_data.tender_id,
+                                                          "DOCUMENT_ID": document_id}))
                         self.exit = True
+                        file_content = tender_data.file_content
+                        self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                                          tender_data.item_name, [edr_id], file_content))
+                        break
                     else:
                         self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                            tender_data.item_name, [edr_id], tender_data.file_content)))
@@ -291,7 +299,7 @@ class EdrHandler(Greenlet):
                                                   params={"TENDER_ID": tender_data.tender_id,  "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
