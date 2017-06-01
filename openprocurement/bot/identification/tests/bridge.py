@@ -42,7 +42,7 @@ config = {
             'empty_stack_sync_delay': 101,
             'on_error_sleep_delay': 5,
             'api_token': "api_token",
-            # 'delay': 0.1
+            'delay': 1
         }
 }
 
@@ -759,46 +759,44 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(edr_handler.call_count, 1)
         self.assertEqual(upload_file.call_count, 1)
 
-    # # @patch('gevent.sleep')
-    # def test_run_mock_check_services_and_start(self):
-    #     self.worker = EdrDataBridge(config)
-    #     self.assertEqual(self.worker.delay, 0.1)
-    #     # create mocks
-    #     scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
-    #     self.worker.scanner = scanner
-    #     self.worker.filter_tender = filter_tender
-    #     self.worker.edr_handler = edr_handler
-    #     self.worker.upload_file = upload_file
-    #     temp = self.worker.check_services_and_stop
-    #     self.worker.check_services_and_start = MagicMock()
-    #     self.worker.is_sleeping = True
-    #     class Mock_Sleep()
-    #     with
-    #     self.worker.run()
-    #     self.assertEqual(self.worker.check_services_and_start.call_count, 1)
-    #     self.assertEqual(scanner.call_count, 1)
-    #     self.assertEqual(filter_tender.call_count, 1)
-    #     self.assertEqual(edr_handler.call_count, 1)
-    #     self.assertEqual(upload_file.call_count, 1)
+    @patch('gevent.sleep')
+    def test_run_mock_check_services_and_start(self, sleep):
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.delay, 1)
+        # create mocks
+        scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
+        self.worker.scanner = scanner
+        self.worker.filter_tender = filter_tender
+        self.worker.edr_handler = edr_handler
+        self.worker.upload_file = upload_file
+        temp = self.worker.check_services_and_start
+        self.worker.check_services_and_start = MagicMock()
+        self.worker.check_services_and_stop = MagicMock()
+        self.worker.is_sleeping = True
+        time.sleep(20)
+        self.worker.run()
+        self.assertEqual(self.worker.check_services_and_start.call_count, 1)
+        self.assertEqual(scanner.call_count, 1)
+        self.assertEqual(filter_tender.call_count, 1)
+        self.assertEqual(edr_handler.call_count, 1)
+        self.assertEqual(upload_file.call_count, 1)
 
-
-
-    # @patch('gevent.sleep')
-    # def test_run_mock_keyboard_interrupt(self, sleep):
-    #     self.worker = EdrDataBridge(config)
-    #     # create mocks
-    #     scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
-    #     self.worker.scanner = scanner
-    #     self.worker.filter_tender = filter_tender
-    #     self.worker.edr_handler = edr_handler
-    #     self.worker.upload_file = upload_file
-    #     temp = self.worker.check_services_and_stop
-    #     self.worker.check_services_and_stop = MagicMock(side_effect=KeyboardInterrupt)
-    #     with patch("openprocurement.bot.identification.databridge.bridge.gevent.killall"):
-    #         self.worker.run()
-    #     self.assertEqual(scanner.call_count, 1)
-    #     self.assertEqual(filter_tender.call_count, 1)
-    #     self.assertEqual(edr_handler.call_count, 1)
-    #     self.assertEqual(upload_file.call_count, 1)
+    @patch('gevent.sleep')
+    def test_run_mock_keyboard_interrupt(self, sleep):
+        self.worker = EdrDataBridge(config)
+        # create mocks
+        scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
+        self.worker.scanner = scanner
+        self.worker.filter_tender = filter_tender
+        self.worker.edr_handler = edr_handler
+        self.worker.upload_file = upload_file
+        temp = self.worker.check_services_and_stop
+        self.worker.check_services_and_stop = MagicMock(side_effect=KeyboardInterrupt)
+        with patch("openprocurement.bot.identification.databridge.bridge.gevent.killall"):
+            self.worker.run()
+        self.assertEqual(scanner.call_count, 1)
+        self.assertEqual(filter_tender.call_count, 1)
+        self.assertEqual(edr_handler.call_count, 1)
+        self.assertEqual(upload_file.call_count, 1)
 
 
