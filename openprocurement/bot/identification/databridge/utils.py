@@ -15,13 +15,11 @@ Data = namedtuple('Data', [
     'item_id',  # qualification or award ID
     'code',  # EDRPOU, IPN or passport
     'item_name',  # "qualifications" or "awards"
-    'edr_ids',  # list of unique identifications in EDR
     'file_content'  # details for file
 ])
 
 def data_string(data):
-    return "tender {} {} id: {} {}".format(data.tender_id, data.item_name[:-1],
-                                                    data.item_id, "edr_ids: " + str(data.edr_ids) if data.edr_ids else "")
+    return "tender {} {} id: {}".format(data.tender_id, data.item_name[:-1], data.item_id)
 
 def journal_context(record={}, params={}):
     for k, v in params.items():
@@ -59,7 +57,7 @@ def check_add_suffix(list_ids, document_id, number):
     """Check if EDR API returns list of edr ids with more then 1 element add suffix to document id"""
     len_list_ids = len(list_ids)
     if len_list_ids > 1:
-        return '{document_id}.{amount}.{number}'.format(document_id=document_id, amount=len_list_ids,number=number)
+        return '{document_id}.{amount}.{number}'.format(document_id=document_id, amount=len_list_ids, number=number)
     return document_id
 
 

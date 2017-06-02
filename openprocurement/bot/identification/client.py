@@ -10,7 +10,6 @@ class ProxyClient(object):
         self.user = user
         self.password = password
         self.verify_url = '{host}:{port}/api/{version}/verify'.format(host=host, port=port, version=version)
-        self.details_url = '{host}:{port}/api/{version}/details'.format(host=host, port=port, version=version)
         self.health_url = '{host}:{port}/api/{version}/health'.format(host=host, port=port, version=version)
         self.timeout = timeout
 
@@ -19,12 +18,6 @@ class ProxyClient(object):
         url = '{url}?{param}={code}'.format(url=self.verify_url, param=param, code=code)
         response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)
 
-        return response
-
-    def details(self, id, headers={}):
-        """ Send request to Proxy server to get details."""
-        url = '{url}/{id}'.format(url=self.details_url, id=id)
-        response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)
         return response
 
     def health(self):

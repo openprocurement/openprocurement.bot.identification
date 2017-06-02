@@ -106,7 +106,7 @@ class FilterTenders(Greenlet):
                                     self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
                                     document_id = generate_doc_id()
                                     tender_data = Data(tender['id'], award['id'], str(code),
-                                                       'awards', None, {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
+                                                       'awards', {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                     self.edrpou_codes_queue.put(tender_data)
                                 else:
                                     logger.info('Tender {} bid {} award {} identifier schema isn\'t UA-EDR or tender is already in process.'.format(
@@ -136,7 +136,7 @@ class FilterTenders(Greenlet):
                                 self.processing_items['{}_{}'.format(tender['id'], qualification['id'])] = 0
                                 document_id = generate_doc_id()
                                 tender_data = Data(tender['id'], qualification['id'], str(code),
-                                                   'qualifications', None, {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
+                                                   'qualifications', {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
                                 self.edrpou_codes_queue.put(tender_data)
                                 logger.info('Processing tender {} bid {} qualification {}'.format(
                                     tender['id'], qualification['bidID'], qualification['id']),
