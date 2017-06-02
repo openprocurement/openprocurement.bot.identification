@@ -23,7 +23,7 @@ config = {
     'main':
         {
             'tenders_api_server': 'http://127.0.0.1:20604',
-            'tenders_api_version': '2.3',
+            'tenders_api_version': '0',
             'public_tenders_api_server': 'http://127.0.0.1:20605',
             'doc_service_server': 'http://127.0.0.1',
             'doc_service_port': 20606,
@@ -72,8 +72,7 @@ class BaseServersTest(unittest.TestCase):
         cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
         setup_routing(cls.doc_server_bottle, doc_response, path='/')
         cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
-        setup_routing(cls.proxy_server_bottle, proxy_response,
-                      path=['/api/1.0/health', '/api/1.0/details/{}'.format(test_x_edr_internal_id)])
+        setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
 
         # start servers
         cls.api_server.start()
@@ -89,21 +88,19 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server.close()
 
     def setUp(self):
-        super(BaseServersTest, self).setUp()
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
         self.worker = EdrDataBridge(config)
-        workers = {'scanner': MagicMock(), 'filter_tender':MagicMock(),'edr_handler': MagicMock(), 'upload_file': MagicMock()}
+        workers = {'scanner': MagicMock(return_value=MagicMock(exit=False)),
+                   'filter_tender': MagicMock(return_value=MagicMock(exit=False)),
+                   'edr_handler': MagicMock(return_value=MagicMock(exit=False)),
+                   'upload_file': MagicMock(return_value=MagicMock(exit=False))}
         for name, value in workers.items():
-            value.return_value.exit = False
             setattr(self.worker, name, value)
-        self.worker._start_jobs()
 
     def tearDown(self):
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/health')
         del self.worker
 
-def setup_routing(app, func, path='/api/2.3/spore', method='GET'):
+def setup_routing(app, func, path='/api/0/spore', method='GET'):
     app.route(path, method, func)
 
 def response_spore():
@@ -120,9 +117,8 @@ def proxy_response():
     return response
 
 def proxy_response_402():
-    res = response
-    res.status = "402 Payment required"
-    return res
+    response.status = "402 Payment required"
+    return response
 
 
 class TestBridgeWorker(BaseServersTest):
@@ -211,190 +207,138 @@ class TestBridgeWorker(BaseServersTest):
 
         with patch('__builtin__.True', AlmostAlwaysTrue(100)):
             self.worker.run()
-        self.assertEqual(scanner.call_count, 1)
-        self.assertEqual(filter_tender.call_count, 1)
-        self.assertEqual(edr_handler.call_count, 1)
-        self.assertEqual(upload_file.call_count, 1)
+        self.assertEqual(self.worker.scanner.call_count, 1)
+        self.assertEqual(self.worker.filter_tender.call_count, 1)
+        self.assertEqual(self.worker.edr_handler.call_count, 1)
+        self.assertEqual(self.worker.upload_file.call_count, 1)
 
-    # region testing checks of separate services
-
-    def test_proxy_server_failure(self):
+    def test_proxy_server(self):
         self.proxy_server.stop()
-        self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestException):
             self.worker.check_proxy()
         self.proxy_server.start()
         self.assertEqual(self.worker.check_proxy(), True)
 
-    def test_proxy_server_success(self):
-        self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_proxy(), True)
-
-    def test_doc_service_failure(self):
+    def test_doc_service(self):
         self.doc_server.stop()
-        self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
             self.worker.check_doc_service()
         self.doc_server.start()
         self.assertEqual(self.worker.check_doc_service(), True)
 
-    def test_doc_service_success(self):
-        self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_doc_service(), True)
-
-    def test_api_server_failure(self):
-        self.worker = EdrDataBridge(config)
+    def test_api_server(self):
         self.api_server.stop()
-        with self.assertRaises(RequestError) as err_context:
+        with self.assertRaises(RequestError):
             self.worker.check_openprocurement_api()
-        self.assertEqual(err_context.exception.message, "socket.error: [Errno 111] Connection refused")
         self.api_server.start()
         self.assertEqual(self.worker.check_openprocurement_api(), True)
 
-    def test_api_server_success(self):
-        self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_openprocurement_api(), True)
-
-    def test_paid_requests_failure(self):
+    def test_paid_requests(self):
         setup_routing(self.proxy_server_bottle, proxy_response_402, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
-        self.worker = EdrDataBridge(config)
-        with self.assertRaises(RequestException) as err:
+        with self.assertRaises(RequestException):
             self.assertEqual(self.worker.check_paid_requests(), True)
-        self.assertEqual(err.exception.message, "Not enough money")
         setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
         self.assertEqual(self.worker.check_paid_requests(), True)
 
-    def test_paid_requests_success(self):
-        self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_paid_requests(), True)
-
-    # endregion
-
-    # region check_and_stop
-
     def test_check_and_stop_did_not_stop(self):
-        """Test that check_and_stop, when called with all services working, does call them and does not shut down bot"""
-        functions = {'check_proxy': MagicMock(), 'check_doc_service': MagicMock(), 'check_openprocurement_api': MagicMock()}
-        for name, value in functions.items():
-            value.return_value = True
-            setattr(self.worker, name, value)
-        self.assertEqual(self.worker.is_sleeping, False)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-        self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.check_proxy.call_count, 1)
-        self.assertEqual(self.worker.check_doc_service.call_count, 1)
-        self.assertEqual(self.worker.check_openprocurement_api.call_count, 1)
-        self.assertEqual(self.worker.is_sleeping, False)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
-    def test_check_and_stop_stops_after_exit(self):
-        """
-            1. Stop scanner
-            2. Check that calling check_and_stop stops the bot
-        """
-        self.worker.set_exit_status = MagicMock(side_effect=self.worker.set_exit_status)
         self.worker._start_jobs()
-        self.worker.scanner.return_value.exit = True
+        functions = {'check_proxy': MagicMock(return_value = True),
+                     'check_doc_service': MagicMock(return_value = True),
+                     'check_openprocurement_api': MagicMock(return_value = True)}
+        for name, value in functions.items():
+            setattr(self.worker, name, value)
         self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.set_exit_status.call_count, 1)
-        self.worker.set_exit_status.assert_called_with(True)
-
-    def test_check_and_stop_stops_with_failed_doc_service(self):
-        """
-            1. Stop doc_service
-            2. Check that check_and_stop stops the bot
-        """
-        self.worker.check_services_and_stop()
+        self.assertEqual(all([i.call_count == 1 for i in functions.values()]), True)
         self.assertEqual(self.worker.is_sleeping, False)
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
+
+    def test_check_and_stop(self):
+        self.worker._start_jobs()
+        self.proxy_server.stop()
+        self.worker.check_services_and_stop()
+        self.assertEqual(self.worker.is_sleeping, True)
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.proxy_server.start()
+        self.worker.set_sleep(False)
+
         self.doc_server.stop()
         self.worker.check_services_and_stop()
         self.assertEqual(self.worker.is_sleeping, True)
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.doc_server.start()
+        self.worker.set_sleep(False)
 
-    # endregion
+        self.api_server.stop()
+        self.worker.check_services_and_stop()
+        self.assertEqual(self.worker.is_sleeping, True)
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.api_server.start()
+        self.worker.set_sleep(False)
 
-    # region check_and_start
+        self.worker.scanner.return_value.exit = True
+        self.worker.check_services_and_stop()
+        self.assertEqual(self.worker.is_sleeping, True)
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
 
-    def test_check_and_start_call(self):
-        """
-            Check that check_and_start runs and changes values accordingly        
-        """
-        self.worker.set_exit_status(True)
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-        self.assertEqual(self.worker.is_sleeping, False)
-
-    def test_check_and_start_does_not_start_with_failed_proxy(self):
+    def test_check_and_start_does_not_start(self):
+        self.worker._start_jobs()
         self.proxy_server.stop()
-        self.worker.set_exit_status(True)
-        self.worker.is_sleeping = True
+        self.worker.set_sleep(True)
         self.worker.check_services_and_start()
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.assertEqual(self.worker.is_sleeping, True)
         self.proxy_server.start()
+        self.worker.check_services_and_start()
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
 
-    def test_check_and_start_does_not_start_without_paid_requests(self):
-        """
-            1. Imitate running out of paid requests
-            2. Check that check_and_start does not start the bot
-        """
-        setup_routing(self.proxy_server_bottle, proxy_response_402, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
-        self.worker.set_exit_status(True)
-        self.worker.is_sleeping = True
+        self.doc_server.stop()
+        self.worker.set_sleep(True)
         self.worker.check_services_and_start()
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.assertEqual(self.worker.is_sleeping, True)
-
-    def test_check_and_start_starts_with_all_up(self):
-        """
-            1. Set all workers to sleep and is_sleeping to True
-            2. Check that check_and_start starts workers and sets is_sleeping to True
-        """
-        functions = {'check_proxy': MagicMock(), 'check_paid_requests': MagicMock(), 'check_doc_service': MagicMock(), 'check_openprocurement_api': MagicMock()}
-        for name, value in functions.items():
-            value.return_value = True
-            setattr(self.worker, name, value)
-        self.worker.set_exit_status(True)
-        self.worker.is_sleeping = True
-        self.worker.set_exit_status = MagicMock(side_effect=self.worker.set_exit_status)
+        self.doc_server.start()
         self.worker.check_services_and_start()
-        self.worker.set_exit_status.assert_called_with(False)
-        self.assertEqual(self.worker.set_exit_status.call_count, 1)
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-        self.assertEqual(self.worker.is_sleeping, False)
 
-    # endregion
+        self.api_server.stop()
+        self.worker.set_sleep(True)
+        self.worker.check_services_and_start()
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.assertEqual(self.worker.is_sleeping, True)
+        self.api_server.start()
+        self.worker.check_services_and_start()
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
+
+        setup_routing(self.proxy_server_bottle, proxy_response_402, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
+        self.worker.set_sleep(True)
+        self.worker.check_services_and_start()
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.assertEqual(self.worker.is_sleeping, True)
+        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
+        self.worker.check_services_and_start()
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
+
+    def test_check_and_start(self):
+        self.worker._start_jobs()
+        functions = {'check_proxy': MagicMock(return_value = True), 'check_paid_requests': MagicMock(return_value = True),
+                     'check_doc_service': MagicMock(return_value = True), 'check_openprocurement_api': MagicMock(return_value = True)}
+        for name, value in functions.items():
+            setattr(self.worker, name, value)
+        self.worker.set_sleep(True)
+        self.worker.check_services_and_start()
+        self.assertEqual(self.worker.is_sleeping, False)
+        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
 
     def test_combine_check_stop_and_start_api(self):
-        self.worker.check_services_and_stop()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-        self.assertEqual(self.worker.is_sleeping, False)
+        self.worker._start_jobs()
         self.api_server.stop()
         self.worker.check_services_and_stop()
         self.assertEqual(self.worker.is_sleeping, True)
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.api_server.start()
         self.worker.check_services_and_start()
-        self.worker.check_services_and_stop()
-
-    def test_set_exit(self):
-        self.worker.set_exit_status(True)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-        self.worker.set_exit_status(False)
+        self.assertEqual(self.worker.is_sleeping, False)
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
-
-    @patch('gevent.sleep')
-    def test_run_mock_exception(self, sleep):
-        self.worker.check_services_and_stop = MagicMock(side_effect=Exception)
-        with patch('__builtin__.True', AlmostAlwaysTrue(100)):
-            self.worker.run()
-        self.assertEqual(self.worker.scanner.call_count, 2)
-        self.assertEqual(self.worker.filter_tender.call_count, 2)
-        self.assertEqual(self.worker.edr_handler.call_count, 2)
-        self.assertEqual(self.worker.upload_file.call_count, 2)
 
     @patch('gevent.sleep')
     def test_run_mock_check_services_and_start(self, sleep):
@@ -404,8 +348,7 @@ class TestBridgeWorker(BaseServersTest):
         self.worker.run()
         self.assertEqual(self.worker.check_services_and_start.call_count, 1)
         self.assertEqual(self.worker.check_services_and_stop.call_count, 21)
-        self.assertEqual(self.worker.scanner.call_count, 2)
-        self.assertEqual(self.worker.filter_tender.call_count, 2)
-        self.assertEqual(self.worker.edr_handler.call_count, 2)
-        self.assertEqual(self.worker.upload_file.call_count, 2)
-
+        self.assertEqual(self.worker.scanner.call_count, 1)
+        self.assertEqual(self.worker.filter_tender.call_count, 1)
+        self.assertEqual(self.worker.edr_handler.call_count, 1)
+        self.assertEqual(self.worker.upload_file.call_count, 1)

@@ -30,7 +30,6 @@ class EdrHandler(Greenlet):
     def __init__(self, proxyClient, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, processing_items, delay=15):
         super(EdrHandler, self).__init__()
         self.exit = False
-        self.has_paid_requests = True
         self.start_time = datetime.now()
 
         # init clients
@@ -221,7 +220,7 @@ class EdrHandler(Greenlet):
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                 elif response.status_code == 402:
-                    logger.info("Payment required; received for tender {} {} {} {}.".format(
+                    logger.info("Payment required; received for tender id {} {} {} document_id {}.".format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
@@ -235,7 +234,7 @@ class EdrHandler(Greenlet):
                     self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                       tender_data.item_name, [edr_id], file_content))
                     self.handle_status_response(response, tender_data.tender_id)
-                    logger.info('Put tender {} with {} id {} {}  to retry_edr_ids_queue'.format(
+                    logger.info('Put tender {} with {} id {} document_id {}  to retry_edr_ids_queue'.format(
                                 tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                                 extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
             self.edr_ids_queue.get()
@@ -263,7 +262,7 @@ class EdrHandler(Greenlet):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
                     if re.args[1].status_code == 402:
-                        logger.info("Payment required; received for tender {} {} {} {}.".format(
+                        logger.info("Payment required; received for tender id {} {} {} document_id {}.".format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                   params={"TENDER_ID": tender_data.tender_id,
@@ -333,7 +332,6 @@ class EdrHandler(Greenlet):
         try:
             while not self.exit:
                 gevent.sleep(self.delay)
-                # logger.info("iteration of run")
                 for name, job in self.immortal_jobs.items():
                     if job.dead:
                         logger.warning("EDR handler worker {} dead try restart".format(name),

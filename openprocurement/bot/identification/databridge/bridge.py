@@ -115,9 +115,6 @@ class EdrDataBridge(object):
         return self.config.get('main').get(name)
 
     def check_doc_service(self):
-        """Makes request to the doc_service, returns True if it's up, raises RequestError otherwise
-                Separated to allow for possible granular checks         
-        """
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
         except RequestError as e:
@@ -128,9 +125,7 @@ class EdrDataBridge(object):
             return True
 
     def check_openprocurement_api(self):
-        """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:
-            logger.debug("Checking status of openprocurement api")
             self.client.head('/api/{}/spore'.format(self.api_version))
         except RequestError as e:
             logger.info('TendersServer connection error, message {}'.format(e),
@@ -140,9 +135,7 @@ class EdrDataBridge(object):
             return True
 
     def check_proxy(self):
-        """Makes request to the EDR proxy, returns True if it's up, raises RequestError otherwise"""
         try:
-            logger.debug("Checking status of proxy")
             self.proxyClient.health()
         except RequestException as e:
             logger.info('Proxy server connection error, message {}'.format(e),
@@ -152,44 +145,35 @@ class EdrDataBridge(object):
             return True
 
     def check_paid_requests(self):
-        """Makes request to the EDR proxy, returns True if we have paid requests, otherwise return False"""
         response = self.proxyClient.details(id=test_x_edr_internal_id)
-        if response.status_code == 402: # status of not having paid requests
-            logger.info("Checking for paid requests failed")
+        if response.status_code == 402:
             raise RequestException("Not enough money")
         return True
 
-    def set_exit_status(self, new_status):
+    def set_sleep(self, new_status):
+        self.is_sleeping= new_status
         for job in self.jobs.values():
             job.exit = new_status
 
     def check_services_and_start(self):
-        logger.info("Checking status of all services to try restarting")
         try:
             self.check_proxy() and self.check_paid_requests() and self.check_openprocurement_api() and self.check_doc_service()
-        except Exception as e:
+        except Exception:
             logger.warning("Service is still unavailable")
         else:
             logger.warning("All services have become available, starting all workers")
-            self.set_exit_status(False)
-            self.is_sleeping = False
+            self.set_sleep(False)
 
     def check_services_and_stop(self):
-        """
-        Check all services and workers; if at least one service is unavailable or at least one of the workers is 
-        sleeping (has self.exit=True), sleep all the workers and set self.is_sleeping to True
-        """
-        logger.info("Checking status of all services to stop the bot if necessary")
+        """Check all services and workers; sleep all the workers and set self.is_sleeping to True if needed"""
         try:
             self.check_proxy() and self.check_doc_service() and self.check_openprocurement_api()
-        except Exception as e:
+        except Exception:
             logger.info("Service is down, stopping all workers")
-            self.is_sleeping = True
-            self.set_exit_status(True)
+            self.set_sleep(True)
         else:
             if any([job.exit for job in self.jobs.values()]):
-                self.is_sleeping = True
-                self.set_exit_status(True)
+                self.set_sleep(True)
 
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),

@@ -383,7 +383,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_get_edr_details_exits_with_no_money(self, mrequest, gevent_sleep):
-        """Accept two ids in /verify request. Then send 402 to /details requests and check that bot goes to sleep"""
+        """Accept one id in /verify request. Then send 402 to /details requests and check that bot goes to sleep"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
@@ -417,7 +417,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_details_exits_with_no_money(self, mrequest, gevent_sleep):
-        """Accept two ids in /verify request. Then send 402 to /details requests and check that bot goes to sleep"""
+        """Accept one id in /verify request. Then send 402 to /details requests and check that bot goes to sleep"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
@@ -426,9 +426,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'data': [{'x_edrInternalId': '322'}],
+                     json={'data': [{'x_edrInternalId': '321'}],
                            "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403,
                       'headers': {'X-Request-ID': edr_details_req_id[1]}},
                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 402,
