@@ -52,14 +52,6 @@ class AlmostAlwaysTrue(object):
             return bool(1)
         return bool(0)
 
-number1 = 0
-class AlmostKeyboardInterrupt(KeyboardInterrupt):
-
-    def __init__(self):
-        global number1
-        if number1 < 100:
-            number1 += 1
-        super(KeyboardInterrupt, self).__init__()
 
 class BaseServersTest(unittest.TestCase):
     """Api server to test openprocurement.integrations.edr.databridge.bridge """
@@ -178,7 +170,6 @@ class TestBridgeWorker(BaseServersTest):
                           'version': config['main']['proxy_version']})
 
     def test_start_jobs(self):
-        setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
 
         scanner, filter_tender, edr_handler, upload_file = [MagicMock(return_value=i) for i in range(4)]
@@ -287,9 +278,9 @@ class TestBridgeWorker(BaseServersTest):
         self.api_server.start()
         self.worker.check_services()
         self.assertFalse(all([i.exit for i in self.worker.jobs.values()]))
-    #
+
     @patch('gevent.sleep')
-    def test_run_with_mock_check_services(self, gevent_sleep):
+    def test_run_with_mock_check_services(self, sleep):
         """Basic test to ensure run() goes into the while (and inside that for) loops and that jobs are called only once"""
         self.worker.check_services = MagicMock()
         self.worker.run()
