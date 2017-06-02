@@ -149,7 +149,7 @@ class EdrDataBridge(object):
         try:
             self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
         except Exception as e:
-            logger.info("Service is still unavailable, message {}".format(e))
+            logger.info("Service is unavailable, message {}".format(e))
             self.set_sleep(True)
         else:
             logger.info("All services have become available, starting all workers")
@@ -186,7 +186,7 @@ class EdrDataBridge(object):
                     counter = 0
                 counter += 1
                 for name, job in self.jobs.items():
-                    if job.dead:
+                    if job.dead and not job.exit:
                         logger.warning('Restarting {} worker'.format(name),
                                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
                         self.jobs[name] = gevent.spawn(getattr(self, name))

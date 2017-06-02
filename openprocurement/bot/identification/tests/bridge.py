@@ -16,8 +16,6 @@ from openprocurement_client.client import TendersClientSync, TendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 
 
-
-
 config = {
     'main':
         {
@@ -215,21 +213,21 @@ class TestBridgeWorker(BaseServersTest):
         with self.assertRaises(RequestException):
             self.worker.check_proxy()
         self.proxy_server.start()
-        self.assertEqual(self.worker.check_proxy(), True)
+        self.assertTrue(self.worker.check_proxy())
 
     def test_doc_service(self):
         self.doc_server.stop()
         with self.assertRaises(RequestError):
             self.worker.check_doc_service()
         self.doc_server.start()
-        self.assertEqual(self.worker.check_doc_service(), True)
+        self.assertTrue(self.worker.check_doc_service())
 
     def test_api(self):
         self.api_server.stop()
         with self.assertRaises(RequestError):
             self.worker.check_openprocurement_api()
         self.api_server.start()
-        self.assertEqual(self.worker.check_openprocurement_api(), True)
+        self.assertTrue(self.worker.check_openprocurement_api())
 
     def test_check_services_did_not_stop(self):
         self.worker._start_jobs()
@@ -239,28 +237,48 @@ class TestBridgeWorker(BaseServersTest):
         for name, value in functions.items():
             setattr(self.worker, name, value)
         self.worker.check_services()
-        self.assertEqual(all([i.call_count == 1 for i in functions.values()]), True)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
+        self.assertTrue(all([i.call_count == 1 for i in functions.values()]))
+        self.assertFalse(all([i.exit for i in self.worker.jobs.values()]))
 
     def test_check_services(self):
         self.worker._start_jobs()
         self.proxy_server.stop()
         self.worker.check_services()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
         self.proxy_server.start()
         self.worker.set_sleep(False)
 
         self.doc_server.stop()
         self.worker.check_services()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
         self.doc_server.start()
         self.worker.set_sleep(False)
 
         self.api_server.stop()
         self.worker.check_services()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
         self.api_server.start()
         self.worker.set_sleep(False)
+
+    def test_check_services_needs_all(self):
+        self.worker._start_jobs()
+        self.worker.set_sleep(True)
+        self.proxy_server.stop()
+        self.doc_server.stop()
+        self.api_server.stop()
+
+        self.proxy_server.start()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+
+        self.doc_server.start()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+        self.worker.set_sleep(False)
+
+        self.api_server.start()
+        self.worker.check_services()
+        self.assertFalse(all([i.exit for i in self.worker.jobs.values()]))
 
     @patch('gevent.sleep')
     def test_run_mock_check_services_and_start(self, sleep):
