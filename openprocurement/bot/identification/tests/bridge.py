@@ -14,7 +14,6 @@ from bottle import Bottle, response
 from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement_client.client import TendersClientSync, TendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
-from openprocurement.bot.identification.databridge.constants import test_x_edr_internal_id
 
 
 
@@ -88,7 +87,6 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server.close()
 
     def setUp(self):
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
         self.worker = EdrDataBridge(config)
         workers = {'scanner': MagicMock(return_value=MagicMock(exit=False)),
                    'filter_tender': MagicMock(return_value=MagicMock(exit=False)),
@@ -226,19 +224,12 @@ class TestBridgeWorker(BaseServersTest):
         self.doc_server.start()
         self.assertEqual(self.worker.check_doc_service(), True)
 
-    def test_api_server(self):
+    def test_api(self):
         self.api_server.stop()
         with self.assertRaises(RequestError):
             self.worker.check_openprocurement_api()
         self.api_server.start()
         self.assertEqual(self.worker.check_openprocurement_api(), True)
-
-    def test_paid_requests(self):
-        setup_routing(self.proxy_server_bottle, proxy_response_402, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
-        with self.assertRaises(RequestException):
-            self.assertEqual(self.worker.check_paid_requests(), True)
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
-        self.assertEqual(self.worker.check_paid_requests(), True)
 
     def test_check_and_stop_did_not_stop(self):
         self.worker._start_jobs()
@@ -309,19 +300,11 @@ class TestBridgeWorker(BaseServersTest):
         self.worker.check_services_and_start()
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
 
-        setup_routing(self.proxy_server_bottle, proxy_response_402, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
-        self.worker.set_sleep(True)
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-        self.assertEqual(self.worker.is_sleeping, True)
-        setup_routing(self.proxy_server_bottle, proxy_response, path='/api/1.0/details/{}'.format(test_x_edr_internal_id))
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
     def test_check_and_start(self):
         self.worker._start_jobs()
-        functions = {'check_proxy': MagicMock(return_value = True), 'check_paid_requests': MagicMock(return_value = True),
-                     'check_doc_service': MagicMock(return_value = True), 'check_openprocurement_api': MagicMock(return_value = True)}
+        functions = {'check_proxy': MagicMock(return_value = True),
+                     'check_doc_service': MagicMock(return_value = True),
+                     'check_openprocurement_api': MagicMock(return_value = True)}
         for name, value in functions.items():
             setattr(self.worker, name, value)
         self.worker.set_sleep(True)

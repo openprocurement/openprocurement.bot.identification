@@ -8,7 +8,7 @@ import unittest
 import datetime
 import requests_mock
 import random
-from time import sleep
+
 from gevent.queue import Queue
 from gevent.hub import LoopExit
 from mock import patch, MagicMock
@@ -16,7 +16,7 @@ from munch import munchify
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, RetryException
+from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, generate_request_id, ResponseMock
 from openprocurement.bot.identification.client import ProxyClient
 from openprocurement.bot.identification.databridge.constants import version, author
@@ -379,70 +379,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/322')
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_get_edr_details_exits_with_no_money(self, mrequest, gevent_sleep):
-        """Accept one id in /verify request. Then send 402 to /details requests and check that bot goes to sleep"""
-        gevent_sleep.side_effect = custom_sleep
-        tender_id = uuid.uuid4().hex
-        award_id = uuid.uuid4().hex
-        document_id = generate_doc_id()
-        edr_req_id = generate_request_id()
-        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'data': [{'x_edrInternalId': '321'}],
-                           "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                     json={'errors':{'error': {'description': 'Not enough money'},
-                                     "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}},
-                     status_code=402, headers={'X-Request-ID': edr_details_req_id[0]})
-        edrpou_codes_queue = Queue(10)
-        edr_ids_queue = Queue(10)
-        upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
-                                    {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
-        while not worker.exit:
-            sleep(1)
-        self.assertEqual(edrpou_codes_queue.qsize(), 0)
-        self.assertEqual(edr_ids_queue.qsize(), 0) # This means that queue empties every outer loop, regardless of inner one
-        self.assertEqual(mrequest.call_count, 2)
-        self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/api/1.0/verify?id=123')
-        self.assertEqual(mrequest.request_history[1].url, u'127.0.0.1:80/api/1.0/details/321')
-        self.assertEqual(worker.exit, True)
-        worker.shutdown()
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_retry_get_edr_details_exits_with_no_money(self, mrequest, gevent_sleep):
-        """Accept one id in /verify request. Then send 402 to /details requests and check that bot goes to sleep"""
-        gevent_sleep.side_effect = custom_sleep
-        tender_id = uuid.uuid4().hex
-        award_id = uuid.uuid4().hex
-        document_id = generate_doc_id()
-        edr_req_id = generate_request_id()
-        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id()]
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     json={'data': [{'x_edrInternalId': '321'}],
-                           "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, status_code=200, headers={'X-Request-ID': edr_req_id})
-        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
-                    [{'json': {'errors': [{'description': ''}]}, 'status_code': 403,
-                      'headers': {'X-Request-ID': edr_details_req_id[1]}},
-                     {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 402,
-                      'headers': {'X-Request-ID': edr_details_req_id[2]}}])
-        edrpou_codes_queue = Queue(10)
-        edr_ids_queue = Queue(10)
-        upload_to_doc_service_queue = Queue(10)
-        edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
-                                    {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
-        while not worker.exit:
-            sleep(1)
-        self.assertEqual(worker.exit, True)
-        worker.shutdown()
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')

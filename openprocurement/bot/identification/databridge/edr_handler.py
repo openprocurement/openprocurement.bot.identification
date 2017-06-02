@@ -13,7 +13,8 @@ from copy import deepcopy
 
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_START_EDR_HANDLER, DATABRIDGE_SUCCESS_CREATE_FILE,
-    DATABRIDGE_EMPTY_RESPONSE, DATABRIDGE_PROXY_SERVER_CONN_ERROR)
+    DATABRIDGE_EMPTY_RESPONSE
+)
 from openprocurement.bot.identification.databridge.utils import (
     Data, journal_context, validate_param, RetryException, check_add_suffix
 )
@@ -219,13 +220,6 @@ class EdrHandler(Greenlet):
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                     params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                elif response.status_code == 402:
-                    logger.info("Payment required; received for tender id {} {} {} document_id {}.".format(
-                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
-                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
-                                                    params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                    self.exit = True
-                    break
                 else:
 
                     file_content = tender_data.file_content
@@ -261,24 +255,12 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    if re.args[1].status_code == 402:
-                        logger.info("Payment required; received for tender id {} {} {} document_id {}.".format(
-                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
-                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
-                                                  params={"TENDER_ID": tender_data.tender_id,
-                                                          "DOCUMENT_ID": document_id}))
-                        self.exit = True
-                        file_content = tender_data.file_content
-                        self.retry_edr_ids_queue.put(Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                                          tender_data.item_name, [edr_id], file_content))
-                        break
-                    else:
-                        self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                                           tender_data.item_name, [edr_id], tender_data.file_content)))
-                        logger.info('Put tender {} with {} id {} {} to retry_edr_ids_queue. Error response {}'.format(
-                            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.args[1].json().get('errors')),
-                            extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
-                        gevent.sleep(0)
+                    self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                                                       tender_data.item_name, [edr_id], tender_data.file_content)))
+                    logger.info('Put tender {} with {} id {} {} to retry_edr_ids_queue. Error response {}'.format(
+                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.args[1].json().get('errors')),
+                        extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
+                    gevent.sleep(0)
                 else:
                     if not isinstance(response.json(), dict):
                         logger.info('Error data type {} {} {} {}. Message {}.'.format(

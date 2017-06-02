@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from openprocurement.bot.identification.databridge.constants import test_x_edr_internal_id
-
 monkey.patch_all()
 
 import logging
@@ -13,7 +11,7 @@ import gevent
 from functools import partial
 from yaml import load
 from gevent.queue import Queue
-from restkit import request, RequestError, ResourceError
+from restkit import request, RequestError
 from requests import RequestException
 
 from openprocurement_client.client import TendersClientSync, TendersClient
@@ -144,12 +142,6 @@ class EdrDataBridge(object):
         else:
             return True
 
-    def check_paid_requests(self):
-        response = self.proxyClient.details(id=test_x_edr_internal_id)
-        if response.status_code == 402:
-            raise RequestException("Not enough money")
-        return True
-
     def set_sleep(self, new_status):
         self.is_sleeping= new_status
         for job in self.jobs.values():
@@ -157,19 +149,18 @@ class EdrDataBridge(object):
 
     def check_services_and_start(self):
         try:
-            self.check_proxy() and self.check_paid_requests() and self.check_openprocurement_api() and self.check_doc_service()
-        except Exception:
-            logger.warning("Service is still unavailable")
+            self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
+        except Exception as e:
+            logger.info("Service is still unavailable, message {}".format(e))
         else:
-            logger.warning("All services have become available, starting all workers")
+            logger.info("All services have become available, starting all workers")
             self.set_sleep(False)
 
     def check_services_and_stop(self):
-        """Check all services and workers; sleep all the workers and set self.is_sleeping to True if needed"""
         try:
             self.check_proxy() and self.check_doc_service() and self.check_openprocurement_api()
-        except Exception:
-            logger.info("Service is down, stopping all workers")
+        except Exception as e:
+            logger.info("Service is down, stopping all workers, message {}".format(e))
             self.set_sleep(True)
         else:
             if any([job.exit for job in self.jobs.values()]):
@@ -229,7 +220,7 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_proxy() and bridge.check_doc_service() and bridge.check_paid_requests() and bridge.check_openprocurement_api()
+        bridge.check_proxy() and bridge.check_doc_service() and bridge.check_openprocurement_api()
         bridge.run()
     else:
         logger.info('Invalid configuration file. Exiting...')
