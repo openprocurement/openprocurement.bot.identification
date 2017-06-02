@@ -36,7 +36,7 @@ class EdrDataBridge(object):
         self.config = config
 
         api_server = self.config_get('tenders_api_server')
-        api_version = self.config_get('tenders_api_version')
+        self.api_version = self.config_get('tenders_api_version')
         ro_api_server = self.config_get('public_tenders_api_server') or api_server
         buffers_size = self.config_get('buffers_size') or 500
         self.delay = self.config_get('delay') or 15
@@ -46,8 +46,8 @@ class EdrDataBridge(object):
         self.doc_service_port = self.config_get('doc_service_port') or 6555
 
         # init clients
-        self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
-        self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=api_version)
+        self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
+        self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=self.api_version)
         self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
                                        user=self.config_get('proxy_user'),
                                        password=self.config_get('proxy_password'),
@@ -112,9 +112,6 @@ class EdrDataBridge(object):
         return self.config.get('main').get(name)
 
     def check_doc_service(self):
-        """Makes request to the doc_service, returns True if it's up, raises RequestError otherwise
-                Separated to allow for possible granular checks         
-        """
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
         except RequestError as e:
@@ -124,10 +121,17 @@ class EdrDataBridge(object):
         else:
             return True
 
+    def check_openprocurement_api(self):
+        try:
+            self.client.head('/api/{}/spore'.format(self.api_version))
+        except RequestError as e:
+            logger.info('TendersServer connection error, message {}'.format(e),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
+            raise e
+        else:
+            return True
+
     def check_proxy(self):
-        """Makes request to the EDR proxy, returns True if it's up, raises RequestError otherwise
-                Separated to allow for possible granular checks         
-        """
         try:
             self.proxyClient.health()
         except RequestException as e:
@@ -136,6 +140,20 @@ class EdrDataBridge(object):
             raise e
         else:
             return True
+
+    def set_sleep(self, new_status):
+        for job in self.jobs.values():
+            job.exit = new_status
+
+    def check_services(self):
+        try:
+            self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
+        except Exception as e:
+            logger.info("Service is unavailable, message {}".format(e))
+            self.set_sleep(True)
+        else:
+            logger.info("All services have become available, starting all workers")
+            self.set_sleep(False)
 
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),
@@ -150,6 +168,7 @@ class EdrDataBridge(object):
         try:
             while True:
                 gevent.sleep(self.delay)
+                self.check_services()
                 if counter == 20:
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
                                 'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
@@ -167,7 +186,7 @@ class EdrDataBridge(object):
                     counter = 0
                 counter += 1
                 for name, job in self.jobs.items():
-                    if job.dead:
+                    if job.dead and not job.exit:
                         logger.warning('Restarting {} worker'.format(name),
                                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
                         self.jobs[name] = gevent.spawn(getattr(self, name))
@@ -188,7 +207,7 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_proxy() and bridge.check_doc_service()
+        bridge.check_proxy() and bridge.check_doc_service() and bridge.check_openprocurement_api()
         bridge.run()
     else:
         logger.info('Invalid configuration file. Exiting...')
