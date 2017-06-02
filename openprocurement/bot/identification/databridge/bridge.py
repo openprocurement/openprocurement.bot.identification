@@ -107,7 +107,6 @@ class EdrDataBridge(object):
                                    processing_items=self.processing_items,
                                    doc_service_client=self.doc_service_client,
                                    delay=self.delay)
-        self.is_sleeping = False
 
     def config_get(self, name):
         return self.config.get('main').get(name)
@@ -143,28 +142,18 @@ class EdrDataBridge(object):
             return True
 
     def set_sleep(self, new_status):
-        self.is_sleeping= new_status
         for job in self.jobs.values():
             job.exit = new_status
 
-    def check_services_and_start(self):
+    def check_services(self):
         try:
             self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
         except Exception as e:
             logger.info("Service is still unavailable, message {}".format(e))
+            self.set_sleep(True)
         else:
             logger.info("All services have become available, starting all workers")
             self.set_sleep(False)
-
-    def check_services_and_stop(self):
-        try:
-            self.check_proxy() and self.check_doc_service() and self.check_openprocurement_api()
-        except Exception as e:
-            logger.info("Service is down, stopping all workers, message {}".format(e))
-            self.set_sleep(True)
-        else:
-            if any([job.exit for job in self.jobs.values()]):
-                self.set_sleep(True)
 
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),
@@ -179,10 +168,8 @@ class EdrDataBridge(object):
         try:
             while True:
                 gevent.sleep(self.delay)
-                self.check_services_and_stop()
+                self.check_services()
                 if counter == 20:
-                    if self.is_sleeping:
-                        self.check_services_and_start()
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
                                 'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
                                 'Upload to tender {}; Retry upload to tender {}'.format(

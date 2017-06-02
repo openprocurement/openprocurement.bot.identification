@@ -231,106 +231,42 @@ class TestBridgeWorker(BaseServersTest):
         self.api_server.start()
         self.assertEqual(self.worker.check_openprocurement_api(), True)
 
-    def test_check_and_stop_did_not_stop(self):
+    def test_check_services_did_not_stop(self):
         self.worker._start_jobs()
         functions = {'check_proxy': MagicMock(return_value = True),
                      'check_doc_service': MagicMock(return_value = True),
                      'check_openprocurement_api': MagicMock(return_value = True)}
         for name, value in functions.items():
             setattr(self.worker, name, value)
-        self.worker.check_services_and_stop()
+        self.worker.check_services()
         self.assertEqual(all([i.call_count == 1 for i in functions.values()]), True)
-        self.assertEqual(self.worker.is_sleeping, False)
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
 
-    def test_check_and_stop(self):
+    def test_check_services(self):
         self.worker._start_jobs()
         self.proxy_server.stop()
-        self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.is_sleeping, True)
+        self.worker.check_services()
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.proxy_server.start()
         self.worker.set_sleep(False)
 
         self.doc_server.stop()
-        self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.is_sleeping, True)
+        self.worker.check_services()
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.doc_server.start()
         self.worker.set_sleep(False)
 
         self.api_server.stop()
-        self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.is_sleeping, True)
+        self.worker.check_services()
         self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
         self.api_server.start()
         self.worker.set_sleep(False)
-
-        self.worker.scanner.return_value.exit = True
-        self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.is_sleeping, True)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-
-    def test_check_and_start_does_not_start(self):
-        self.worker._start_jobs()
-        self.proxy_server.stop()
-        self.worker.set_sleep(True)
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-        self.assertEqual(self.worker.is_sleeping, True)
-        self.proxy_server.start()
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
-        self.doc_server.stop()
-        self.worker.set_sleep(True)
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-        self.assertEqual(self.worker.is_sleeping, True)
-        self.doc_server.start()
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
-        self.api_server.stop()
-        self.worker.set_sleep(True)
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-        self.assertEqual(self.worker.is_sleeping, True)
-        self.api_server.start()
-        self.worker.check_services_and_start()
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
-    def test_check_and_start(self):
-        self.worker._start_jobs()
-        functions = {'check_proxy': MagicMock(return_value = True),
-                     'check_doc_service': MagicMock(return_value = True),
-                     'check_openprocurement_api': MagicMock(return_value = True)}
-        for name, value in functions.items():
-            setattr(self.worker, name, value)
-        self.worker.set_sleep(True)
-        self.worker.check_services_and_start()
-        self.assertEqual(self.worker.is_sleeping, False)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
-
-    def test_combine_check_stop_and_start_api(self):
-        self.worker._start_jobs()
-        self.api_server.stop()
-        self.worker.check_services_and_stop()
-        self.assertEqual(self.worker.is_sleeping, True)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), True)
-        self.api_server.start()
-        self.worker.check_services_and_start()
-        self.assertEqual(self.worker.is_sleeping, False)
-        self.assertEqual(all([i.exit for i in self.worker.jobs.values()]), False)
 
     @patch('gevent.sleep')
     def test_run_mock_check_services_and_start(self, sleep):
-        self.worker.check_services_and_start = MagicMock()
-        self.worker.check_services_and_stop = MagicMock()
-        self.worker.is_sleeping = True
+        self.worker.check_services = MagicMock()
         self.worker.run()
-        self.assertEqual(self.worker.check_services_and_start.call_count, 1)
-        self.assertEqual(self.worker.check_services_and_stop.call_count, 21)
+        self.assertEqual(self.worker.check_services.call_count, 21)
         self.assertEqual(self.worker.scanner.call_count, 1)
         self.assertEqual(self.worker.filter_tender.call_count, 1)
         self.assertEqual(self.worker.edr_handler.call_count, 1)
