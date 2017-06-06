@@ -113,7 +113,7 @@ class EdrHandler(Greenlet):
         data back to retry_edrpou_codes_queue."""
         while not self.exit:
             try:
-                tender_data = self.retry_edrpou_codes_queue.get()
+                tender_data = self.retry_edrpou_codes_queue.peek()
             except LoopExit:
                 gevent.sleep(0)
                 continue
@@ -137,17 +137,16 @@ class EdrHandler(Greenlet):
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                 tender_data.item_name, [], file_content)
                     self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
+                    self.retry_edrpou_codes_queue.get()
                     continue
                 logger.info("RetryException error message {}".format(re.args[0]))
                 self.handle_status_response(re.args[1], tender_data.tender_id)
-                self.retry_edrpou_codes_queue.put(tender_data)
-                logger.info('Put tender {} with {} id {} to retry_edrpou_codes_queue'.format(
+                logger.info('Leave tender {} with {} id {} in retry_edrpou_codes_queue'.format(
                     tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                     extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
                 gevent.sleep(0)
             except Exception:
-                self.retry_edrpou_codes_queue.put(tender_data)
-                logger.info('Put tender {} with {} id {} to retry_edrpou_codes_queue'.format(
+                logger.info('Leave tender {} with {} id {} in retry_edrpou_codes_queue'.format(
                     tender_data.tender_id, tender_data.item_name, tender_data.item_id),
                     extra=journal_context(params={"TENDER_ID": tender_data.tender_id}))
                 gevent.sleep(0)
@@ -162,15 +161,15 @@ class EdrHandler(Greenlet):
                     except TypeError as e:
                         logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
                                                                           tender_data.item_id, e))
-                        self.retry_edrpou_codes_queue.put(tender_data)
                     else:
                         self.edr_ids_queue.put(data)
+                        self.retry_edrpou_codes_queue.get()
                         logger.info('Put tender {} {} {} from retry to edr_ids_queue.'.format(tender_data.tender_id,
                                                                                               tender_data.item_name,
                                                                                               tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
     def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
@@ -239,7 +238,7 @@ class EdrHandler(Greenlet):
         data back to retry_edr_ids_queue."""
         while not self.exit:
             try:
-                tender_data = self.retry_edr_ids_queue.get()
+                tender_data = self.retry_edr_ids_queue.peek()
             except LoopExit:
                 gevent.sleep(0)
                 continue
@@ -255,8 +254,6 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                                       tender_data.item_name, [edr_id], tender_data.file_content)))
                     logger.info('Put tender {} with {} id {} {} to retry_edr_ids_queue. Error response {}'.format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.args[1].json().get('errors')),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
@@ -265,8 +262,6 @@ class EdrHandler(Greenlet):
                     if not isinstance(response.json(), dict):
                         logger.info('Error data type {} {} {} {}. Message {}.'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, "Not a dictionary"))
-                        self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                                           tender_data.item_name, [edr_id], tender_data.file_content)))
                     else:
                         file_content = response.json()
                         file_content['meta'].update(tender_data.file_content['meta'])
@@ -274,13 +269,17 @@ class EdrHandler(Greenlet):
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
+                        tender_data.edr_ids.remove(edr_id)
                         logger.info('Successfully created file for tender {} {} {} {} in retry.'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                   params={"TENDER_ID": tender_data.tender_id,  "DOCUMENT_ID": document_id}))
+            if len(tender_data.edr_ids) == 0:
+                self.retry_edr_ids_queue.get()
+                continue
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
