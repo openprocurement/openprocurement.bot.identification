@@ -120,7 +120,6 @@ class EdrHandler(Greenlet):
             logger.info('Get tender {} from retry_edrpou_codes_queue'.format(tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
-            self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             try:
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id)
@@ -173,6 +172,7 @@ class EdrHandler(Greenlet):
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
+        self.until_too_many_requests_event.wait()
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
         if response.status_code != 200:
             logger.info(
@@ -247,7 +247,6 @@ class EdrHandler(Greenlet):
                                                                                     tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
-            self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             for edr_id in tender_data.edr_ids:
                 try:
@@ -283,6 +282,7 @@ class EdrHandler(Greenlet):
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
+        self.until_too_many_requests_event.wait()
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
         if response.status_code != 200:
             logger.info(
@@ -294,7 +294,13 @@ class EdrHandler(Greenlet):
     def handle_status_response(self, response, tender_id):
         """Process unsuccessful request"""
         if response.status_code == 429:
-            self.until_too_many_requests_event.wait(response.headers.get('Retry-After', self.delay))
+            seconds_to_wait = response.headers.get('Retry-After', self.delay)
+            logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait),
+                        extra=journal_context(params={"TENDER_ID": tender_id}))
+            self.until_too_many_requests_event.clear()
+            self.until_too_many_requests_event.wait(float(seconds_to_wait))
+            logger.info('Waited for {} seconds. Renewal requests to EDR API.'.format(seconds_to_wait))
+            self.until_too_many_requests_event.set()
         elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
