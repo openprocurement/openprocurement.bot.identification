@@ -42,8 +42,8 @@ class EdrHandler(Greenlet):
         self.upload_to_doc_service_queue = upload_to_doc_service_queue
 
         # retry queues for workers
-        self.retry_edrpou_codes_queue = Queue(maxsize=500)
-        self.retry_edr_ids_queue = Queue(maxsize=500)
+        self.retry_edrpou_codes_queue = Queue(maxsize=2)
+        self.retry_edr_ids_queue = Queue(maxsize=1)
 
         # blockers
         self.until_too_many_requests_event = gevent.event.Event()
@@ -169,7 +169,7 @@ class EdrHandler(Greenlet):
                                                                                               tender_data.item_id))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
@@ -279,7 +279,7 @@ class EdrHandler(Greenlet):
                 continue
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
