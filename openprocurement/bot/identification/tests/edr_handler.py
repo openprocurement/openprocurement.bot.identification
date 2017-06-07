@@ -689,6 +689,56 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
+    def test_retry_get_edr_details_two_edr_ids_one_success(self, mrequest, gevent_sleep):
+        """Accept 6 times errors in response while requesting /details"""
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
+                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
+                       'headers': {'X-Request-ID': '1.7'}}
+                      ])
+        mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
+                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
+                       'headers': {'X-Request-ID': '2.7'}}
+                      ])
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
+        worker.retry_edr_ids_queue.put(Data(tender_id, award_id, '123', "awards", ['321', '322'],
+                                            {'meta': {'id': document_id, 'author': author,
+                                                      'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
+        self.assertEquals(upload_to_doc_service_queue.get(),
+                          Data(tender_id=tender_id, item_id=award_id,
+                               code='123', item_name='awards',
+                               edr_ids=['322'],
+                               file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                  "id": document_id, "version": version,
+                                                                  'author': author,
+                                                                  'sourceRequests': [
+                                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220', '1.7']
+                                                                  }}))
+        self.assertEquals(upload_to_doc_service_queue.get(),
+                          Data(tender_id=tender_id, item_id=award_id,
+                               code='123', item_name='awards',
+                               edr_ids=[],
+                               file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                                  "id": document_id, "version": version,
+                                                                  'author': author,
+                                                                  'sourceRequests': [
+                                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220', '1.7', '2.7']
+                                                                  }}))
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0)
+        self.assertEqual(upload_to_doc_service_queue.qsize(), 0)
+        self.assertEqual(mrequest.call_count, 2)
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
     def test_retry_5_times_get_edr_id(self, mrequest, gevent_sleep):
         """Accept 6 times errors in response while requesting /verify"""
         gevent_sleep.side_effect = custom_sleep
