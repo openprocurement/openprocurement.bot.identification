@@ -66,7 +66,6 @@ class EdrHandler(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
-            # gevent.wait([self.until_too_many_requests_event])
             document_id = tender_data.file_content['meta']['id']
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code, headers={'X-Client-Request-ID': document_id})
             if response.status_code == 404 and response.json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
@@ -122,8 +121,6 @@ class EdrHandler(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
             document_id = tender_data.file_content['meta']['id']
-            self.until_too_many_requests_event.wait()
-            # gevent.wait([self.until_too_many_requests_event])
             try:
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id)
                 if response.headers.get('X-Request-ID'):
@@ -176,13 +173,12 @@ class EdrHandler(Greenlet):
     def get_edr_id_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         self.until_too_many_requests_event.wait()
-        # gevent.wait([self.until_too_many_requests_event])
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
         if response.status_code == 429:
             seconds_to_wait = response.headers.get('Retry-After', self.delay)
             logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait))
-            self.until_too_many_requests_event.wait(float(seconds_to_wait))
-            # self.wait_until_too_many_requests(seconds_to_wait)
+            self.wait_until_too_many_requests(seconds_to_wait)
+            raise RetryException('Unsuccessful retry request to EDR.', response)
         elif response.status_code != 200:
             logger.info(
                 'Get unsuccessful response {} in get_edr_id_request, header {}'.format(response.status_code, response.headers.get('X-Request-ID')))
@@ -202,7 +198,6 @@ class EdrHandler(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
             self.until_too_many_requests_event.wait()
-            # gevent.wait([self.until_too_many_requests_event])
             meta_id = tender_data.file_content['meta']['id']
             for edr_id in tender_data.edr_ids:
                 # if more then 1 instance add amount and number of document to document_id
@@ -258,8 +253,6 @@ class EdrHandler(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
             document_id = tender_data.file_content['meta']['id']
-            self.until_too_many_requests_event.wait()
-            # gevent.wait([self.until_too_many_requests_event])
             for edr_id in tender_data.edr_ids:
                 try:
                     response = self.get_edr_details_request(edr_id, document_id)
@@ -296,13 +289,12 @@ class EdrHandler(Greenlet):
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         self.until_too_many_requests_event.wait()
-        # gevent.wait([self.until_too_many_requests_event])
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
         if response.status_code == 429:
             seconds_to_wait = response.headers.get('Retry-After', self.delay)
-            # self.wait_until_too_many_requests(seconds_to_wait)
             logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait))
-            self.until_too_many_requests_event.wait(float(seconds_to_wait))
+            self.wait_until_too_many_requests(seconds_to_wait)
+            raise RetryException('Unsuccessful retry request to EDR.', response)
         elif response.status_code != 200:
             logger.info(
                 'Get unsuccessful response {} in get_edr_details_request, header {}'.format(response.status_code, response.headers.get('X-Request-ID')))
@@ -316,8 +308,7 @@ class EdrHandler(Greenlet):
             seconds_to_wait = response.headers.get('Retry-After', self.delay)
             logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait),
                         extra=journal_context(params={"TENDER_ID": tender_id}))
-            self.until_too_many_requests_event.wait(float(seconds_to_wait))
-            # self.wait_until_too_many_requests(seconds_to_wait)
+            self.wait_until_too_many_requests(seconds_to_wait)
         elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
@@ -327,13 +318,13 @@ class EdrHandler(Greenlet):
                            'Description: {err}'.format(err=response.text),
                            extra=journal_context(params={"TENDER_ID": tender_id}))
 
-    # def wait_until_too_many_requests(self, seconds_to_wait):
-    #     if self.until_too_many_requests_event.ready():
-    #         logger.info('sleep')
-    #         self.until_too_many_requests_event.clear()
-    #         self.until_too_many_requests_event.wait(float(seconds_to_wait))
-    #         self.until_too_many_requests_event.set()
-    #         logger.info('wake up')
+    def wait_until_too_many_requests(self, seconds_to_wait):
+        if self.until_too_many_requests_event.ready():
+            logger.info('Bot is waiting...')
+            self.until_too_many_requests_event.clear()
+            self.until_too_many_requests_event.wait(float(seconds_to_wait))
+            self.until_too_many_requests_event.set()
+            logger.info('Bot stop waiting...')
 
     def _run(self):
         logger.info('Start EDR Handler', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_EDR_HANDLER}, {}))
