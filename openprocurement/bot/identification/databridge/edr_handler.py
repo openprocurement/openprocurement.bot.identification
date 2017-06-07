@@ -42,8 +42,8 @@ class EdrHandler(Greenlet):
         self.upload_to_doc_service_queue = upload_to_doc_service_queue
 
         # retry queues for workers
-        self.retry_edrpou_codes_queue = Queue(maxsize=2)
-        self.retry_edr_ids_queue = Queue(maxsize=1)
+        self.retry_edrpou_codes_queue = Queue(maxsize=500)
+        self.retry_edr_ids_queue = Queue(maxsize=500)
 
         # blockers
         self.until_too_many_requests_event = gevent.event.Event()

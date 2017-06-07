@@ -9,7 +9,7 @@ import datetime
 import requests_mock
 import random
 
-from gevent.queue import Queue
+from gevent.queue import Queue, Empty
 from gevent.hub import LoopExit
 from mock import patch, MagicMock
 from munch import munchify
@@ -662,6 +662,30 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[2].url, u'127.0.0.1:80/api/1.0/details/321')
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
+
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_get_edr_details_no_edr_ids(self, mrequest, gevent_sleep):
+        """Accept 6 times errors in response while requesting /details"""
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        edrpou_codes_queue = Queue(10)
+        edr_ids_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        edr_ids_queue.put(Data(tender_id, award_id, '123', "awards", [],
+                                    {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
+        with self.assertRaises(Empty):
+            upload_to_doc_service_queue.get(timeout=1)
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertEqual(edr_ids_queue.qsize(), 0)
+        self.assertEqual(upload_to_doc_service_queue.qsize(), 0)
+        self.assertEqual(mrequest.call_count, 0)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
