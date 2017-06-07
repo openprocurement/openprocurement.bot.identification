@@ -70,9 +70,6 @@ class EdrDataBridge(object):
 
         # blockers
         self.initialization_event = gevent.event.Event()
-        self.until_too_many_requests_event = gevent.event.Event()
-
-        self.until_too_many_requests_event.set()
 
         # dictionary with processing awards/qualifications
         self.processing_items = {}
