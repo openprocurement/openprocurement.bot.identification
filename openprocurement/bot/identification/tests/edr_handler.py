@@ -695,21 +695,22 @@ class TestEdrHandlerWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         document_id = generate_doc_id()
+        edr_details_req_id = [generate_request_id(), generate_request_id(), generate_request_id(),
+                              generate_request_id(), generate_request_id(), generate_request_id(),
+                              generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
-                       'headers': {'X-Request-ID': '1.7'}}
+                       'headers': {'X-Request-ID': edr_details_req_id[0]}}
                       ])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
-                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[1]}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[2]}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[3]}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[4]}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[5]}},
                       {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
-                       'headers': {'X-Request-ID': '2.7'}}
+                       'headers': {'X-Request-ID': edr_details_req_id[6]}}
                       ])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
@@ -726,7 +727,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                   "id": document_id, "version": version,
                                                                   'author': author,
                                                                   'sourceRequests': [
-                                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220', '1.7']
+                                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_details_req_id[0]]
                                                                   }}))
         self.assertEquals(upload_to_doc_service_queue.get(),
                           Data(tender_id=tender_id, item_id=award_id,
@@ -736,13 +737,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                   "id": document_id, "version": version,
                                                                   'author': author,
                                                                   'sourceRequests': [
-                                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220', '1.7', '2.7']
+                                                                      'req-db3ed1c6-9843-415f-92c9-7d4b08d39220', edr_details_req_id[0], edr_details_req_id[6]]
                                                                   }}))
         worker.shutdown()
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0)
-        self.assertEqual(mrequest.call_count, 9)
+        self.assertEqual(mrequest.call_count, 7)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')

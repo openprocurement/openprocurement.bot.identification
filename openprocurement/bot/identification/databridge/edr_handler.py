@@ -109,8 +109,8 @@ class EdrHandler(Greenlet):
             gevent.sleep(0)
 
     def retry_get_edr_id(self):
-        """Get data from retry_edrpou_codes_queue; Put data into edr_ids_queue if request is successful, otherwise put
-        data back to retry_edrpou_codes_queue."""
+        """Get data from retry_edrpou_codes_queue; Put data into edr_ids_queue if request is successful, otherwise leave
+        data in retry_edrpou_codes_queue."""
         while not self.exit:
             try:
                 tender_data = self.retry_edrpou_codes_queue.peek()
@@ -234,8 +234,8 @@ class EdrHandler(Greenlet):
             gevent.sleep(0)
 
     def retry_get_edr_details(self):
-        """Get data from retry_edr_ids_queue; Put data into upload_to_doc_service_queue if request is successful, otherwise put
-        data back to retry_edr_ids_queue."""
+        """Get data from retry_edr_ids_queue; Put data into upload_to_doc_service_queue if request is successful, otherwise leave
+        data in retry_edr_ids_queue."""
         while not self.exit:
             try:
                 tender_data = self.retry_edr_ids_queue.peek()
@@ -254,13 +254,13 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    logger.info('Put tender {} with {} id {} {} to retry_edr_ids_queue. Error response {}'.format(
+                    logger.info('Leave tender {} with {} id {} {} in retry_edr_ids_queue. Error response {}'.format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.args[1].json().get('errors')),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
                     gevent.sleep(0)
                 else:
                     if not isinstance(response.json(), dict):
-                        logger.info('Error data type {} {} {} {}. Message {}.'.format(
+                        logger.info('Error data type {} {} {} {}. Leaving in retry_edr_ids_queue. Message {}.'.format(
                             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, "Not a dictionary"))
                     else:
                         file_content = response.json()
