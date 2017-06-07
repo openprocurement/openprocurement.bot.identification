@@ -152,7 +152,7 @@ class EdrDataBridge(object):
             logger.info("Service is unavailable, message {}".format(e))
             self.set_sleep(True)
         else:
-            logger.info("All services have become available, starting all workers")
+            logger.info("All services are available")
             self.set_sleep(False)
 
     def _start_jobs(self):
