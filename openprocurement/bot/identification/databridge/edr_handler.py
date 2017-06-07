@@ -266,7 +266,7 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    self.handle_status_response(re, tender_data.tender_id)
+                    self.handle_status_response(re.args[1], tender_data.tender_id)
                     self.retry_edr_ids_queue.put((Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                                        tender_data.item_name, [edr_id], tender_data.file_content)))
                     logger.info('Put tender {} with {} id {} {} to retry_edr_ids_queue. Error response {}'.format(
