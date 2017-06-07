@@ -124,7 +124,6 @@ class TestBridgeWorker(BaseServersTest):
 
         # check events
         self.assertFalse(self.worker.initialization_event.is_set())
-        self.assertTrue(self.worker.until_too_many_requests_event.is_set())
 
         # check processing items
         self.assertEqual(self.worker.processing_items, {})
