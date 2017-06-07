@@ -667,7 +667,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_details_no_edr_ids(self, mrequest, gevent_sleep):
-        """Accept 6 times errors in response while requesting /details"""
+        """Test that retry_get_edr_ids removes from retry_queue items with empty edr_ids lists"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
@@ -690,7 +690,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_retry_get_edr_details_two_edr_ids_one_success(self, mrequest, gevent_sleep):
-        """Accept 6 times errors in response while requesting /details"""
+        """Test that retry_get_edr_details correctly processes case of one working, other not and does not delete"""
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
@@ -701,7 +701,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
                        'headers': {'X-Request-ID': '1.7'}}
                       ])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
-                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
+                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': '2.7'}},
+                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
                        'headers': {'X-Request-ID': '2.7'}}
                       ])
         edrpou_codes_queue = Queue(10)
@@ -735,7 +742,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertEqual(edr_ids_queue.qsize(), 0)
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0)
-        self.assertEqual(mrequest.call_count, 2)
+        self.assertEqual(mrequest.call_count, 9)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
