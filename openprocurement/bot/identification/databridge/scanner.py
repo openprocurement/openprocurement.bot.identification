@@ -92,36 +92,38 @@ class Scanner(Greenlet):
                     raise re
 
     def get_tenders_forward(self):
-        logger.info('Start forward data sync worker...')
-        params = {'opt_fields': 'status,procurementMethodType', 'mode': '_all_'}
-        try:
-            for tender in self.get_tenders(params=params, direction="forward"):
-                logger.info('Forward sync: Put tender {} to process...'.format(tender['id']),
-                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
-                                                  {"TENDER_ID": tender['id']}))
-                self.filtered_tender_ids_queue.put(tender['id'])
-        except Exception as e:
-            logger.warning('Forward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
-            logger.exception(e)
-        else:
-            logger.warning('Forward data sync finished!')
+        if not self.exit:
+            logger.info('Start forward data sync worker...')
+            params = {'opt_fields': 'status,procurementMethodType', 'mode': '_all_'}
+            try:
+                for tender in self.get_tenders(params=params, direction="forward"):
+                    logger.info('Forward sync: Put tender {} to process...'.format(tender['id']),
+                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
+                                                      {"TENDER_ID": tender['id']}))
+                    self.filtered_tender_ids_queue.put(tender['id'])
+            except Exception as e:
+                logger.warning('Forward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
+                logger.exception(e)
+            else:
+                logger.warning('Forward data sync finished!')
 
     def get_tenders_backward(self):
-        logger.info('Start backward data sync worker...')
-        params = {'opt_fields': 'status,procurementMethodType', 'descending': 1, 'mode': '_all_'}
-        try:
-            for tender in self.get_tenders(params=params, direction="backward"):
-                logger.info('Backward sync: Put tender {} to process...'.format(tender['id']),
-                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
-                                                  {"TENDER_ID": tender['id']}))
-                self.filtered_tender_ids_queue.put(tender['id'])
-        except Exception as e:
-            logger.warning('Backward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
-            logger.exception(e)
-            return False
-        else:
-            logger.info('Backward data sync finished.')
-            return True
+        if not self.exit:
+            logger.info('Start backward data sync worker...')
+            params = {'opt_fields': 'status,procurementMethodType', 'descending': 1, 'mode': '_all_'}
+            try:
+                for tender in self.get_tenders(params=params, direction="backward"):
+                    logger.info('Backward sync: Put tender {} to process...'.format(tender['id']),
+                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
+                                                      {"TENDER_ID": tender['id']}))
+                    self.filtered_tender_ids_queue.put(tender['id'])
+            except Exception as e:
+                logger.warning('Backward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
+                logger.exception(e)
+                return False
+            else:
+                logger.info('Backward data sync finished.')
+                return True
 
     def _start_synchronization_workers(self):
         logger.info('Scanner starting forward and backward sync workers')

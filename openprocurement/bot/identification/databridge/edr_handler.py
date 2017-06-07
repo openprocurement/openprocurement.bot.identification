@@ -120,6 +120,7 @@ class EdrHandler(Greenlet):
             logger.info('Get tender {} from retry_edrpou_codes_queue'.format(tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
+            self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             try:
                 response = self.get_edr_id_request(validate_param(tender_data.code), tender_data.code, document_id)
@@ -254,6 +255,7 @@ class EdrHandler(Greenlet):
                                                                                     tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id}))
+            self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             for edr_id in tender_data.edr_ids:
                 try:
