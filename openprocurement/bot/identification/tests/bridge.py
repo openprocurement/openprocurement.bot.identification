@@ -64,7 +64,7 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server_bottle = Bottle()
         cls.doc_server_bottle = Bottle()
         cls.api_server = WSGIServer(('127.0.0.1', 20604), cls.api_server_bottle, log=None)
-        setup_routing(cls.api_server_bottle, response_spore)
+        setup_routing(cls.api_server_bottle, response_spore, method='HEAD')
         cls.public_api_server = WSGIServer(('127.0.0.1', 20605), cls.api_server_bottle, log=None)
         cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
         setup_routing(cls.doc_server_bottle, doc_response, path='/')
@@ -84,13 +84,20 @@ class BaseServersTest(unittest.TestCase):
         cls.doc_server.close()
         cls.proxy_server.close()
 
+    def setUp(self):
+        self.worker = EdrDataBridge(config)
+        workers = {'scanner': MagicMock(return_value=MagicMock(exit=False)),
+                   'filter_tender': MagicMock(return_value=MagicMock(exit=False)),
+                   'edr_handler': MagicMock(return_value=MagicMock(exit=False)),
+                   'upload_file': MagicMock(return_value=MagicMock(exit=False))}
+        for name, value in workers.items():
+            setattr(self.worker, name, value)
+
     def tearDown(self):
         del self.worker
 
-
 def setup_routing(app, func, path='/api/0/spore', method='GET'):
     app.route(path, method, func)
-
 
 def response_spore():
     response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
@@ -102,15 +109,17 @@ def response_spore():
 def doc_response():
     return response
 
-
 def proxy_response():
+    return response
+
+def proxy_response_402():
+    response.status = "402 Payment required"
     return response
 
 
 class TestBridgeWorker(BaseServersTest):
 
     def test_init(self):
-        # setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, 15)
         self.assertEqual(self.worker.increment_step, 1)
@@ -161,7 +170,6 @@ class TestBridgeWorker(BaseServersTest):
                           'version': config['main']['proxy_version']})
 
     def test_start_jobs(self):
-        # setup_routing(self.api_server_bottle, response_spore)
         self.worker = EdrDataBridge(config)
 
         scanner, filter_tender, edr_handler, upload_file = [MagicMock(return_value=i) for i in range(4)]
@@ -173,9 +181,9 @@ class TestBridgeWorker(BaseServersTest):
         self.worker._start_jobs()
         # check that all jobs were started
         self.assertTrue(scanner.called)
-        self.assertTrue(scanner.called)
-        self.assertTrue(scanner.called)
-        self.assertTrue(scanner.called)
+        self.assertTrue(filter_tender.called)
+        self.assertTrue(edr_handler.called)
+        self.assertTrue(upload_file.called)
 
         self.assertEqual(self.worker.jobs['scanner'], 0)
         self.assertEqual(self.worker.jobs['filter_tender'], 1)
@@ -194,31 +202,89 @@ class TestBridgeWorker(BaseServersTest):
 
         with patch('__builtin__.True', AlmostAlwaysTrue(100)):
             self.worker.run()
-        self.assertEqual(scanner.call_count, 1)
-        self.assertEqual(filter_tender.call_count, 1)
-        self.assertEqual(edr_handler.call_count, 1)
-        self.assertEqual(upload_file.call_count, 1)
+        self.assertEqual(self.worker.scanner.call_count, 1)
+        self.assertEqual(self.worker.filter_tender.call_count, 1)
+        self.assertEqual(self.worker.edr_handler.call_count, 1)
+        self.assertEqual(self.worker.upload_file.call_count, 1)
 
-    def test_proxy_server_failure(self):
+    def test_proxy_server(self):
         self.proxy_server.stop()
-        self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestException):
             self.worker.check_proxy()
         self.proxy_server.start()
-        self.assertEqual(self.worker.check_proxy(), True)
+        self.assertTrue(self.worker.check_proxy())
 
-    def test_proxy_server_success(self):
-        self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_proxy(), True)
-
-    def test_doc_service_failure(self):
+    def test_doc_service(self):
         self.doc_server.stop()
-        self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
             self.worker.check_doc_service()
         self.doc_server.start()
-        self.assertEqual(self.worker.check_doc_service(), True)
+        self.assertTrue(self.worker.check_doc_service())
 
-    def test_doc_service_success(self):
-        self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_doc_service(), True)
+    def test_api(self):
+        self.api_server.stop()
+        with self.assertRaises(RequestError):
+            self.worker.check_openprocurement_api()
+        self.api_server.start()
+        self.assertTrue(self.worker.check_openprocurement_api())
+
+    def test_check_services_did_not_stop(self):
+        self.worker._start_jobs()
+        functions = {'check_proxy': MagicMock(return_value = True),
+                     'check_doc_service': MagicMock(return_value = True),
+                     'check_openprocurement_api': MagicMock(return_value = True)}
+        for name, value in functions.items():
+            setattr(self.worker, name, value)
+        self.worker.check_services()
+        self.assertTrue(all([i.call_count == 1 for i in functions.values()]))
+        self.assertFalse(all([i.exit for i in self.worker.jobs.values()]))
+
+    def test_check_services(self):
+        self.worker._start_jobs()
+        self.proxy_server.stop()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+        self.proxy_server.start()
+        self.worker.set_sleep(False)
+
+        self.doc_server.stop()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+        self.doc_server.start()
+        self.worker.set_sleep(False)
+
+        self.api_server.stop()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+        self.api_server.start()
+        self.worker.set_sleep(False)
+
+    def test_check_services_needs_all(self):
+        self.worker._start_jobs()
+        self.worker.set_sleep(True)
+        self.proxy_server.stop()
+        self.doc_server.stop()
+        self.api_server.stop()
+
+        self.proxy_server.start()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+
+        self.doc_server.start()
+        self.worker.check_services()
+        self.assertTrue(all([i.exit for i in self.worker.jobs.values()]))
+        self.worker.set_sleep(False)
+
+        self.api_server.start()
+        self.worker.check_services()
+        self.assertFalse(all([i.exit for i in self.worker.jobs.values()]))
+
+    @patch('gevent.sleep')
+    def test_run_with_mock_check_services(self, sleep):
+        """Basic test to ensure run() goes into the while (and inside that for) loops and that jobs are called only once"""
+        self.worker.check_services = MagicMock()
+        self.worker.run()
+        self.assertEqual(self.worker.scanner.call_count, 1)
+        self.assertEqual(self.worker.filter_tender.call_count, 1)
+        self.assertEqual(self.worker.edr_handler.call_count, 1)
+        self.assertEqual(self.worker.upload_file.call_count, 1)
