@@ -106,10 +106,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edr_details_req_ids = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[0]}},
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '1', 'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '1', 'X-Request-ID': edr_req_ids[0]}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[0]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
-                      {'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[1]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '1', 'X-Request-ID': edr_req_ids[1]}},
+                      {'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers': {'Retry-After': '1', 'X-Request-ID': edr_req_ids[1]}},
                       {'json': {'data': [{'x_edrInternalId': local_edr_ids[1]}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=local_edr_ids[0]),
@@ -138,7 +140,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                               "version": version, 'author': author,
                                                               "sourceRequests": [
                                                                   'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                                  edr_req_ids[i], edr_req_ids[i],
+                                                                  edr_req_ids[i], edr_req_ids[i], edr_req_ids[i],
                                                                   edr_details_req_ids[i]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, check_queue, MagicMock())
