@@ -100,7 +100,6 @@ class EdrHandler(Greenlet):
             else:
                 if response.headers.get('X-Request-ID'):
                     tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
-                self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
                 self.handle_status_response(response, tender_data.tender_id)
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
                 logger.info('Put tender {} with {} id {} to retry_edrpou_codes_queue'.format(
@@ -168,7 +167,6 @@ class EdrHandler(Greenlet):
                     except TypeError as e:
                         logger.info('Error data type {} {} {}. {}'.format(tender_data.tender_id, tender_data.item_name,
                                                                           tender_data.item_id, e))
-                        self.retry_edrpou_codes_queue.put(tender_data)
                     else:
                         self.edr_ids_queue.put(data)
                         self.retry_edrpou_codes_queue.get()

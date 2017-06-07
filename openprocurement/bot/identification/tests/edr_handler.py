@@ -706,14 +706,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
                        'headers': {'X-Request-ID': edr_details_req_id[0]}}
                       ])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=322),
-                     [{'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[1]}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[2]}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[3]}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[4]}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[5]}},
-                      {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200,
-                       'headers': {'X-Request-ID': edr_details_req_id[6]}}
-                      ])
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[1]}},
+                     {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[2]}},
+                     {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[3]}},
+                     {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[4]}},
+                     {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[5]}},
+                     {'json': {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[6]}}])
         edrpou_codes_queue = Queue(10)
         edr_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
