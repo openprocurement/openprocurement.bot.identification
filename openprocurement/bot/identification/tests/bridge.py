@@ -193,12 +193,16 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.edr_handler.call_count, 1)
         self.assertEqual(self.worker.upload_file.call_count, 1)
 
-    def test_proxy_server(self):
+    def test_proxy_server_failure(self):
         self.worker = EdrDataBridge(config)
         self.proxy_server.stop()
         with self.assertRaises(RequestException):
             self.worker.check_proxy()
         self.proxy_server.start()
+        self.assertTrue(self.worker.check_proxy())
+
+    def test_proxy_server_success(self):
+        self.worker = EdrDataBridge(config)
         self.assertTrue(self.worker.check_proxy())
 
     def test_doc_service_failure(self):
@@ -207,8 +211,8 @@ class TestBridgeWorker(BaseServersTest):
         with self.assertRaises(RequestError):
             self.worker.check_doc_service()
         self.doc_server.start()
-        self.assertEqual(self.worker.check_doc_service(), True)
+        self.assertTrue(self.worker.check_doc_service())
 
     def test_doc_service_success(self):
         self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.check_doc_service(), True)
+        self.assertTrue(self.worker.check_doc_service())
