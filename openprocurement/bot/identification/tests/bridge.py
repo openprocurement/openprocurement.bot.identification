@@ -201,10 +201,14 @@ class TestBridgeWorker(BaseServersTest):
         self.proxy_server.start()
         self.assertTrue(self.worker.check_proxy())
 
-    def test_doc_service(self):
-        self.worker = EdrDataBridge(config)
+    def test_doc_service_failure(self):
         self.doc_server.stop()
+        self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
             self.worker.check_doc_service()
         self.doc_server.start()
-        self.assertTrue(self.worker.check_doc_service())
+        self.assertEqual(self.worker.check_doc_service(), True)
+
+    def test_doc_service_success(self):
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.check_doc_service(), True)
