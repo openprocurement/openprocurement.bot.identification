@@ -18,6 +18,8 @@ Data = namedtuple('Data', [
     'file_content'  # details for file
 ])
 
+def data_string(data):
+    return "tender {} {} {}".format(data.tender_id, data.item_name, data.item_id)
 
 def journal_context(record={}, params={}):
     for k, v in params.items():
