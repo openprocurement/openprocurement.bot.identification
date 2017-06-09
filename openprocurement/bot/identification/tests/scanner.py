@@ -114,7 +114,7 @@ class TestScannerWorker(unittest.TestCase):
         Scanner.sleep_change_value = 0
 
     @patch('gevent.sleep')
-    def test_425_sleep_change_value(self, gevent_sleep):
+    def test_425_and_429_sleep_change_value(self, gevent_sleep):
         """Three times receive 425, check queue, check sleep_change_value"""
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
@@ -142,7 +142,7 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": uuid.uuid4().hex,
                                 'procurementMethodType': 'aboveThresholdUA'}]}),
             ResourceError(http_code=425),
-            ResourceError(http_code=425),
+            ResourceError(http_code=429),
             ResourceError(http_code=425),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
