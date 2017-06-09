@@ -64,7 +64,7 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server_bottle = Bottle()
         cls.doc_server_bottle = Bottle()
         cls.api_server = WSGIServer(('127.0.0.1', 20604), cls.api_server_bottle, log=None)
-        setup_routing(cls.api_server_bottle, response_spore, method='HEAD')
+        setup_routing(cls.api_server_bottle, response_spore)
         cls.public_api_server = WSGIServer(('127.0.0.1', 20605), cls.api_server_bottle, log=None)
         cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
         setup_routing(cls.doc_server_bottle, doc_response, path='/')
