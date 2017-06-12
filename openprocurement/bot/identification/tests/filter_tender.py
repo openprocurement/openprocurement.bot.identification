@@ -37,7 +37,7 @@ def response_412():
     response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
                                       "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
                                       "96a11693fa8bd38623e4daee121f60b4301aef012c"))
-    return ResourceError(response=response)
+    return response
 
 
 def response_get_tender():
