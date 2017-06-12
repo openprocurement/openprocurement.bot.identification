@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from restkit import ResourceError
-
 monkey.patch_all()
 
 import logging.config
@@ -21,6 +19,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_TENDER_NOT_PROCESS
 )
 from openprocurement.bot.identification.databridge.constants import author
+from restkit import ResourceError
 
 
 logger = logging.getLogger(__name__)
