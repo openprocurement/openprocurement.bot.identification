@@ -4,6 +4,7 @@ import io
 
 from uuid import uuid4
 from collections import namedtuple
+from restkit import ResourceError
 
 from openprocurement.bot.identification.databridge.constants import file_name
 
@@ -57,3 +58,18 @@ def check_add_suffix(list_ids, document_id, number):
     if len_list_ids > 1:
         return '{document_id}.{amount}.{number}'.format(document_id=document_id, amount=len_list_ids,number=number)
     return document_id
+
+
+def check_412(func):
+
+    def func_wrapper(obj, *args, **kwargs):
+        try:
+            response = func(obj, *args, **kwargs)
+        except ResourceError as re:
+            if re.status_int == 412:
+                obj.headers['Cookie'] = re.response.headers['Set-Cookie']
+                response = func(obj, *args, **kwargs)
+            else:
+                raise ResourceError(re)
+        return response
+    return func_wrapper

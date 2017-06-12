@@ -14,18 +14,32 @@ from gevent.queue import Queue
 from restkit import request, RequestError
 from requests import RequestException
 
-from openprocurement_client.client import TendersClientSync, TendersClient
+from openprocurement_client.client import TendersClientSync as BaseTendersClientSync, TendersClient as BaseTendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
-from openprocurement.bot.identification.databridge.utils import journal_context
+from openprocurement.bot.identification.databridge.utils import journal_context, check_412
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
     DATABRIDGE_PROXY_SERVER_CONN_ERROR)
 
 logger = logging.getLogger(__name__)
+
+
+class TendersClientSync(BaseTendersClientSync):
+
+    @check_412
+    def request(self, *args, **kwargs):
+        return super(TendersClientSync, self).request(*args, **kwargs)
+
+
+class TendersClient(BaseTendersClient):
+
+    @check_412
+    def _create_tender_resource_item(self, *args, **kwargs):
+        return super(TendersClient, self)._create_tender_resource_item(*args, **kwargs)
 
 
 class EdrDataBridge(object):
