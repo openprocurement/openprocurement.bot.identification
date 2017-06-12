@@ -73,8 +73,8 @@ class TestScannerWorker(unittest.TestCase):
         del worker
 
     @patch('gevent.sleep')
-    def test_425(self, gevent_sleep):
-        """Receive 425 status, check queue, check sleep_change_value"""
+    def test_429(self, gevent_sleep):
+        """Receive 429 status, check queue, check sleep_change_value"""
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
@@ -95,7 +95,7 @@ class TestScannerWorker(unittest.TestCase):
                       'data': [{'status': "active.qualification",
                                 "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdUA'}]}),
-            ResourceError(http_code=425),
+            ResourceError(http_code=429),
             munchify({'prev_page': {'offset': '1237'},
                       'next_page': {'offset': '1238'},
                       'data': [{'status': "active.qualification",
@@ -114,8 +114,8 @@ class TestScannerWorker(unittest.TestCase):
         Scanner.sleep_change_value = 0
 
     @patch('gevent.sleep')
-    def test_425_and_429_sleep_change_value(self, gevent_sleep):
-        """Three times receive 425, check queue, check sleep_change_value"""
+    def test_429_sleep_change_value(self, gevent_sleep):
+        """Three times receive 429, check queue, check sleep_change_value"""
         gevent_sleep.side_effect = custom_sleep
         tender_queue = Queue(10)
         client = MagicMock()
@@ -141,9 +141,9 @@ class TestScannerWorker(unittest.TestCase):
                       'data': [{'status': "active.tendering",
                                 "id": uuid.uuid4().hex,
                                 'procurementMethodType': 'aboveThresholdUA'}]}),
-            ResourceError(http_code=425),
             ResourceError(http_code=429),
-            ResourceError(http_code=425),
+            ResourceError(http_code=429),
+            ResourceError(http_code=429),
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': [{'status': "active.pre-qualification",

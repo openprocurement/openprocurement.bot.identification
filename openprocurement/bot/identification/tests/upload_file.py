@@ -252,7 +252,7 @@ class TestUploadFileWorker(unittest.TestCase):
                           'title': file_name}},
                       status_code=200)
         client = MagicMock()
-        client._create_tender_resource_item.side_effect = [ResourceError(http_code=425),
+        client._create_tender_resource_item.side_effect = [ResourceError(http_code=429),
                                                            ResourceError(http_code=422),
                                                            ResourceError(http_code=422),
                                                            ResourceError(http_code=422),
@@ -293,7 +293,7 @@ class TestUploadFileWorker(unittest.TestCase):
                                     'title': file_name}},
                       status_code=200)
         client = MagicMock()
-        client._create_tender_resource_item.side_effect = [ResourceError(http_code=425),
+        client._create_tender_resource_item.side_effect = [ResourceError(http_code=429),
                                                            ResourceError(http_code=403),
                                                            ResourceError(http_code=403),
                                                            ResourceError(http_code=403),

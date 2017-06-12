@@ -197,12 +197,12 @@ class TestFilterWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         processing_items = {}
         client = MagicMock()
-        client.request.side_effect = [Unauthorized()]
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
-        sleep(2)
+        client.request.side_effect = [Unauthorized(http_code=403)]
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
         worker.shutdown()
         del worker
 
+        gevent_sleep.assert_called_with_once(1)
         self.assertEqual(filtered_tender_ids_queue.peek(), tender_id)
         self.assertEqual(processing_items, {})
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -220,9 +220,9 @@ class TestFilterWorker(unittest.TestCase):
         processing_items = {}
         client = MagicMock()
         client.request.side_effect = [
-            Unauthorized(),
-            Unauthorized(),
-            Unauthorized(),
+            Unauthorized(http_code=403),
+            Unauthorized(http_code=403),
+            Unauthorized(http_code=403),
             ResponseMock({'X-Request-ID': request_id},
                     munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},

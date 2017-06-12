@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from restkit import ResourceError
+
 monkey.patch_all()
 
 import logging.config
@@ -27,8 +29,9 @@ logger = logging.getLogger(__name__)
 class FilterTenders(Greenlet):
     """ Edr API Data Bridge """
     identification_scheme = u'UA-EDR'
+    sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, increment_step=1, decrement_step=1,  delay=15):
         super(FilterTenders, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -41,6 +44,8 @@ class FilterTenders(Greenlet):
         self.filtered_tender_ids_queue = filtered_tender_ids_queue
         self.edrpou_codes_queue = edrpou_codes_queue
         self.processing_items = processing_items
+        self.increment_step = increment_step
+        self.decrement_step = decrement_step
 
     def prepare_data(self):
         """Get tender_id from filtered_tender_ids_queue, check award/qualification status, documentType; get
@@ -54,19 +59,23 @@ class FilterTenders(Greenlet):
             try:
                 response = self.tenders_sync_client.request("GET", path='{}/{}'.format(self.tenders_sync_client.prefix_path, tender_id),
                                                             headers={'X-Client-Request-ID': generate_req_id()})
+            except ResourceError as re:
+                if re.status_int == 429:
+                    FilterTenders.sleep_change_value += self.increment_step
+                else:
+                    logger.warning('Fail to get tender info {}'.format(tender_id),
+                                   extra=journal_context(params={"TENDER_ID": tender_id}))
+                    logger.exception(re)
+                    logger.info('Put tender {} back to tenders queue'.format(tender_id),
+                                extra=journal_context(params={"TENDER_ID": tender_id}))
+                    gevent.sleep(0)
+            else:
+                FilterTenders.sleep_change_value = FilterTenders.sleep_change_value - self.decrement_step if self.decrement_step < FilterTenders.sleep_change_value else 0
                 if response.status_int == 200:
                     tender = munchify(loads(response.body_string()))['data']
                 logger.info('Get tender {} from filtered_tender_ids_queue'.format(tender_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                             params={"TENDER_ID": tender['id']}))
-            except Exception as e:
-                logger.warning('Fail to get tender info {}'.format(tender_id),
-                               extra=journal_context(params={"TENDER_ID": tender_id}))
-                logger.exception(e)
-                logger.info('Put tender {} back to tenders queue'.format(tender_id),
-                            extra=journal_context(params={"TENDER_ID": tender_id}))
-                gevent.sleep(0)
-            else:
                 if 'awards' in tender:
                     for award in tender['awards']:
                         logger.info('Processing tender {} award {}'.format(tender['id'], award['id']),
@@ -130,7 +139,7 @@ class FilterTenders(Greenlet):
                                             tender_id, qualification['id']),
                                             extra=journal_context(params={"TENDER_ID": tender['id']}))
                 self.filtered_tender_ids_queue.get()  # Remove elem from queue
-            gevent.sleep(0)
+            gevent.sleep(self.delay + FilterTenders.sleep_change_value)
 
     def check_processing_item(self, tender_id, item_id):
         """Check if current tender_id, item_id is processing"""

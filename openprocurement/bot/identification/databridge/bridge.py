@@ -87,6 +87,8 @@ class EdrDataBridge(object):
                                      filtered_tender_ids_queue=self.filtered_tender_ids_queue,
                                      edrpou_codes_queue=self.edrpou_codes_queue,
                                      processing_items=self.processing_items,
+                                     increment_step=self.increment_step,
+                                     decrement_step=self.decrement_step,
                                      delay=self.delay)
 
         self.edr_handler = partial(EdrHandler.spawn,
