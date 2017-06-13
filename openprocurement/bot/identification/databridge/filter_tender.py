@@ -61,6 +61,7 @@ class FilterTenders(Greenlet):
             except ResourceError as re:
                 if re.status_int == 429:
                     FilterTenders.sleep_change_value += self.increment_step
+                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(tender_id, FilterTenders.sleep_change_value))
                 else:
                     logger.warning('Fail to get tender info {}'.format(tender_id),
                                    extra=journal_context(params={"TENDER_ID": tender_id}))

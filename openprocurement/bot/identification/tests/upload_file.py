@@ -379,27 +379,21 @@ class TestUploadFileWorker(unittest.TestCase):
         qualification_id = uuid.uuid4().hex
         document_id = generate_doc_id()
         keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
-        processing_items = {keys[0]: 1, keys[1]: 1}
+        processing_items = {keys[0]: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
 
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client)
+                                  doc_service_client, 3, 1.5)
         worker.client_upload_to_tender = MagicMock()
         worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
-                                                      Exception(),
-                                                      ResourceError(http_code=403),
-                                                           ResourceError(http_code=422),
-                                                           ResourceError(http_code=429)]
+                                                      ResourceError(http_code=403)]
         worker.retry_upload_to_tender_queue.put(
             Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
-        worker.retry_upload_to_tender_queue.put(
-            Data(tender_id, qualification_id, '123', 'qualifications', None,
-                 {'meta': {'id': document_id}, 'test_data': 'test_data'}))
 
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
@@ -408,9 +402,9 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(worker.retry_upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(worker.sleep_change_value, 2)
+        self.assertEqual(worker.sleep_change_value, 13.5)
         self.assertEqual(processing_items, {})
-        self.assertEqual(worker.client_upload_to_tender.call_count, 8)  # check that processed just 1 request
+        self.assertEqual(worker.client_upload_to_tender.call_count, 6)  # check that processed just 1 request
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
