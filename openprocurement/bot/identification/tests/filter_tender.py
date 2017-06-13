@@ -11,7 +11,7 @@ from openprocurement.bot.identification.tests.utils import custom_sleep, generat
 from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
-from restkit.errors import Unauthorized
+from restkit.errors import Unauthorized, ResourceError
 
 
 class TestFilterWorker(unittest.TestCase):
@@ -132,7 +132,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue.put(tender_id)
         first_award_id, second_award_id, third_award_id, fourth_award_id, fifth_award_id = [uuid.uuid4().hex for i in range(5)]
         client = MagicMock()
-        client.request.return_value = ResponseMock({'X-Request-ID': request_id},
+        client.request.side_effect = [ResponseMock({'X-Request-ID': request_id},
             munchify({'prev_page': {'offset': '123'},
                       'next_page': {'offset': '1234'},
                       'data': {'status': "active.pre-qualification",
@@ -169,13 +169,12 @@ class TestFilterWorker(unittest.TestCase):
                                                'id': '23494714'}
                                            }]},
                                         ]
-                               }}))
+                               }}))]
 
         first_data = Data(tender_id, first_award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
         second_data = Data(tender_id, second_award_id, '0013823', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
         third_data = Data(tender_id, third_award_id, '23494714', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
-
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
         for edrpou in [first_data, second_data, third_data]:
             self.check_data_objects(edrpou_codes_queue.get(), edrpou)
 
@@ -192,19 +191,74 @@ class TestFilterWorker(unittest.TestCase):
         """ We must not lose tender after restart filter worker """
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
+        request_id = generate_request_id()
+        award_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
         filtered_tender_ids_queue.put(tender_id)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
         client = MagicMock()
-        client.request.side_effect = [Unauthorized(http_code=403)]
+        client.request.side_effect = [Exception(),
+                                      ResponseMock({'X-Request-ID': request_id},
+                                                   munchify({'prev_page': {'offset': '123'},
+                                                             'next_page': {'offset': '1234'},
+                                                             'data': {'status': "active.pre-qualification",
+                                                                      'id': tender_id,
+                                                                      'procurementMethodType': 'aboveThresholdEU',
+                                                                      'awards': [{'id': award_id,
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': '14360570'}
+                                                                                  }]}
+                                                                                 ]
+                                                                      }}))]
+        data = Data(tender_id, award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
+        self.check_data_objects(edrpou_codes_queue.get(), data)
         worker.shutdown()
+        self.assertEqual(worker.sleep_change_value, 0)
         del worker
-
         gevent_sleep.assert_called_with_once(1)
-        self.assertEqual(filtered_tender_ids_queue.peek(), tender_id)
-        self.assertEqual(processing_items, {})
+        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, award_id)])
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+
+    @patch('gevent.sleep')
+    def test_get_tender_429(self, gevent_sleep):
+        """ We must not lose tender after restart filter worker """
+        gevent_sleep.side_effect = custom_sleep
+        tender_id = uuid.uuid4().hex
+        request_id = generate_request_id()
+        award_id = uuid.uuid4().hex
+        filtered_tender_ids_queue = Queue(10)
+        filtered_tender_ids_queue.put(tender_id)
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        client = MagicMock()
+        client.request.side_effect = [
+                                      ResourceError(http_code=429),
+                                      ResponseMock({'X-Request-ID': request_id},
+                                                   munchify({'prev_page': {'offset': '123'},
+                                                             'next_page': {'offset': '1234'},
+                                                             'data': {'status': "active.pre-qualification",
+                                                                      'id': tender_id,
+                                                                      'procurementMethodType': 'aboveThresholdEU',
+                                                                      'awards': [{'id': award_id,
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': '14360570'}
+                                                                                  }]}
+                                                                                 ]
+                                                                      }}))]
+        data = Data(tender_id, award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
+        self.check_data_objects(edrpou_codes_queue.get(), data)
+        worker.shutdown()
+        self.assertEqual(worker.sleep_change_value, 1)
+        del worker
+        gevent_sleep.assert_called_with_once(1)
+        self.assertItemsEqual(processing_items.keys(), ['{}_{}'.format(tender_id, award_id)])
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
 
     @patch('gevent.sleep')

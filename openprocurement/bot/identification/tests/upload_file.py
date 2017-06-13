@@ -190,9 +190,6 @@ class TestUploadFileWorker(unittest.TestCase):
         client._create_tender_resource_item.side_effect = [Unauthorized(http_code=401),
                                                            Unauthorized(http_code=403),
                                                            Unauthorized(http_code=429),
-                                                           Unauthorized(http_code=401),
-                                                           Unauthorized(http_code=401),
-                                                           Exception(),
                                                            {'data': {'id': uuid.uuid4().hex,
                                                                      'documentOf': 'tender',
                                                                      'documentType': 'registerExtract',
@@ -218,7 +215,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(processing_items, {})  # test that item removed from processing_items
-        self.assertEqual(client._create_tender_resource_item.call_count, 7)  # check upload to tender
+        self.assertEqual(client._create_tender_resource_item.call_count, 4)  # check upload to tender
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -261,9 +258,7 @@ class TestUploadFileWorker(unittest.TestCase):
         client = MagicMock()
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
                                   doc_service_client)
-        client.client_upload_to_tender = MagicMock(side_effect=generate_answers([ResourceError(http_code=429),
-                                                                                 ResourceError(http_code=403)],
-                                                                                ResourceError(http_code=403)))
+        client.client_upload_to_tender = MagicMock(side_effect=[ResourceError(http_code=429), ResourceError(http_code=403)])
         worker.client = client
         worker.retry_upload_to_tender_queue = Queue(10)
         worker.retry_upload_to_tender_queue.put(Data(tender_id, award_id, '123',
@@ -392,20 +387,12 @@ class TestUploadFileWorker(unittest.TestCase):
                                   doc_service_client)
         worker.client_upload_to_tender = MagicMock()
         worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429),
-                                                      Exception(),
-                                                       ResourceError(http_code=422),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
                                                       Exception(),
                                                       ResourceError(http_code=403),
-                                                           ResourceError(http_code=422),
                                                            ResourceError(http_code=422),
                                                            ResourceError(http_code=429)]
         worker.retry_upload_to_tender_queue.put(
@@ -421,9 +408,9 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(worker.retry_upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(worker.sleep_change_value, 7)
+        self.assertEqual(worker.sleep_change_value, 2)
         self.assertEqual(processing_items, {})
-        self.assertEqual(worker.client_upload_to_tender.call_count, 14)  # check that processed just 1 request
+        self.assertEqual(worker.client_upload_to_tender.call_count, 8)  # check that processed just 1 request
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -441,25 +428,19 @@ class TestUploadFileWorker(unittest.TestCase):
                                                            ResourceError(http_code=403),
                                                            ResourceError(http_code=403),
                                                            ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
+                                                           ResourceError(http_code=403)
                                                            ]
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
         qualification_id = uuid.uuid4().hex
         document_id = generate_doc_id()
         keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
-        processing_items = {keys[0]: 1, keys[1]: 1}
+        processing_items = {keys[0]: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
 
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         worker.retry_upload_to_tender_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
-        worker.retry_upload_to_tender_queue.put(Data(tender_id, qualification_id, '123', 'qualifications', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                    worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -467,7 +448,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(processing_items, {})
-        self.assertEqual(client._create_tender_resource_item.call_count, 10)  # check that processed just 1 request
+        self.assertEqual(client._create_tender_resource_item.call_count, 5)  # check that processed just 1 request
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')

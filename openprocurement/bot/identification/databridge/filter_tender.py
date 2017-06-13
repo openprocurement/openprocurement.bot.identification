@@ -68,6 +68,13 @@ class FilterTenders(Greenlet):
                     logger.info('Put tender {} back to tenders queue'.format(tender_id),
                                 extra=journal_context(params={"TENDER_ID": tender_id}))
                     gevent.sleep(0)
+            except Exception as e:
+                logger.warning('Fail to get tender info {}'.format(tender_id),
+                               extra=journal_context(params={"TENDER_ID": tender_id}))
+                logger.exception(e)
+                logger.info('Put tender {} back to tenders queue'.format(tender_id),
+                            extra=journal_context(params={"TENDER_ID": tender_id}))
+                gevent.sleep(0)
             else:
                 FilterTenders.sleep_change_value = FilterTenders.sleep_change_value - self.decrement_step if self.decrement_step < FilterTenders.sleep_change_value else 0
                 if response.status_int == 200:
@@ -138,7 +145,7 @@ class FilterTenders(Greenlet):
                                             tender_id, qualification['id']),
                                             extra=journal_context(params={"TENDER_ID": tender['id']}))
                 self.filtered_tender_ids_queue.get()  # Remove elem from queue
-            gevent.sleep(self.delay + FilterTenders.sleep_change_value)
+            gevent.sleep(FilterTenders.sleep_change_value)
 
     def check_processing_item(self, tender_id, item_id):
         """Check if current tender_id, item_id is processing"""
