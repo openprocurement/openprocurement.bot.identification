@@ -115,7 +115,7 @@ class FilterTenders(Greenlet):
                                                               params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id']}))
                         else:
                             logger.info('Tender {} bid {} award {} is not in status pending or award has already document '
-                                        'with documentType registerExtract.'.format(tender_id, award['id'], award['bid_id']),
+                                        'with documentType registerExtract.'.format(tender_id, award['bid_id'], award['id']),
                                         extra=journal_context(params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id']}))
                 elif 'qualifications' in tender:
                     for qualification in tender['qualifications']:
