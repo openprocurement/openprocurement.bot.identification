@@ -87,7 +87,7 @@ class FilterTenders(Greenlet):
                     for award in tender['awards']:
                         logger.info('Processing tender {} bid {} award {}'.format(tender['id'], award['bid_id'], award['id']),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
-                                    params={"TENDER_ID": tender['id'], "BID_ID": award['bid_id']}))
+                                    params={"TENDER_ID": tender['id'], "BID_ID": award['bid_id'], "AWARD_ID": award['id']}))
                         if award['status'] == 'pending' and not [document for document in award.get('documents', [])
                                                                  if document.get('documentType') == 'registerExtract']:
                             for supplier in award['suppliers']:
@@ -97,7 +97,7 @@ class FilterTenders(Greenlet):
                                     logger.info(u'Tender {} bid {} award {} identifier id {} is not valid.'.format(
                                         tender['id'], award['bid_id'], award['id'], code),
                                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
-                                                              params={"TENDER_ID": tender['id'], "BID_ID": award['bid_id']}))
+                                                              params={"TENDER_ID": tender['id'], "BID_ID": award['bid_id'], "AWARD_ID": award['id']}))
                                     continue
                                 # check first identification scheme, if yes then check if item is already in process or not
                                 if (supplier['identifier']['scheme'] == self.identification_scheme and
@@ -112,11 +112,11 @@ class FilterTenders(Greenlet):
                                     logger.info('Tender {} bid {} award {} identifier schema isn\'t UA-EDR or tender is already in process.'.format(
                                         tender['id'], award['bid_id'], award['id']),
                                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
-                                                              params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id']}))
+                                                              params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id'], "AWARD_ID": award['id']}))
                         else:
                             logger.info('Tender {} bid {} award {} is not in status pending or award has already document '
                                         'with documentType registerExtract.'.format(tender_id, award['bid_id'], award['id']),
-                                        extra=journal_context(params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id']}))
+                                        extra=journal_context(params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id'], "AWARD_ID": award['id']}))
                 elif 'qualifications' in tender:
                     for qualification in tender['qualifications']:
                         if (qualification['status'] == 'pending' and
@@ -128,7 +128,8 @@ class FilterTenders(Greenlet):
                                 logger.info(u'Tender {} bid {} qualification {} identifier id {} is not valid.'.format(
                                     tender['id'], qualification['bidID'], qualification['id'], code),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
-                                                          params={"TENDER_ID": tender['id'], "BID_ID": qualification['bidID']}))
+                                                          params={"TENDER_ID": tender['id'], "BID_ID":
+                                                              qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                                 continue
                             # check first identification scheme, if yes then check if item is already in process or not
                             if appropriate_bid['tenderers'][0]['identifier']['scheme'] == self.identification_scheme and self.check_processing_item(tender['id'], qualification['id']):
@@ -140,17 +141,19 @@ class FilterTenders(Greenlet):
                                 logger.info('Processing tender {} bid {} qualification {}'.format(
                                     tender['id'], qualification['bidID'], qualification['id']),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
-                                                          params={"TENDER_ID": tender['id'], "BID_ID": qualification['bidID']}))
+                                                          params={"TENDER_ID": tender['id'], "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                             else:
                                 logger.info('Tender {} bid {} qualification {} identifier schema is not UA-EDR or tender is already in process.'.format(
                                     tender['id'], qualification['bidID'], qualification['id']),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
-                                                          params={"TENDER_ID": tender['id'],  "BID_ID": qualification['bidID']}))
+                                                          params={"TENDER_ID": tender['id'],
+                                                                  "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                         else:
                             logger.info('Tender {} bid {} qualification {} is not in status pending or qualification has '
                                         'already document with documentType registerExtract.'.format(
                                             tender_id, qualification['bidID'], qualification['id']),
-                                            extra=journal_context(params={"TENDER_ID": tender['id'], "BID_ID": qualification['bidID']}))
+                                            extra=journal_context(params={"TENDER_ID": tender['id'],
+                                                                          "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                 self.filtered_tender_ids_queue.get()  # Remove elem from queue
             gevent.sleep(FilterTenders.sleep_change_value)
 
