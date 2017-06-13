@@ -253,7 +253,6 @@ class EdrHandler(Greenlet):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
                     self.handle_status_response(re.args[1], tender_data.tender_id)
-
                     logger.info('Leave {} doc_id: {} in retry_edr_ids_queue. Error response {}'.format(
                         data_string(tender_data), document_id, re.args[1].json().get('errors')),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, "DOCUMENT_ID": document_id}))
@@ -266,7 +265,6 @@ class EdrHandler(Greenlet):
                         self.wait_until_too_many_requests(seconds_to_wait)
                         continue
                     if not isinstance(response.json(), dict):
-
                         logger.info('Error data type {} doc_id: {}. Leaving in retry_edr_ids_queue. Message {}.'.format(
                             data_string(tender_data), document_id, "Not a dictionary"))
                     else:
@@ -277,7 +275,6 @@ class EdrHandler(Greenlet):
                                     tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
                         tender_data.edr_ids.remove(edr_id)
-
                         logger.info('Successfully created file for tender {} doc_id {} in retry.'.format(
                             data_string(tender_data), document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
@@ -287,7 +284,7 @@ class EdrHandler(Greenlet):
                 continue
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def get_edr_details_request(self, edr_id, document_id):
         """Execute request to EDR Api to get detailed info for retry queue objects."""
         self.until_too_many_requests_event.wait()

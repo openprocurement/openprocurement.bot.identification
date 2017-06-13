@@ -199,6 +199,7 @@ class TestFilterWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         request_id = generate_request_id()
         award_id = uuid.uuid4().hex
+        bid_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
         filtered_tender_ids_queue.put(tender_id)
         edrpou_codes_queue = Queue(10)
@@ -212,6 +213,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                       'id': tender_id,
                                                                       'procurementMethodType': 'aboveThresholdEU',
                                                                       'awards': [{'id': award_id,
+                                                                                  'bid_id': bid_id,
                                                                                   'status': 'pending',
                                                                                   'suppliers': [{'identifier': {
                                                                                       'scheme': 'UA-EDR',
@@ -236,6 +238,7 @@ class TestFilterWorker(unittest.TestCase):
         tender_id = uuid.uuid4().hex
         request_id = generate_request_id()
         award_id = uuid.uuid4().hex
+        bid_id = uuid.uuid4().hex
         filtered_tender_ids_queue = Queue(10)
         filtered_tender_ids_queue.put(tender_id)
         edrpou_codes_queue = Queue(10)
@@ -251,6 +254,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                       'procurementMethodType': 'aboveThresholdEU',
                                                                       'awards': [{'id': award_id,
                                                                                   'status': 'pending',
+                                                                                  'bid_id': bid_id,
                                                                                   'suppliers': [{'identifier': {
                                                                                       'scheme': 'UA-EDR',
                                                                                       'id': '14360570'}
