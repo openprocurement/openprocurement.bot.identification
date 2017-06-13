@@ -13,12 +13,17 @@ from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
 from restkit.errors import Unauthorized
-from restkit import ResourceError
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, response
 from simplejson import dumps
 
 SERVER_RESPONSE_FLAG = 0
+SPORE_COOKIES = ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
+                 "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
+                 "96a11693fa8bd38623e4daee121f60b4301aef012c")
+COOKIES_412 = ("b7afc9b1fc79e640f2487ba48243ca071c07a823d27"
+               "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
+               "96a11693fa8bd38623e4daee121f60b4301aef012c")
 
 
 def setup_routing(app, func, path='/api/2.3/spore', method='GET'):
@@ -26,17 +31,13 @@ def setup_routing(app, func, path='/api/2.3/spore', method='GET'):
 
 
 def response_spore():
-    response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
-                                      "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
-                                      "96a11693fa8bd38623e4daee121f60b4301aef012c"))
+    response.set_cookie("SERVER_ID", SPORE_COOKIES)
     return response
 
 
 def response_412():
     response.status = 412
-    response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
-                                      "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
-                                      "96a11693fa8bd38623e4daee121f60b4301aef012c"))
+    response.set_cookie("SERVER_ID", COOKIES_412)
     return response
 
 
@@ -569,12 +570,13 @@ class TestFilterWorker(unittest.TestCase):
         setup_routing(api_server_bottle, generate_response, path='/api/2.3/tenders/123')
         api_server.start()
         client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        self.assertEqual(client.headers['Cookie'], 'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
         data = Data('123', '124', '14360570', 'awards', None, {'meta': {'sourceRequests': ['125']}})
 
         for i in [data]:
             self.check_data_objects(edrpou_codes_queue.get(), i)
-
+        self.assertEqual(client.headers['Cookie'], 'SERVER_ID={}'.format(COOKIES_412))  # check that response_412 change cookies
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
         self.assertItemsEqual(processing_items.keys(), ['123_124'])
 

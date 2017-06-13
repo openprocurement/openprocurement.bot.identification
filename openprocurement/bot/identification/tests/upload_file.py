@@ -24,6 +24,12 @@ from openprocurement.bot.identification.databridge.constants import file_name
 from openprocurement.bot.identification.databridge.bridge import TendersClientSync
 
 SERVER_RESPONSE_FLAG = 0
+SPORE_COOKIES = ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
+                 "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
+                 "96a11693fa8bd38623e4daee121f60b4301aef012c")
+COOKIES_412 = ("b7afc9b1fc79e640f2487ba48243ca071c07a823d27"
+               "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
+               "96a11693fa8bd38623e4daee121f60b4301aef012c")
 
 
 def setup_routing(app, func, path='/api/2.3/spore', method='GET'):
@@ -32,17 +38,13 @@ def setup_routing(app, func, path='/api/2.3/spore', method='GET'):
 
 
 def response_spore():
-    response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
-                                      "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
-                                      "96a11693fa8bd38623e4daee121f60b4301aef012c"))
+    response.set_cookie("SERVER_ID", SPORE_COOKIES)
     return response
 
 
 def response_412():
     response.status = 412
-    response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
-                                      "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
-                                      "96a11693fa8bd38623e4daee121f60b4301aef012c"))
+    response.set_cookie("SERVER_ID", COOKIES_412)
     return response
 
 
@@ -643,6 +645,7 @@ class TestUploadFileWorker(unittest.TestCase):
         api_server.start()
         client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
         setup_routing(api_server_bottle, generate_response, path='/api/2.3/tenders/123456789/awards/124/documents', method='POST')
+        self.assertEqual(client.headers['Cookie'], 'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
         document_id = generate_doc_id()
         key = '{}_{}'.format('123456789', '124')
         processing_items = {key: 1}
@@ -656,6 +659,7 @@ class TestUploadFileWorker(unittest.TestCase):
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
+        self.assertEqual(client.headers['Cookie'], 'SERVER_ID={}'.format(COOKIES_412))  # check that response_412 change cookies
         worker.shutdown()
         self.assertEqual(upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
