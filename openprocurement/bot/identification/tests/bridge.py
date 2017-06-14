@@ -6,7 +6,7 @@ import os
 from requests import RequestException
 
 from mock import patch, MagicMock
-from restkit import RequestError
+from restkit import RequestError, ResourceError
 
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, response
@@ -14,6 +14,7 @@ from bottle import Bottle, response
 from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement_client.client import TendersClientSync, TendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
+from openprocurement.bot.identification.databridge.utils import check_412
 
 
 config = {
@@ -87,8 +88,10 @@ class BaseServersTest(unittest.TestCase):
     def tearDown(self):
         del self.worker
 
+
 def setup_routing(app, func, path='/api/0/spore', method='GET'):
     app.route(path, method, func)
+
 
 def response_spore():
     response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
@@ -216,3 +219,21 @@ class TestBridgeWorker(BaseServersTest):
     def test_doc_service_success(self):
         self.worker = EdrDataBridge(config)
         self.assertTrue(self.worker.check_doc_service())
+
+    def test_check_412_function(self):
+        self.worker = EdrDataBridge(config)
+        # check if within except
+        func = check_412(
+            MagicMock(side_effect=ResourceError(http_code=412, response=MagicMock(headers={'Set-Cookie': 1}))))
+        with self.assertRaises(ResourceError):
+            func(MagicMock(headers={'Cookie': 1}))
+
+        # check else within except
+            func = check_412(
+            MagicMock(side_effect=ResourceError(http_code=403, response=MagicMock(headers={'Set-Cookie': 1}))))
+        with self.assertRaises(ResourceError):
+            func(MagicMock(headers={'Cookie': 1}))
+
+        # check regular return
+        f = check_412(MagicMock(side_effect=[1]))
+        self.assertEqual(f(1), 1)
