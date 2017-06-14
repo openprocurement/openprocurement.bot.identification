@@ -19,6 +19,9 @@ Data = namedtuple('Data', [
     'file_content'  # details for file
 ])
 
+def data_string(data):
+    return "tender {} {} id: {} {}".format(data.tender_id, data.item_name[:-1],
+                                                    data.item_id, "edr_ids: " + str(data.edr_ids) if data.edr_ids else "")
 
 def journal_context(record={}, params={}):
     for k, v in params.items():
