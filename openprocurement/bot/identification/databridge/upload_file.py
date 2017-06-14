@@ -61,7 +61,7 @@ class UploadFile(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name.upper() + "_ID"
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
                 response = self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
                                                           headers={'X-Client-Request-ID': document_id})
@@ -105,7 +105,7 @@ class UploadFile(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name.upper() + "_ID"
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
                 # create patch request to award/qualification with document to upload
                 self.client.headers.update({'X-Client-Request-ID': document_id})
@@ -158,7 +158,7 @@ class UploadFile(Greenlet):
             document_data = tender_data.file_content.get('data', {})
             document_id = tender_data.file_content.get('meta', {}).get('id')
             document_data["documentType"] = "registerExtract"
-            item_name_id = tender_data.item_name.upper() + "_ID"
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
                 self.client.headers.update({'X-Client-Request-ID': document_id})
                 self.client._create_tender_resource_item(munchify({'data': {'id': tender_data.tender_id}}),
@@ -234,7 +234,7 @@ class UploadFile(Greenlet):
                 continue
             document_id = tender_data.file_content.get('meta', {}).get('id')
             self.client.headers.update({'X-Client-Request-ID': document_id})
-            item_name_id = tender_data.item_name.upper() + "_ID"
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
                 self.client_upload_to_tender(tender_data)
             except ResourceError as re:

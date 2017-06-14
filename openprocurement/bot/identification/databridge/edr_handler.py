@@ -62,7 +62,7 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name.upper() + "_ID"
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             logger.info('Get {} from edrpou_codes_queue'.format(data_string(tender_data)),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
@@ -117,7 +117,7 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name.upper() + "_ID"
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             logger.info('Get {} from retry_edrpou_codes_queue'.format(data_string(tender_data)),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
@@ -194,8 +194,8 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name.upper() + "_ID"
-            logger.info('Get edr ids {} of {} from edr_ids_queue'.format(tender_data.edr_ids, data_string(tender_data)),
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
+            logger.info('Get {} from edr_ids_queue'.format(tender_data.edr_ids, data_string(tender_data)),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
             self.until_too_many_requests_event.wait()
@@ -248,8 +248,8 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name.upper() + "_ID"
-            logger.info('Get edr ids {} of {} from retry_edr_ids_queue'.format(data_string(tender_data), tender_data.tender_id),
+            item_name_id = tender_data.item_name[:1].upper() + "_ID"
+            logger.info('Get {} of {} from retry_edr_ids_queue'.format(data_string(tender_data), tender_data.tender_id),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
             self.until_too_many_requests_event.wait()
