@@ -847,6 +847,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         tender_id = uuid.uuid4().hex
         award_id = uuid.uuid4().hex
+        bid_id = uuid.uuid4().hex
         edr_details_req_id = generate_request_id()
         edr_req_id = generate_request_id()
 
@@ -867,6 +868,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                'procurementMethodType': 'aboveThresholdEU',
                                'awards': [{'id': award_id,
                                            'status': 'pending',
+                                           'bid_id': bid_id,
                                            'suppliers': [{'identifier': {
                                              'scheme': 'UA-EDR',
                                              'id': 14360570}  # int instead of str type
