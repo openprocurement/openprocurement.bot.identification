@@ -50,6 +50,7 @@ def response_get_tender():
                            'id': '123',
                            'procurementMethodType': 'aboveThresholdEU',
                            'awards': [{'id': '124',
+                                       'bid_id': '111',
                                        'status': 'pending',
                                        'suppliers': [{'identifier': {
                                                       'scheme': 'UA-EDR',
