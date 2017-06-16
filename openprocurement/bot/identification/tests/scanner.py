@@ -355,3 +355,25 @@ class TestScannerWorker(unittest.TestCase):
         sleep(4)
         self.assertEqual(worker.ready(), False)
 
+    @patch('gevent.sleep')
+    def test_forward_exception(self, gevent_sleep):
+        """  Run forward when backward get empty response and
+            prev_page.offset is equal to next_page.offset """
+        gevent_sleep.side_effect = custom_sleep
+        tender_queue = Queue(10)
+        client = MagicMock()
+        tender_id = uuid.uuid4().hex
+        worker = Scanner.spawn(client, tender_queue, 1, 0.5)
+        worker.initialize_sync = MagicMock(side_effect=[
+            ResourceError(msg=RequestFailed()),
+                munchify({'prev_page': {'offset': '123'},
+                          'next_page': {'offset': '1234'},
+                          'data': [{'status': "active.pre-qualification",
+                                    "id": tender_id,
+                                    'procurementMethodType': 'aboveThresholdEU'}]})
+        ])
+        self.assertEqual(tender_queue.get(), tender_id)
+        self.assertEqual(worker.initialize_sync.call_count, 2)
+        worker.shutdown()
+        del worker
+
