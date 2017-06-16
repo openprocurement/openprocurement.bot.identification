@@ -87,8 +87,8 @@ class Scanner(Greenlet):
                 Scanner.sleep_change_value = Scanner.sleep_change_value - self.decrement_step if self.decrement_step < Scanner.sleep_change_value else 0
             except ResourceError as re:
                 if re.status_int == 429:
-                    logger.info("Received 429, will sleep. Message: {}".format(re.message))
                     Scanner.sleep_change_value += self.increment_step
+                    logger.info("Received 429, will sleep for {}".format(Scanner.sleep_change_value))
                 else:
                     raise re
 
