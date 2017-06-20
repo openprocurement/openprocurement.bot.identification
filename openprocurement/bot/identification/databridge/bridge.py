@@ -119,6 +119,8 @@ class EdrDataBridge(object):
                                    upload_to_tender_queue=self.upload_to_tender_queue,
                                    processing_items=self.processing_items,
                                    doc_service_client=self.doc_service_client,
+                                   increment_step=self.increment_step,
+                                   decrement_step=self.decrement_step,
                                    delay=self.delay)
 
     def config_get(self, name):
