@@ -88,6 +88,7 @@ class Scanner(Greenlet):
             except ResourceError as re:
                 if re.status_int == 429:
                     Scanner.sleep_change_value += self.increment_step
+                    logger.info("Received 429, will sleep for {}".format(Scanner.sleep_change_value))
                 else:
                     raise re
 
@@ -102,7 +103,7 @@ class Scanner(Greenlet):
                 self.filtered_tender_ids_queue.put(tender['id'])
         except Exception as e:
             logger.warning('Forward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
-            logger.exception(e)
+            logger.exception("Message: {}".format(e.message))
         else:
             logger.warning('Forward data sync finished!')
 
@@ -117,7 +118,7 @@ class Scanner(Greenlet):
                 self.filtered_tender_ids_queue.put(tender['id'])
         except Exception as e:
             logger.warning('Backward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
-            logger.exception(e)
+            logger.exception("Message: {}".format(e.message))
             return False
         else:
             logger.info('Backward data sync finished.')
