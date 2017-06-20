@@ -103,7 +103,7 @@ class Scanner(Greenlet):
                 self.filtered_tender_ids_queue.put(tender['id'])
         except Exception as e:
             logger.warning('Forward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
-            logger.exception("Message: {}, status code: {}".format(str(getattr(e, 'msg', "No message")), str(getattr(e, 'status_int', "No status code"))))
+            logger.exception("Message: {}".format(e.message))
         else:
             logger.warning('Forward data sync finished!')
 
@@ -118,7 +118,7 @@ class Scanner(Greenlet):
                 self.filtered_tender_ids_queue.put(tender['id'])
         except Exception as e:
             logger.warning('Backward worker died!', extra=journal_context({"MESSAGE_ID": DATABRIDGE_WORKER_DIED}, {}))
-            logger.exception("Message: {}, status_code {}".format(str(getattr(e, 'msg', "No message")), str(getattr(e, 'status_int', "No status code"))))
+            logger.exception("Message: {}".format(e.message))
             return False
         else:
             logger.info('Backward data sync finished.')

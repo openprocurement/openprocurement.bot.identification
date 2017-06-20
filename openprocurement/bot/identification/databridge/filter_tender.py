@@ -65,14 +65,14 @@ class FilterTenders(Greenlet):
                 else:
                     logger.warning('Fail to get tender info {}'.format(tender_id),
                                    extra=journal_context(params={"TENDER_ID": tender_id}))
-                    logger.exception("Message: {}, status_code {}".format(str(re.msg), re.status_int))
+                    logger.exception("Message: {}, status_code {}".format(re.msg, re.status_int))
                     logger.info('Leave tender {} in tenders queue'.format(tender_id),
                                 extra=journal_context(params={"TENDER_ID": tender_id}))
                     gevent.sleep(0)
             except Exception as e:
                 logger.warning('Fail to get tender info {}'.format(tender_id),
                                extra=journal_context(params={"TENDER_ID": tender_id}))
-                logger.exception("Message: {}, status code: {}".format(str(getattr(e, 'msg', "No message")), str(getattr(e, 'status_int', "No status code"))))
+                logger.exception("Message: {}".format(e.message))
                 logger.info('Leave tender {} in tenders queue'.format(tender_id),
                             extra=journal_context(params={"TENDER_ID": tender_id}))
                 gevent.sleep(0)
