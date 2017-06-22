@@ -220,7 +220,7 @@ class EdrHandler(Greenlet):
                         file_content['meta'].update({"version": version})  # add filed meta.version
                         file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, tender_data.edr_ids[:], file_content)
+                                    tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
                         logger.info('Successfully created file for {} doc_id: {}.'.format(
                             data_string(tender_data), document_id),
@@ -253,8 +253,7 @@ class EdrHandler(Greenlet):
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
-            while len(tender_data.edr_ids):
-                edr_id = tender_data.edr_ids[0]
+            for edr_id in tender_data.edr_ids:
                 try:
                     response = self.get_edr_details_request(edr_id, document_id)
                     if response.headers.get('X-Request-ID'):
@@ -265,9 +264,7 @@ class EdrHandler(Greenlet):
                         data_string(tender_data), document_id, re.args[1].json().get('errors')),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                       "DOCUMENT_ID": document_id}))
-                    self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
                     gevent.sleep(0)
-                    break
                 else:
                     if response.status_code == 429:
                         seconds_to_wait = response.headers.get('Retry-After', self.delay)
@@ -280,24 +277,22 @@ class EdrHandler(Greenlet):
                             data_string(tender_data), document_id, "Not a dictionary"),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                           "DOCUMENT_ID": document_id}))
-                        self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
-                        break
                     else:
                         file_content = response.json()
                         file_content['meta'].update(tender_data.file_content['meta'])
                         file_content['meta'].update({"version": version})  # add filed meta.version
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, tender_data.edr_ids[:], file_content)
+                                    tender_data.item_name, tender_data.edr_ids, file_content)
                         self.upload_to_doc_service_queue.put(data)
                         tender_data.edr_ids.remove(edr_id)
-                        if len(tender_data.edr_ids) == 0:
-                            self.retry_edr_ids_queue.get()
-                            continue
                         logger.info('Successfully created file for tender {} doc_id {} in retry.'.format(
                             data_string(tender_data), document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                   params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                           "DOCUMENT_ID": document_id}))
+            if len(tender_data.edr_ids) == 0:
+                self.retry_edr_ids_queue.get()
+                continue
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)

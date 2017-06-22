@@ -422,7 +422,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id,
                                      item_id=award_id,
-                                     code='123', item_name='awards', edr_ids=['322'],
+                                     code='123', item_name='awards', edr_ids=[],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": '{}.{}.{}'.format(document_id, 2, 2),
                                                                         "version": version, 'author': author,
@@ -553,7 +553,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=['321'],
+                                     edr_ids=[],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": document_id, "version": version, 'author': author,
                                                                         'sourceRequests': [
@@ -597,7 +597,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=['321'],
+                                     edr_ids=[],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": document_id, "version": version, 'author': author,
                                                                         'sourceRequests': [
@@ -647,7 +647,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=['321'],
+                                     edr_ids=[],
                                      file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                         "id": document_id, "version": version, 'author': author,
                                                                         'sourceRequests': [
@@ -722,7 +722,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                           Data(tender_id=tender_id, item_id=award_id,
                                code='123', item_name='awards',
-                               edr_ids=['321', '322'],
+                               edr_ids=['322'],
                                file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                   "id": document_id, "version": version,
                                                                   'author': author,
@@ -732,7 +732,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                           Data(tender_id=tender_id, item_id=award_id,
                                code='123', item_name='awards',
-                               edr_ids=['322'],
+                               edr_ids=[],
                                file_content={'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                   "id": document_id, "version": version,
                                                                   'author': author,
@@ -807,7 +807,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
+                      {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[0]}},
                       {'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[1]}}])
@@ -820,7 +820,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=['321'],
+                                     edr_ids=[],
                                      file_content={'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                                                 "id": document_id, "version": version, 'author': author,
                                                                                  'sourceRequests': [
@@ -994,7 +994,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': {'data': [{'x_edrInternalId': '321'}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
+                      {'json': {'data': [{'x_edrInternalId': 321}], "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321),
                      [{'json': {'errors': [{'description': [{u'message': u'Forbidden'}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_details_req_id[0]}},
                       {'json': {'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id[1]}}])
@@ -1007,7 +1007,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEquals(upload_to_doc_service_queue.get(),
                                 Data(tender_id=tender_id, item_id=award_id,
                                      code='123', item_name='awards',
-                                     edr_ids=['321'],
+                                     edr_ids=[],
                                      file_content={'data': {'id': 321},
                                                    "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                             "id": document_id, "version": version, 'author': author,
@@ -1228,7 +1228,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             tender_id = uuid.uuid4().hex
             award_id = uuid.uuid4().hex
             edr_ids = [str(random.randrange(10000000, 99999999)) for _ in range(2)]
-            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [local_edr_ids[i]],
+            expected_result.append(Data(tender_id, award_id, edr_ids[i], "awards", [],
                                         {'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": document_ids[i],
                                                               "version": version, 'author': author,
                                                               'sourceRequests': [
