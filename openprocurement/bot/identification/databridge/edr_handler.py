@@ -146,8 +146,8 @@ class EdrHandler(Greenlet):
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
-            except Exception:
-                logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
+            except Exception as e:
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(data_string(tender_data), e.message),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
@@ -261,11 +261,14 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    self.handle_status_response(re.args[1], tender_data.tender_id)
-                    logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
-                        data_string(tender_data), document_id, re.args[1].json().get('errors')),
-                        extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                      "DOCUMENT_ID": document_id}))
+                    try:
+                        self.handle_status_response(re.args[1], tender_data.tender_id)
+                        logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
+                            data_string(tender_data), document_id, re.args[1].json().get('errors')),
+                            extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                                          "DOCUMENT_ID": document_id}))
+                    except ValueError as ve:
+                        logger.exception("Exception could not be parsed into json.")
                     self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
                     gevent.sleep(0)
                 else:
