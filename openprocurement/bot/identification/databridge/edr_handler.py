@@ -2,6 +2,8 @@
 from gevent import monkey
 from gevent.queue import Queue
 from retrying import retry
+from simplejson import JSONDecodeError
+
 monkey.patch_all()
 
 import logging.config
@@ -68,6 +70,8 @@ class EdrHandler(Greenlet):
             self.until_too_many_requests_event.wait()
             document_id = tender_data.file_content['meta']['id']
             response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code, headers={'X-Client-Request-ID': document_id})
+            if response.headers.get('X-Request-ID'):
+                tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])  # add unique request id
             if response.status_code == 404 and response.json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                 logger.info('Empty response for {} doc_id {}.'.format(data_string(tender_data), document_id),
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
@@ -75,34 +79,33 @@ class EdrHandler(Greenlet):
                 file_content = response.json().get('errors')[0].get('description')[0]
                 file_content['meta'].update(tender_data.file_content['meta'])  # add meta.id to file_content
                 file_content['meta'].update({"version": version})  # add filed meta.version
-                if response.headers.get('X-Request-ID'):
-                    file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])  # add unique request id
                 data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code, tender_data.item_name, file_content)
                 self.upload_to_doc_service_queue.put(data)
                 self.edrpou_codes_queue.get()
                 continue
             if response.status_code == 200:
                 meta_id = tender_data.file_content['meta']['id']
-                for obj in response.json():
-                    try:
+                data_list = []
+                try:
+                    for obj in response.json():
                         document_id = check_add_suffix(response.json(), meta_id, response.json().index(obj) + 1)
                         file_content = obj
                         file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                         file_content['meta'].update({"version": version})  # add filed meta.version
-                        file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                         file_content['meta']['id'] = document_id
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, obj)
-                    except KeyError as e:
-                        logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
-                        self.retry_edrpou_codes_queue.put(tender_data)
-                    else:
+                        data_list.append(data)
+                except KeyError as e:
+                    logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
+                    self.retry_edrpou_codes_queue.put(tender_data)
+                else:
+                    self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json())
+                    for data in data_list:
                         self.upload_to_doc_service_queue.put(data)
-                        logger.info('Put tender {} to upload_to_doc_service_queue.'.format(data_string(tender_data)))
-                self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json())
+                        logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue.'.format(
+                            data_string(data), data.file_content['meta']['id']))
             else:
-                if response.headers.get('X-Request-ID'):
-                    tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 self.handle_status_response(response, tender_data.tender_id)
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
                 logger.info('Put {} to retry_edrpou_codes_queue'.format(data_string(tender_data)),
@@ -130,11 +133,20 @@ class EdrHandler(Greenlet):
                 if response.headers.get('X-Request-ID'):
                     tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
             except RetryException as re:
-                if re.args[1].status_code == 404 and re.args[1].json().get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
+                try:
+                    res_json = re.args[1].json()
+                except JSONDecodeError:
+                    logger.exception("Could not get json of response. Response: {}".format(re.args[1].text))
+                    logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
+                                extra=journal_context(
+                                    params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                    self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
+                    continue
+                if re.args[1].status_code == 404 and res_json.get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                     logger.info('Empty response for {} doc_id: {}.'.format(data_string(tender_data), document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                    file_content = re.args[1].json().get('errors')[0].get('description')[0]
+                    file_content = res_json.get('errors')[0].get('description')[0]
                     file_content['meta'].update(tender_data.file_content['meta'])
                     file_content['meta'].update({"version": version})  # add filed meta.version
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
@@ -164,22 +176,28 @@ class EdrHandler(Greenlet):
                     self.wait_until_too_many_requests(seconds_to_wait)
                     continue
                 if response.status_code == 200:
-                    for obj in response.json():
-                        try:
+                    meta_id = tender_data.file_content['meta']['id']
+                    data_list = []
+                    try:
+                        for obj in response.json():
+                            document_id = check_add_suffix(response.json(), meta_id, response.json().index(obj) + 1)
                             file_content = obj
-                            file_content['meta'].update(tender_data.file_content['meta'])
+                            file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                             file_content['meta'].update({"version": version})  # add filed meta.version
+                            file_content['meta']['id'] = document_id
                             data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                         tender_data.item_name, file_content)
-                        except KeyError as e:
-                            logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
-                            self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
-                        else:
+                            data_list.append(data)
+                    except KeyError as e:
+                        logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
+                        self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
+                    else:
+                        for data in data_list:
                             self.upload_to_doc_service_queue.put(data)
-                            self.retry_edrpou_codes_queue.get()
-                            logger.info('Put tender {} in retry to '
-                                        'upload_to_doc_service_queue'.format(data_string(tender_data)))
-                    self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json())
+                            logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue from retry.'.format(
+                                data_string(data), data.file_content['meta']['id']))
+                        self.retry_edrpou_codes_queue.get()
+                        self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json())
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)

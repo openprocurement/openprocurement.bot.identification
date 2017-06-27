@@ -421,20 +421,19 @@ class TestUploadFileWorker(unittest.TestCase):
         award_id = uuid.uuid4().hex
         qualification_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
+        keys = ['{}_{}'.format(tender_id, award_id)]
         processing_items = {keys[0]: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(
-            Data(tender_id, award_id, '123', 'awards', {'meta': {'id': document_id}, 'test_data': 'test_data'}))
+
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
                                   doc_service_client, 3, 1.5)
         worker.client_upload_to_tender = MagicMock()
         worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
-                                                       ResourceError(http_code=429),
+                                                      ResourceError(http_code=429),
+                                                      ResourceError(http_code=429),
+                                                      ResourceError(http_code=429),
+                                                      ResourceError(http_code=429),
                                                       ResourceError(http_code=403)]
         worker.retry_upload_to_tender_queue.put(
             Data(tender_id, award_id, '123', 'awards', {'meta': {'id': document_id}, 'test_data': 'test_data'}))
@@ -472,12 +471,10 @@ class TestUploadFileWorker(unittest.TestCase):
         award_id = uuid.uuid4().hex
         qualification_id = uuid.uuid4().hex
         document_id = generate_doc_id()
-        keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
+        keys = ['{}_{}'.format(tender_id, award_id)]
         processing_items = {keys[0]: 1}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
-        upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', {'meta': {'id': document_id}, 'test_data': 'test_data'}))
-        upload_to_doc_service_queue.put(Data(tender_id, qualification_id, '123', 'qualifications', {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client)
         worker.retry_upload_to_tender_queue.put(Data(tender_id, award_id, '123', 'awards', {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
