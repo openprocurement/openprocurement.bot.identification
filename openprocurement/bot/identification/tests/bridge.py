@@ -3,6 +3,7 @@
 import unittest
 import os
 
+from openprocurement.bot.identification.tests.utils import custom_sleep
 from requests import RequestException
 
 from mock import patch, MagicMock
@@ -196,7 +197,7 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.edr_handler.call_count, 1)
         self.assertEqual(self.worker.upload_file.call_count, 1)
 
-    def test_proxy_server_failure(self):
+    def test_proxy_server(self):
         self.worker = EdrDataBridge(config)
         self.proxy_server.stop()
         with self.assertRaises(RequestException):
@@ -204,11 +205,15 @@ class TestBridgeWorker(BaseServersTest):
         self.proxy_server.start()
         self.assertTrue(self.worker.check_proxy())
 
-    def test_proxy_server_success(self):
+    def test_proxy_server_mock(self):
         self.worker = EdrDataBridge(config)
+        self.worker.proxyClient = MagicMock(health=MagicMock(side_effect=RequestError()))
+        with self.assertRaises(RequestError):
+            self.worker.check_proxy()
+        self.worker.proxyClient = MagicMock(return_value=True)
         self.assertTrue(self.worker.check_proxy())
 
-    def test_doc_service_failure(self):
+    def test_doc_service(self):
         self.doc_server.stop()
         self.worker = EdrDataBridge(config)
         with self.assertRaises(RequestError):
@@ -216,9 +221,29 @@ class TestBridgeWorker(BaseServersTest):
         self.doc_server.start()
         self.assertTrue(self.worker.check_doc_service())
 
-    def test_doc_service_success(self):
+    def test_doc_service_mock(self):
         self.worker = EdrDataBridge(config)
-        self.assertTrue(self.worker.check_doc_service())
+        with patch("openprocurement.bot.identification.databridge.bridge.request", side_effect=RequestError()):
+            with self.assertRaises(RequestError):
+                self.worker.check_doc_service()
+        with patch("openprocurement.bot.identification.databridge.bridge.request", return_value=True):
+            self.assertTrue(self.worker.check_doc_service())
+
+    def test_openprocurement_api_failure(self):
+        self.worker = EdrDataBridge(config)
+        self.api_server.stop()
+        with self.assertRaises(RequestError):
+            self.worker.check_openprocurement_api()
+        self.api_server.start()
+        self.assertTrue(self.worker.check_openprocurement_api())
+
+    def test_openprocurement_api_mock(self):
+        self.worker = EdrDataBridge(config)
+        self.worker.client = MagicMock(head=MagicMock(side_effect=RequestError()))
+        with self.assertRaises(RequestError):
+            self.worker.check_openprocurement_api()
+        self.worker.client = MagicMock()
+        self.assertTrue(self.worker.check_openprocurement_api())
 
     def test_check_412_function(self):
         self.worker = EdrDataBridge(config)
@@ -237,3 +262,36 @@ class TestBridgeWorker(BaseServersTest):
         # check regular return
         f = check_412(MagicMock(side_effect=[1]))
         self.assertEqual(f(1), 1)
+
+    def test_check_services(self):
+        self.worker = EdrDataBridge(config)
+        self.worker.services_not_available = MagicMock(set=MagicMock(), clear=MagicMock())
+        self.proxy_server.stop()
+        self.worker.check_services()
+        self.assertTrue(self.worker.services_not_available.clear.called)
+        self.proxy_server.start()
+        self.worker.check_services()
+        self.assertTrue(self.worker.services_not_available.set.called)
+
+    def test_check_services_mock(self):
+        self.worker = EdrDataBridge(config)
+        self.worker.check_proxy = self.worker.check_openprocurement_api = self.worker.check_doc_service = MagicMock()
+        self.worker.set_wake_up = MagicMock()
+        self.worker.set_sleep = MagicMock()
+        self.worker.check_services()
+        self.assertTrue(self.worker.set_wake_up.called)
+        self.worker.check_doc_service = MagicMock(side_effect=RequestError())
+        self.worker.check_services()
+        self.assertTrue(self.worker.set_sleep.called)
+
+
+    @patch("gevent.sleep")
+    def test_check_log(self, gevent_sleep):
+        gevent_sleep = custom_sleep
+        self.worker = EdrDataBridge(config)
+        self.worker.edrpou_codes_queue = MagicMock(qsize=MagicMock(side_effect=Exception()))
+        self.worker.check_services = MagicMock(return_value=True)
+        self.worker.run()
+        self.assertTrue(self.worker.edrpou_codes_queue.qsize.called)
+
+

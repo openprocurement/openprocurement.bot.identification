@@ -153,8 +153,8 @@ class EdrDataBridge(object):
         
     def check_openprocurement_api(self):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
+        logger.debug("Checking status of openprocurement api")
         try:
-            logger.debug("Checking status of openprocurement api")
             self.client.head('/api/{}/spore'.format(self.api_version))
         except RequestError as e:
             logger.info('TendersServer connection error, message {}'.format(e),
@@ -194,6 +194,7 @@ class EdrDataBridge(object):
                 gevent.sleep(self.delay)
                 self.check_services()
                 if counter == 20:
+                    counter = 0
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
                                 'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
                                 'Upload to tender {}; Retry upload to tender {}'.format(
@@ -207,7 +208,6 @@ class EdrDataBridge(object):
                                     self.upload_to_tender_queue.qsize(),
                                     self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
                                 ))
-                    counter = 0
                 counter += 1
                 for name, job in self.jobs.items():
                     logger.debug("{}.dead: {}".format(name, job.dead))
