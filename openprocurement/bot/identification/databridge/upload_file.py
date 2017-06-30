@@ -144,7 +144,7 @@ class UploadFile(Greenlet):
                                                               item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
         return self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
@@ -292,7 +292,7 @@ class UploadFile(Greenlet):
                 UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
             gevent.sleep(UploadFile.sleep_change_value)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def client_upload_to_tender(self, tender_data):
         """Process upload to tender request for retry queue objects."""
         document_data = tender_data.file_content.get('data', {})

@@ -211,7 +211,7 @@ class EdrDataBridge(object):
                 counter += 1
                 for name, job in self.jobs.items():
                     logger.debug("{}.dead: {}".format(name, job.dead))
-                    if job.dead and not job.exit:
+                    if job.dead:
                         logger.warning('Restarting {} worker'.format(name),
                                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
                         self.jobs[name] = gevent.spawn(getattr(self, name))
