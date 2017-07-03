@@ -82,7 +82,7 @@ class TestFilterWorker(unittest.TestCase):
         self.assertEqual(obj.file_content['meta']['sourceRequests'], example.file_content['meta']['sourceRequests'])
 
     def test_init(self):
-        worker = FilterTenders.spawn(None, None, None, None)
+        worker = FilterTenders.spawn(None, None, None, None, None)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
         self.assertEqual(worker.tenders_sync_client, None)
@@ -101,6 +101,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         request_id = generate_request_id()
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue.put(tender_id)
@@ -159,7 +160,7 @@ class TestFilterWorker(unittest.TestCase):
         first_data = Data(tender_id, qualification_ids[0], '14360570', 'qualifications', None, {'meta': {'sourceRequests': [request_id]}})
         second_data = Data(tender_id, qualification_ids[1], '0013823', 'qualifications', None, {'meta': {'sourceRequests': [request_id]}})
         third_data = Data(tender_id, qualification_ids[2], '23494714', 'qualifications', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         for data in [first_data, second_data, third_data]:
             self.check_data_objects(edrpou_codes_queue.get(), data)
@@ -178,6 +179,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         tender_id = uuid.uuid4().hex
         request_id = generate_request_id()
         filtered_tender_ids_queue.put(tender_id)
@@ -231,7 +233,7 @@ class TestFilterWorker(unittest.TestCase):
         first_data = Data(tender_id, award_ids[0], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
         second_data = Data(tender_id, award_ids[1], '0013823', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
         third_data = Data(tender_id, award_ids[2], '23494714', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, 2, 1)
         for edrpou in [first_data, second_data, third_data]:
             self.check_data_objects(edrpou_codes_queue.get(), edrpou)
 
@@ -255,6 +257,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue.put(tender_id)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         client = MagicMock()
         client.request.side_effect = [Exception(),
                                       ResponseMock({'X-Request-ID': request_id},
@@ -273,7 +276,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                  ]
                                                                       }}))]
         data = Data(tender_id, award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, 2, 1)
         self.check_data_objects(edrpou_codes_queue.get(), data)
         worker.shutdown()
         self.assertEqual(worker.sleep_change_value, 0)
@@ -294,6 +297,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue.put(tender_id)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         client = MagicMock()
         client.request.side_effect = [
                                       ResourceError(http_code=429),
@@ -313,7 +317,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                  ]
                                                                       }}))]
         data = Data(tender_id, award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, 2, 1)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, 2, 1)
         self.check_data_objects(edrpou_codes_queue.get(), data)
         worker.shutdown()
         self.assertEqual(worker.sleep_change_value, 1)
@@ -334,6 +338,7 @@ class TestFilterWorker(unittest.TestCase):
         bid_ids = [uuid.uuid4().hex for i in range(2)]
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         client = MagicMock()
         client.request.side_effect = [
             Unauthorized(http_code=403),
@@ -363,7 +368,7 @@ class TestFilterWorker(unittest.TestCase):
                                }}))
         ]
         data = Data(tender_id, award_ids[0], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         self.check_data_objects(edrpou_codes_queue.get(), data)
 
@@ -385,6 +390,7 @@ class TestFilterWorker(unittest.TestCase):
         request_ids = [generate_request_id() for i in range(2)]
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         client = MagicMock()
         client.request.side_effect = [
             ResponseMock({'X-Request-ID': request_ids[0]},
@@ -421,7 +427,7 @@ class TestFilterWorker(unittest.TestCase):
                                }]}]}}))]
         first_data = Data(tender_id, award_ids[0], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_ids[0]]}})
         second_data = Data(tender_id, award_ids[1], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_ids[1]]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
         self.check_data_objects(edrpou_codes_queue.get(), first_data)
         worker.job.kill(timeout=1)
         self.check_data_objects(edrpou_codes_queue.get(), second_data)
@@ -443,6 +449,7 @@ class TestFilterWorker(unittest.TestCase):
         bid_id = uuid.uuid4().hex
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         client = MagicMock()
         client.request.return_value = ResponseMock({'X-Request-ID': request_id},
             munchify(
@@ -461,7 +468,7 @@ class TestFilterWorker(unittest.TestCase):
                                               'id': '14360570'}}]
                           }]}}))
         first_data = Data(tender_id, first_award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
         self.check_data_objects(edrpou_codes_queue.get(), first_data)
 
         worker.shutdown()
@@ -476,6 +483,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         tender_id = uuid.uuid4().hex
         request_id = generate_request_id()
         filtered_tender_ids_queue.put(tender_id)
@@ -513,7 +521,7 @@ class TestFilterWorker(unittest.TestCase):
                                }}))
 
         data = Data(tender_id, award_ids[1], '0013823', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         for edrpou in [data]:
             self.check_data_objects(edrpou_codes_queue.get(), edrpou)
@@ -529,6 +537,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         request_id = generate_request_id()
         tender_id = uuid.uuid4().hex
         filtered_tender_ids_queue.put(tender_id)
@@ -569,7 +578,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                   {'status': 'pending',
                                                                                    'id': second_qualification_id,
                                                                                    'bidID': second_bid_id}]}}))
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         sleep(1)
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
@@ -584,6 +593,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         tender_id = uuid.uuid4().hex
         request_id = generate_request_id()
         filtered_tender_ids_queue.put(tender_id)
@@ -625,7 +635,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                       'id': 'test@test.com'}
                                                                                   }]}]
                                                                       }}))
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         sleep(1)
 
@@ -641,6 +651,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         filtered_tender_ids_queue.put('123')
         api_server_bottle = Bottle()
         api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
@@ -649,7 +660,7 @@ class TestFilterWorker(unittest.TestCase):
         api_server.start()
         client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
         self.assertEqual(client.headers['Cookie'], 'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
         data = Data('123', '124', '14360570', 'awards', None, {'meta': {'sourceRequests': ['125']}})
 
         for i in [data]:
