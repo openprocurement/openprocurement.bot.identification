@@ -263,8 +263,9 @@ class EdrHandler(Greenlet):
                 except RetryException as re:
                     try:
                         self.handle_status_response(re.args[1], tender_data.tender_id)
+                        error_response = re.args[1].json().get('errors') if isinstance(re.args[1].json(), dict) else re.args[1].text
                         logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
-                            data_string(tender_data), document_id, re.args[1].json().get('errors')),
+                            data_string(tender_data), document_id, error_response),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                           "DOCUMENT_ID": document_id}))
                     except ValueError as ve:
