@@ -263,12 +263,14 @@ class EdrHandler(Greenlet):
                 except RetryException as re:
                     try:
                         self.handle_status_response(re.args[1], tender_data.tender_id)
-                        logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
-                            data_string(tender_data), document_id, re.args[1].json()),
-                            extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                          "DOCUMENT_ID": document_id}))
-                    except ValueError as ve:
-                        logger.exception("Exception could not be parsed into json. Error response {}".format(re.args[1].text))
+                        error_response = re.args[1].json().get('errors')
+                    except ValueError:
+                        error_response = re.args[1].text
+                        logger.exception("Exception could not be parsed into json")
+                    logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
+                        data_string(tender_data), document_id, error_response),
+                        extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                                      "DOCUMENT_ID": document_id}))
                     self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
                     gevent.sleep(0)
                 else:
@@ -320,7 +322,7 @@ class EdrHandler(Greenlet):
             logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait),
                         extra=journal_context(params={"TENDER_ID": tender_id}))
             self.wait_until_too_many_requests(seconds_to_wait)
-        elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
+        elif response.status_code == 403 and response.headers.get('content-type', '') == 'application/json' and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
                            extra=journal_context(params={"TENDER_ID": tender_id}))
