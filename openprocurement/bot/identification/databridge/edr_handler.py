@@ -266,7 +266,6 @@ class EdrHandler(Greenlet):
                         error_response = re.args[1].json().get('errors')
                     except ValueError:
                         error_response = re.args[1].text
-                        logger.exception("Exception could not be parsed into json")
                     logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
                         data_string(tender_data), document_id, error_response),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
