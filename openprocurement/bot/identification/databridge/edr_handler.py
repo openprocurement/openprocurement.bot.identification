@@ -160,8 +160,8 @@ class EdrHandler(Greenlet):
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
-            except Exception:
-                logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
+            except Exception as e:
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(data_string(tender_data), e.message),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
@@ -218,7 +218,7 @@ class EdrHandler(Greenlet):
             logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait),
                         extra=journal_context(params={"TENDER_ID": tender_id}))
             self.wait_until_too_many_requests(seconds_to_wait)
-        elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
+        elif response.status_code == 403 and response.headers.get('content-type', '') == 'application/json' and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
                            extra=journal_context(params={"TENDER_ID": tender_id}))
