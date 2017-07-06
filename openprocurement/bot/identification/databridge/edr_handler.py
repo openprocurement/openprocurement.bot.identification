@@ -138,10 +138,6 @@ class EdrHandler(Greenlet):
                     res_json = re.args[1].json()
                 except JSONDecodeError:
                     res_json = re.args[1].text
-                logger.info('Put {} in back of retry_edrpou_codes_queue. Response: {}'.format(data_string(tender_data), res_json),
-                            extra=journal_context(
-                                params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
-                self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 if re.args[1].status_code == 404 and isinstance(res_json, dict) and res_json.get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                     logger.info('Empty response for {} doc_id: {}.'.format(data_string(tender_data), document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
@@ -154,8 +150,7 @@ class EdrHandler(Greenlet):
                     self.upload_to_doc_service_queue.put(data)  # Given EDRPOU code not found, file with error put into upload_to_doc_service_queue
                     self.retry_edrpou_codes_queue.get()
                     continue
-                logger.info("RetryException error message {}".format(re.args[0]))
-                logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Response {}'.format(data_string(tender_data), res_json),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
