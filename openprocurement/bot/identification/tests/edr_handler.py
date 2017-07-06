@@ -711,7 +711,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': [{'data': {},
                      "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
-        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
+        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {}, {})
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, upload_to_doc_service_queue, MagicMock())
 
         obj = upload_to_doc_service_queue.get()
