@@ -134,15 +134,15 @@ class EdrHandler(Greenlet):
                     tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
             except RetryException as re:
                 try:
+                    self.handle_status_response(re.args[1], tender_data.tender_id)
                     res_json = re.args[1].json()
                 except JSONDecodeError:
-                    logger.exception("Could not get json of response. Response: {}".format(re.args[1].text))
-                    logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
-                                extra=journal_context(
-                                    params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
-                    self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
-                    continue
-                if re.args[1].status_code == 404 and res_json.get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
+                    res_json = re.args[1].text
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Response: {}'.format(data_string(tender_data), res_json),
+                            extra=journal_context(
+                                params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
+                if re.args[1].status_code == 404 and isinstance(res_json, dict) and res_json.get('errors')[0].get('description')[0].get('error').get('code') == u"notFound":
                     logger.info('Empty response for {} doc_id: {}.'.format(data_string(tender_data), document_id),
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
                                                       params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
@@ -155,7 +155,6 @@ class EdrHandler(Greenlet):
                     self.retry_edrpou_codes_queue.get()
                     continue
                 logger.info("RetryException error message {}".format(re.args[0]))
-                self.handle_status_response(re.args[1], tender_data.tender_id)
                 logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
