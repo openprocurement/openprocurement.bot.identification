@@ -72,7 +72,7 @@ class UploadFile(Greenlet):
                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
                                                      params={"TENDER_ID": tender_data.tender_id,
                                                              item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                logger.exception(e)
+                logger.exception("Message: {}".format(e.message))
                 self.retry_upload_to_doc_service_queue.put(tender_data)
                 self.upload_to_doc_service_queue.get()
             else:
@@ -117,7 +117,7 @@ class UploadFile(Greenlet):
                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
                                                      params={"TENDER_ID": tender_data.tender_id,
                                                              item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                logger.exception(e)
+                logger.exception("Message: {}".format(e.message))
                 self.retry_upload_to_doc_service_queue.get()
                 self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                 raise e
@@ -273,7 +273,7 @@ class UploadFile(Greenlet):
                     data_string(tender_data), document_id, e.message),
                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
                                           params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                logger.exception(e)
+                logger.exception("Message: {}".format(e.message))
                 UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
             else:
                 logger.info('Successfully uploaded file to {} doc_id: {} in retry'.format(

@@ -12,7 +12,7 @@ from openprocurement.bot.identification.databridge.bridge import TendersClientSy
 from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
-from restkit.errors import Unauthorized, ResourceError
+from restkit.errors import Unauthorized, ResourceError, RequestFailed
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, response
 from simplejson import dumps
@@ -672,3 +672,41 @@ class TestFilterWorker(unittest.TestCase):
         worker.shutdown()
         del worker
         api_server.stop()
+
+    @patch('gevent.sleep')
+    def test_request_failed(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        filtered_tender_ids_queue = Queue(10)
+        edrpou_codes_queue = Queue(10)
+        processing_items = {}
+        tender_id = uuid.uuid4().hex
+        request_id = generate_request_id()
+        filtered_tender_ids_queue.put(tender_id)
+        award_id = uuid.uuid4().hex
+        bid_ids = [uuid.uuid4().hex for i in range(2)]
+        client = MagicMock()
+        client.request.side_effect = [RequestFailed(http_code=401, msg=RequestFailed()),
+            ResponseMock({'X-Request-ID': request_id},
+                                                   munchify({'prev_page': {'offset': '123'},
+                                                             'next_page': {'offset': '1234'},
+                                                             'data': {'status': "active.pre-qualification",
+                                                                      'id': tender_id,
+                                                                      'procurementMethodType': 'aboveThresholdEU',
+                                                                      'awards': [{'id': award_id,
+                                                                                  'bid_id': bid_ids[0],
+                                                                                  'status': 'pending',
+                                                                                  'suppliers': [{'identifier': {
+                                                                                      'scheme': 'UA-EDR',
+                                                                                      'id': ''}
+                                                                                  }]}]
+                                                                      }}))]
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+
+        sleep(1)
+
+        self.assertEqual(client.request.call_count, 2)
+        self.assertEqual(edrpou_codes_queue.qsize(), 0)
+        self.assertItemsEqual(processing_items, {})
+
+        worker.shutdown()
+        del worker
