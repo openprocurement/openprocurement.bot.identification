@@ -87,6 +87,8 @@ class EdrDataBridge(object):
 
         # dictionary with processing awards/qualifications
         self.processing_items = {}
+        # dictionary with already processed awards/qualifications for prevent duplicates
+        self.processed_items = {}
 
         # Workers
         self.scanner = partial(Scanner.spawn,
@@ -101,6 +103,7 @@ class EdrDataBridge(object):
                                      filtered_tender_ids_queue=self.filtered_tender_ids_queue,
                                      edrpou_codes_queue=self.edrpou_codes_queue,
                                      processing_items=self.processing_items,
+                                     processed_items=self.processed_items,
                                      increment_step=self.increment_step,
                                      decrement_step=self.decrement_step,
                                      delay=self.delay)
@@ -118,6 +121,7 @@ class EdrDataBridge(object):
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    upload_to_tender_queue=self.upload_to_tender_queue,
                                    processing_items=self.processing_items,
+                                   processed_items=self.processed_items,
                                    doc_service_client=self.doc_service_client,
                                    increment_step=self.increment_step,
                                    decrement_step=self.decrement_step,

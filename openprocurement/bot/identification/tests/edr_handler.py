@@ -960,7 +960,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                      "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
         mrequest.get("{url}/{id}".format(url=proxy_client.details_url, id=321), [{'json': {'data': {'id': 321},
                      "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_details_req_id}}])
-        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {})
+        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {}, {})
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edr_ids_queue, upload_to_doc_service_queue, MagicMock())
 
         obj = upload_to_doc_service_queue.get()
