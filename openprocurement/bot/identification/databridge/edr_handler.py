@@ -142,19 +142,21 @@ class EdrHandler(Greenlet):
                     continue
                 logger.info("RetryException error message {}".format(re.args[0]))
                 self.handle_status_response(re.args[1], tender_data.tender_id)
-                logger.info('Leave {} in retry_edrpou_codes_queue'.format(data_string(tender_data)),
+                logger.info('Put {} in back of retry_edrpou_codes_queue'.format(data_string(tender_data)),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
-            except Exception:
-                logger.info('Leave {} in retry_edrpou_codes_queue'.format(data_string(tender_data)),
+            except Exception as e:
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(data_string(tender_data), e.message),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep(0)
             else:
                 # Create new Data object. Write to Data.code list of edr ids from EDR.
                 # List because EDR can return 0, 1 or 2 values to our request
                 if response.status_code == 429:
                     seconds_to_wait = response.headers.get('Retry-After', self.delay)
-                    logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text,
+                    logger.info('retry_get_edr_id: Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text,
                                                                                                  seconds_to_wait),
                                 extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
                     self.wait_until_too_many_requests(seconds_to_wait)
@@ -181,7 +183,7 @@ class EdrHandler(Greenlet):
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
         if response.status_code not in (200, 429):
             logger.info(
-                'Get unsuccessful response {} in get_edr_id_request, header {}'.format(response.status_code, response.headers.get('X-Request-ID')))
+                'Get unsuccessful response {} in get_edr_id_request code={} document_id={}, header {}'.format(response.status_code, param, code, response.headers.get('X-Request-ID')))
             raise RetryException('Unsuccessful retry request to EDR.', response)
         return response
 
@@ -207,7 +209,7 @@ class EdrHandler(Greenlet):
                 response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
                 if response.status_code == 200:
                     if not isinstance(response.json(), dict):
-                        file_content = tender_data.file_content
+                        file_content = deepcopy(tender_data.file_content)
                         file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                         logger.info('Error data type {} doc_id: {}. Message {}'.format(
                             data_string(tender_data), document_id, "Not a dictionary"),
@@ -227,8 +229,7 @@ class EdrHandler(Greenlet):
                             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_CREATE_FILE},
                                                   params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                 else:
-
-                    file_content = tender_data.file_content
+                    file_content = deepcopy(tender_data.file_content)
                     if response.headers.get('X-Request-ID'):
                         file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                     self.handle_status_response(response, tender_data.tender_id)
@@ -248,8 +249,8 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep(0)
                 continue
-            item_name_id = tender_data.item_name[:1].upper() + "_ID"
-            logger.info('Get {} of {} from retry_edr_ids_queue'.format(data_string(tender_data), tender_data.tender_id),
+            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
+            logger.info('Get {} of {} doc_id: {} from retry_edr_ids_queue'.format(data_string(tender_data), tender_data.tender_id, tender_data.file_content['meta']['id']),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
             self.until_too_many_requests_event.wait()
@@ -260,24 +261,30 @@ class EdrHandler(Greenlet):
                     if response.headers.get('X-Request-ID'):
                         tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
                 except RetryException as re:
-                    self.handle_status_response(re.args[1], tender_data.tender_id)
-                    logger.info('Leave {} doc_id: {} in retry_edr_ids_queue. Error response {}'.format(
-                        data_string(tender_data), document_id, re.args[1].json().get('errors')),
+                    try:
+                        self.handle_status_response(re.args[1], tender_data.tender_id)
+                        error_response = re.args[1].json().get('errors')
+                    except ValueError:
+                        error_response = re.args[1].text
+                    logger.info('Put {} doc_id: {} in back of retry_edr_ids_queue. Error response {}'.format(
+                        data_string(tender_data), document_id, error_response),
                         extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                       "DOCUMENT_ID": document_id}))
+                    self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
                     gevent.sleep(0)
                 else:
                     if response.status_code == 429:
                         seconds_to_wait = response.headers.get('Retry-After', self.delay)
-                        logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text,
+                        logger.info('retry_get_edr_details: Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text,
                                                                                                      seconds_to_wait))
                         self.wait_until_too_many_requests(seconds_to_wait)
                         continue
                     if not isinstance(response.json(), dict):
-                        logger.info('Error data type {} doc_id: {}. Leaving in retry_edr_ids_queue. Message {}.'.format(
+                        logger.info('Error data type {} doc_id: {}. Put in back of retry_edr_ids_queue. Message {}.'.format(
                             data_string(tender_data), document_id, "Not a dictionary"),
                             extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                           "DOCUMENT_ID": document_id}))
+                        self.retry_edr_ids_queue.put(self.retry_edr_ids_queue.get())
                     else:
                         file_content = response.json()
                         file_content['meta'].update(tender_data.file_content['meta'])
@@ -293,7 +300,6 @@ class EdrHandler(Greenlet):
                                                           "DOCUMENT_ID": document_id}))
             if len(tender_data.edr_ids) == 0:
                 self.retry_edr_ids_queue.get()
-                continue
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
@@ -303,7 +309,7 @@ class EdrHandler(Greenlet):
         response = self.proxyClient.details(id=edr_id, headers={'X-Client-Request-ID': document_id})
         if response.status_code not in (200, 429):
             logger.info(
-                'Get unsuccessful response {} in get_edr_details_request, header {}'.format(response.status_code, response.headers.get('X-Request-ID')))
+                'Get unsuccessful response {} in get_edr_details_request edr_id={} document_id={}, header {}'.format(response.status_code, edr_id, document_id, response.headers.get('X-Request-ID')))
             raise RetryException('Unsuccessful retry request to EDR.', response)
 
         return response
@@ -315,7 +321,7 @@ class EdrHandler(Greenlet):
             logger.info('Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(response.text, seconds_to_wait),
                         extra=journal_context(params={"TENDER_ID": tender_id}))
             self.wait_until_too_many_requests(seconds_to_wait)
-        elif response.status_code == 403 and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
+        elif response.status_code == 403 and response.headers.get('content-type', '') == 'application/json' and response.json().get('errors')[0].get('description') == [{'message': 'Payment required.', 'code': 5}]:
             logger.warning('Payment required for requesting info to EDR. '
                            'Error description: {err}'.format(err=response.text),
                            extra=journal_context(params={"TENDER_ID": tender_id}))
