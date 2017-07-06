@@ -679,6 +679,7 @@ class TestFilterWorker(unittest.TestCase):
         filtered_tender_ids_queue = Queue(10)
         edrpou_codes_queue = Queue(10)
         processing_items = {}
+        processed_items = {}
         tender_id = uuid.uuid4().hex
         request_id = generate_request_id()
         filtered_tender_ids_queue.put(tender_id)
@@ -700,7 +701,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                       'id': ''}
                                                                                   }]}]
                                                                       }}))]
-        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items)
+        worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         sleep(1)
 
