@@ -78,7 +78,7 @@ class UploadFile(Greenlet):
             else:
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids, dict(response.json(), **{'meta': {'id': document_id}}))
+                                tender_data.item_name, dict(response.json(), **{'meta': {'id': document_id}}))
                     self.upload_to_tender_queue.put(data)
                     self.upload_to_doc_service_queue.get()
                     logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(
@@ -124,7 +124,7 @@ class UploadFile(Greenlet):
             else:
                 if response.status_code == 200:
                     data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, tender_data.edr_ids, dict(response.json(), **{'meta': {'id': document_id}}))
+                                tender_data.item_name, dict(response.json(), **{'meta': {'id': document_id}}))
                     self.upload_to_tender_queue.put(data)
                     self.retry_upload_to_doc_service_queue.get()
                     logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(
