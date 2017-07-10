@@ -88,6 +88,8 @@ class EdrDataBridge(object):
 
         # dictionary with processing awards/qualifications
         self.processing_items = {}
+        # dictionary with already processed awards/qualifications for prevent duplicates
+        self.processed_items = {}
 
         # Workers
         self.scanner = partial(Scanner.spawn,
@@ -104,6 +106,7 @@ class EdrDataBridge(object):
                                      edrpou_codes_queue=self.edrpou_codes_queue,
                                      processing_items=self.processing_items,
                                      services_not_available=self.services_not_available,
+                                     processed_items=self.processed_items,
                                      increment_step=self.increment_step,
                                      decrement_step=self.decrement_step,
                                      delay=self.delay)
@@ -122,6 +125,7 @@ class EdrDataBridge(object):
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    upload_to_tender_queue=self.upload_to_tender_queue,
                                    processing_items=self.processing_items,
+                                   processed_items=self.processed_items,
                                    doc_service_client=self.doc_service_client,
                                    services_not_available=self.services_not_available,
                                    increment_step=self.increment_step,
@@ -150,7 +154,7 @@ class EdrDataBridge(object):
             raise e
         else:
             return True
-        
+
     def check_openprocurement_api(self):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         logger.debug("Checking status of openprocurement api")

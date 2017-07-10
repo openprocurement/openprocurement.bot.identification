@@ -28,13 +28,14 @@ class UploadFile(Greenlet):
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
     sleep_change_value = 0
 
-    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, services_not_available, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, services_not_available, increment_step=1, decrement_step=1, delay=15):
         super(UploadFile, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
 
         self.delay = delay
         self.processing_items = processing_items
+        self.processed_items = processed_items
 
         # init clients
         self.client = client
@@ -308,6 +309,8 @@ class UploadFile(Greenlet):
         if self.processing_items[key] > 1:
             self.processing_items[key] -= 1
         else:
+            # push to global dict with processed items
+            self.processed_items[key] = datetime.now()
             del self.processing_items[key]
 
     def _run(self):

@@ -76,6 +76,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(worker.upload_to_doc_service_queue, None)
         self.assertEqual(worker.upload_to_tender_queue, None)
         self.assertEqual(worker.processing_items, None)
+        self.assertEqual(worker.processed_items, None)
         self.assertEqual(worker.doc_service_client, None)
         self.assertEqual(worker.delay, 15)
         self.assertEqual(worker.exit, False)
@@ -105,12 +106,13 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -150,12 +152,13 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -178,13 +181,14 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_tender_queue.put(Data(tender_id, award_id, '123', 'awards', None,
                                         {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         client = MagicMock()
         client._create_tender_resource_item = MagicMock(side_effect=[ResourceError(http_code=429), ResourceError(http_code=429), ResourceError(http_code=403)])
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.client = client
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                    worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
@@ -203,14 +207,14 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_tender_queue.put(Data(tender_id, award_id, '123', 'awards', None,
                                         {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         client = MagicMock()
         client._create_tender_resource_item = MagicMock(side_effect=[Exception()])
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.client = client
         worker.client_upload_to_tender = MagicMock(side_effect=ResourceError(http_code=403))
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
@@ -244,12 +248,13 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -272,11 +277,11 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         client = MagicMock()
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.client_upload_to_tender = MagicMock(side_effect=ResourceError(http_code=422))
         worker.retry_upload_to_tender_queue = Queue(10)
         worker.retry_upload_to_tender_queue.put(Data(tender_id, award_id, '123',
@@ -298,11 +303,11 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         client = MagicMock()
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         client.client_upload_to_tender = MagicMock(side_effect=[ResourceError(http_code=429), ResourceError(http_code=403)])
         worker.client = client
         worker.retry_upload_to_tender_queue = Queue(10)
@@ -326,11 +331,11 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         client = MagicMock()
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.client_upload_to_tender = MagicMock(side_effect=[Exception(), ResourceError(http_code=403)])
         worker.retry_upload_to_tender_queue.put(Data(tender_id, award_id, '123',
                                                      'awards', None,
@@ -360,10 +365,11 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -396,11 +402,12 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
         processing_items = {keys[0]: 1, keys[1]: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         upload_to_doc_service_queue.put(Data(tender_id, qualification_id, '123', 'qualifications', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -425,11 +432,11 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
         processing_items = {keys[0]: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
 
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client, MagicMock(), 3, 1.5)
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock(), 3, 1.5)
         worker.client_upload_to_tender = MagicMock()
         worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429),
                                                        ResourceError(http_code=429),
@@ -475,10 +482,11 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         keys = ['{}_{}'.format(tender_id, award_id), '{}_{}'.format(tender_id, qualification_id)]
         processing_items = {keys[0]: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
 
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.retry_upload_to_tender_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                    worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
@@ -520,12 +528,12 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         upload_to_doc_service_queue.put(Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}))
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
@@ -570,6 +578,7 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
+        processed_items = {}
         upload_to_doc_service_queue = MagicMock()
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.peek.side_effect = generate_answers(
@@ -577,7 +586,7 @@ class TestUploadFileWorker(unittest.TestCase):
                      Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'}),
                      Data(tender_id, award_id, '123', 'awards', None, {'meta': {'id': document_id}, 'test_data': 'test_data'})],
             default=LoopExit())
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         sleep(10)
         worker.shutdown()
         self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
@@ -607,6 +616,7 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(1)
         upload_to_tender_queue = MagicMock()
         upload_to_tender_queue.peek.side_effect = generate_answers(
@@ -630,7 +640,7 @@ class TestUploadFileWorker(unittest.TestCase):
                               u'hash': u'md5:9a0364b9e99bb480dd25e1f0284c8555',
                               u'title': file_name})],
             default=LoopExit())
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         sleep(10)
         worker.shutdown()
         self.assertEqual(processing_items, {})
@@ -660,9 +670,10 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(1)
         upload_to_tender_queue = Queue(1)
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.retry_upload_to_tender_queue = MagicMock()
         worker.retry_upload_to_tender_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
@@ -726,9 +737,10 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format(tender_id, award_id)
         processing_items = {key: 2}
+        processed_items = {}
         upload_to_tender_queue = Queue(1)
         upload_to_doc_service_queue = Queue(1)
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         worker.retry_upload_to_doc_service_queue = MagicMock()
         worker.retry_upload_to_doc_service_queue.peek.side_effect = generate_answers(
             answers=[LoopExit(),
@@ -765,13 +777,14 @@ class TestUploadFileWorker(unittest.TestCase):
         document_id = generate_doc_id()
         key = '{}_{}'.format('123456789', '124')
         processing_items = {key: 1}
+        processed_items = {}
         upload_to_doc_service_queue = Queue(10)
         upload_to_tender_queue = Queue(10)
         upload_to_doc_service_queue.put(Data('123456789', '124', '123', 'awards', None,
                                              {'meta': {'id': document_id}, 'test_data': 'test_data'}))
         self.assertItemsEqual(processing_items.keys(), [key])
         self.assertEqual(upload_to_doc_service_queue.qsize(), 1)
-        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, doc_service_client, MagicMock())
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, MagicMock())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
