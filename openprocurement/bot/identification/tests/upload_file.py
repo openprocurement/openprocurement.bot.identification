@@ -68,7 +68,7 @@ def generate_response():
 class TestUploadFileWorker(unittest.TestCase):
 
     def test_init(self):
-        worker = UploadFile.spawn(None, None, None, None, None, None)
+        worker = UploadFile.spawn(None, None, None, None, None, None, None)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
 

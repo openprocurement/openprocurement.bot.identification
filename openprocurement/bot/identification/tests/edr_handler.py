@@ -346,7 +346,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         upload_to_doc_service_queue = Queue(10)
         edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards", None,
                                     {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock(), MagicMock())
         worker.get_edr_id_request = MagicMock(
             side_effect=[
                 RetryException("text", MagicMock(status_code=404, json=MagicMock(return_value={
@@ -498,7 +498,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue = Queue(10)
         edrpou_ids_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock())
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, edrpou_ids_queue, upload_to_doc_service_queue, MagicMock(), MagicMock())
         worker.retry_edr_ids_queue.put(Data(tender_id, award_id, '123', "awards", ['111'],
                                     {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker.get_edr_details_request = MagicMock(

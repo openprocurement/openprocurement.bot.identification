@@ -82,7 +82,7 @@ class TestFilterWorker(unittest.TestCase):
         self.assertEqual(obj.file_content['meta']['sourceRequests'], example.file_content['meta']['sourceRequests'])
 
     def test_init(self):
-        worker = FilterTenders.spawn(None, None, None, None, None)
+        worker = FilterTenders.spawn(None, None, None, None, None, None)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
         self.assertEqual(worker.tenders_sync_client, None)
