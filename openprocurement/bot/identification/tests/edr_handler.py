@@ -49,9 +49,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         edr_req_ids = [generate_request_id(), generate_request_id()]
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200,
+                     [{'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200,
                        'headers': {'X-Request-ID': edr_req_ids[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200,
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200,
                        'headers': {'X-Request-ID': edr_req_ids[1]}}])
 
         edrpou_codes_queue = Queue(10)
@@ -96,12 +96,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 429,
-                       'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                       'headers': {'Retry-After': '3', 'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 429, 'headers':
-                          {'Retry-After': '10', 'X-Request-ID': edr_req_ids[1]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                          {'Retry-After': '3', 'X-Request-ID': edr_req_ids[1]}},
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}])
 
         edrpou_codes_queue = Queue(10)
@@ -141,9 +141,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edr_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},  # pay for me
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
                       {'json': {'errors': [{'description': [{'message': 'Payment required.', 'code': 5}]}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},  # pay for me
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
 
         edrpou_codes_queue = Queue(10)
         check_queue = Queue(10)
@@ -184,7 +184,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
 
         edrpou_codes_queue = Queue(10)
@@ -256,14 +256,61 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_get_edr_data_two_ids(self, mrequest, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
-        edr_req_ids = [generate_request_id(), generate_request_id()]
+        edr_req_id = generate_request_id()
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': [{'data': {"test": 1}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {"test": 2}}],
-                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
-                      {'json': [{'data': {"test": 1}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {"test": 2}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                     [{'json': {'data': [{"test": 1}, {"test": 2}],
+                                "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"]}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}
+                      ])
+
+        edrpou_codes_queue = Queue(10)
+        check_queue = Queue(10)
+        expected_result = []
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        edr_id = str(random.randrange(10000000, 99999999))
+        edrpou_codes_queue.put(Data(tender_id, award_id, edr_id, "awards",
+                                    {'meta': {'id': document_id, 'author': author,
+                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
+        expected_result.append(Data(tender_id, award_id, edr_id, "awards",
+                                    {"data": {"test": 1}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                          "id": document_id+".2.1",
+                                                          "version": version, 'author': author,
+                                                          "sourceRequests": [
+                                                              'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
+                                                              edr_req_id]}}))  # result
+        expected_result.append(Data(tender_id, award_id, edr_id, "awards",
+                                    {"data": {"test": 2}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
+                                                          "id": document_id+".2.2",
+                                                          "version": version, 'author': author,
+                                                          "sourceRequests": [
+                                                              'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
+                                                              edr_req_id]}}))  # result
+
+        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
+
+        for result in expected_result:
+            self.assertEquals(check_queue.get(), result)
+
+        self.assertEqual(worker.retry_edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
+        worker.shutdown()
+        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
+        self.assertEqual(check_queue.qsize(), 0, 'Queue must be empty')
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
+    def test_retry_get_edr_data_two_ids(self, mrequest, gevent_sleep):
+        """Accept 429 status code in first request with header 'Retry-After'"""
+        gevent_sleep.side_effect = custom_sleep
+        edr_req_ids = [generate_request_id(), generate_request_id(), generate_request_id()]
+        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
+        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
+                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403,
+                       'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'data': [{"test": 1}, {"test": 2}],
+                                "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}
                       ])
 
@@ -292,60 +339,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                           "sourceRequests": [
                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
                                                               edr_req_ids[0], edr_req_ids[1]]}}))  # result
-
-        worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
-
-        for result in expected_result:
-            self.assertEquals(check_queue.get(), result)
-
-        self.assertEqual(worker.retry_edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        worker.shutdown()
-        self.assertEqual(edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(check_queue.qsize(), 0, 'Queue must be empty')
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_retry_get_edr_data_two_ids(self, mrequest, gevent_sleep):
-        """Accept 429 status code in first request with header 'Retry-After'"""
-        gevent_sleep.side_effect = custom_sleep
-        edr_req_ids = [generate_request_id(), generate_request_id(), generate_request_id()]
-        proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': {'errors': [{'description': ''}]}, 'status_code': 403,
-                       'headers': {'Retry-After': '10', 'X-Request-ID': edr_req_ids[0]}},
-                      {'json': [{'data': {"test": 1}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {"test": 2}}],
-                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}},
-                      {'json': [{'data': {"test": 1}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {"test": 2}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
-                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[2]}}
-                      ])
-
-        edrpou_codes_queue = Queue(10)
-        check_queue = Queue(10)
-
-        expected_result = []
-        tender_id = uuid.uuid4().hex
-        award_id = uuid.uuid4().hex
-        document_id = generate_doc_id()
-        edr_id = str(random.randrange(10000000, 99999999))
-        edrpou_codes_queue.put(Data(tender_id, award_id, edr_id, "awards",
-                                    {'meta': {'id': document_id, 'author': author,
-                                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
-        expected_result.append(Data(tender_id, award_id, edr_id, "awards",
-                                    {"data": {"test": 1}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                          "id": document_id+".2.1",
-                                                          "version": version, 'author': author,
-                                                          "sourceRequests": [
-                                                              'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                              edr_req_ids[0], edr_req_ids[1], edr_req_ids[2]]}}))  # result
-        expected_result.append(Data(tender_id, award_id, edr_id, "awards",
-                                    {"data": {"test": 2}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                                                          "id": document_id+".2.2",
-                                                          "version": version, 'author': author,
-                                                          "sourceRequests": [
-                                                              'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                              edr_req_ids[0], edr_req_ids[1], edr_req_ids[2]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
 
@@ -538,8 +531,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edr_req_id = [generate_request_id(), generate_request_id()]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': [{'data': {}}], 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200,
+                     [{'json': {'data': [{}]}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200,
                        'headers': {'X-Request-ID': edr_req_id[1]}}])
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
@@ -572,8 +565,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {}}], 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}]}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}},
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[2]}}])
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
@@ -618,7 +611,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[3]}},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[4]}},
                       {'json': {'errors': [{'description': ''}]}, 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[5]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200,
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200,
                        'headers': {'X-Request-ID': edr_req_id[6]}}])
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
@@ -654,7 +647,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]},
                        'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
@@ -709,8 +702,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                              'id': 14360570}  # int instead of str type
                                          }]}, ]}}))
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
-        mrequest.get("{url}".format(url=proxy_client.verify_url), [{'json': [{'data': {},
-                     "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
+        mrequest.get("{url}".format(url=proxy_client.verify_url),
+                     [{'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}])
         filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {}, {})
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, upload_to_doc_service_queue, MagicMock())
 
@@ -778,12 +771,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{url}".format(url=proxy_client.verify_url),
-                     [{'json': [{'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {'id': 322}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                     [{'json': {'data': [{'id': 321}, {'id': 322}],
+                                "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {'id': 321}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {'id': 322}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}},
-                                {'data': {'id': 323}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{'id': 321}, {'id': 322}, {'id': 323}],
+                                "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
 
         #  create queues
@@ -818,7 +810,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         mrequest.get("{url}".format(url=proxy_client.verify_url),
                      [{'json': {'errors': [{'description': [{u'message': u'Content-Type of EDR API response is not application/json'}]}]},
                        'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
         edrpou_codes_queue = Queue(10)
         upload_to_doc_service_queue = Queue(10)
@@ -852,9 +844,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         edr_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200,
+                     [{'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200,
                        'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}], 'status_code': 200,
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}}, 'status_code': 200,
                        'headers': {'X-Request-ID': edr_req_id[1]}}])
 
         edrpou_codes_queue = MagicMock()
@@ -900,9 +892,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         edr_req_id = [generate_request_id(), generate_request_id()]
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
-                     [{'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                     [{'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[0]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}])
 
         edrpou_codes_queue = Queue(1)
@@ -956,7 +948,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'status_code': 500, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'status_code': 500, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'exc': RetryException('Retry Exception', retry_response)},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}])
 
         edrpou_codes_queue = Queue(10)
@@ -1057,7 +1049,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {'status_code': 500, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'status_code': 500, 'headers': {'X-Request-ID': edr_req_ids[0]}},
                       {'exc': Exception()},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}])
 
         edrpou_codes_queue = Queue(10)
@@ -1110,7 +1102,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
                       {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
                       {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
-                      {'json': [{'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}}],
+                      {'json': {'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_id[1]}}
                       ])
         edrpou_codes_queue = Queue(10)
@@ -1152,7 +1144,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                     {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         worker.get_edr_data_request = MagicMock(side_effect=[RetryException("Exception", Response()),
                                                              MagicMock(headers={'X-Request-ID': edr_req_id[0]}, status_code=200,
-                                                                       json=MagicMock(return_value=[munchify({'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}})]))])
+                                                                       json=MagicMock(return_value=munchify({'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}})))])
         self.assertEquals(upload_to_doc_service_queue.get(),
                           Data(tender_id=tender_id, item_id=award_id,
                                code='123', item_name='awards',
@@ -1180,9 +1172,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, upload_to_doc_service_queue, MagicMock())
         worker.retry_edrpou_codes_queue.put(Data(tender_id, award_id, '123', "awards",
                                     {'meta': {'id': document_id, 'author': author, 'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        worker.get_edr_data_request = MagicMock(side_effect=[ MagicMock(headers={'X-Request-ID': edr_req_id[0], 'Retry-After': '1'}, status_code=429),
+        worker.get_edr_data_request = MagicMock(side_effect=[MagicMock(headers={'X-Request-ID': edr_req_id[0], 'Retry-After': '1'}, status_code=429),
                                                              MagicMock(headers={'X-Request-ID': edr_req_id[1]}, status_code=200,
-                                                                       json=MagicMock(return_value=[munchify({'data': {}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00"}})]))])
+                                                                       json=MagicMock(return_value=munchify({'data': [{}], "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}})))])
         self.assertEquals(upload_to_doc_service_queue.get(),
                           Data(tender_id=tender_id, item_id=award_id,
                                code='123', item_name='awards',

@@ -87,20 +87,21 @@ class EdrHandler(Greenlet):
                 meta_id = tender_data.file_content['meta']['id']
                 data_list = []
                 try:
-                    for obj in response.json():
-                        document_id = check_add_suffix(response.json(), meta_id, response.json().index(obj) + 1)
-                        file_content = obj
+                    for i, obj in enumerate(response.json()['data']):
+                        document_id = check_add_suffix(response.json()['data'], meta_id, response.json()['data'].index(obj) + 1)
+                        file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
+                                        'data': obj}
                         file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                         file_content['meta'].update({"version": version})  # add filed meta.version
                         file_content['meta']['id'] = document_id
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                    tender_data.item_name, obj)
+                                    tender_data.item_name, file_content)
                         data_list.append(data)
                 except KeyError as e:
                     logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
                     self.retry_edrpou_codes_queue.put(tender_data)
                 else:
-                    self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json())
+                    self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json()['data'])
                     for data in data_list:
                         self.upload_to_doc_service_queue.put(data)
                         logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue.'.format(
@@ -173,9 +174,10 @@ class EdrHandler(Greenlet):
                     meta_id = tender_data.file_content['meta']['id']
                     data_list = []
                     try:
-                        for obj in response.json():
-                            document_id = check_add_suffix(response.json(), meta_id, response.json().index(obj) + 1)
-                            file_content = obj
+                        for i, obj in enumerate(response.json()['data']):
+                            document_id = check_add_suffix(response.json()['data'], meta_id, response.json()['data'].index(obj) + 1)
+                            file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
+                                            'data': obj}
                             file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                             file_content['meta'].update({"version": version})  # add filed meta.version
                             file_content['meta']['id'] = document_id
@@ -191,7 +193,7 @@ class EdrHandler(Greenlet):
                             logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue from retry.'.format(
                                 data_string(data), data.file_content['meta']['id']))
                         self.retry_edrpou_codes_queue.get()
-                        self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json())
+                        self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json()['data'])
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
