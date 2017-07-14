@@ -76,7 +76,6 @@ class TestFilterWorker(unittest.TestCase):
         self.assertEqual(obj.item_id, example.item_id)
         self.assertEqual(obj.code, example.code)
         self.assertEqual(obj.item_name, example.item_name)
-        self.assertEqual(obj.edr_ids, example.edr_ids)
         self.assertIsNotNone(obj.file_content['meta']['id'])
         self.assertEqual(obj.file_content['meta']['author'], author)
         self.assertEqual(obj.file_content['meta']['sourceRequests'], example.file_content['meta']['sourceRequests'])
@@ -157,9 +156,9 @@ class TestFilterWorker(unittest.TestCase):
                                                                                    'id': qualification_ids[4],
                                                                                    'bidID': bid_ids[4]},
                                                                                   ]}}))
-        first_data = Data(tender_id, qualification_ids[0], '14360570', 'qualifications', None, {'meta': {'sourceRequests': [request_id]}})
-        second_data = Data(tender_id, qualification_ids[1], '0013823', 'qualifications', None, {'meta': {'sourceRequests': [request_id]}})
-        third_data = Data(tender_id, qualification_ids[2], '23494714', 'qualifications', None, {'meta': {'sourceRequests': [request_id]}})
+        first_data = Data(tender_id, qualification_ids[0], '14360570', 'qualifications', {'meta': {'sourceRequests': [request_id]}})
+        second_data = Data(tender_id, qualification_ids[1], '0013823', 'qualifications', {'meta': {'sourceRequests': [request_id]}})
+        third_data = Data(tender_id, qualification_ids[2], '23494714', 'qualifications', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         for data in [first_data, second_data, third_data]:
@@ -230,9 +229,9 @@ class TestFilterWorker(unittest.TestCase):
                                         ]
                                }}))]
 
-        first_data = Data(tender_id, award_ids[0], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        second_data = Data(tender_id, award_ids[1], '0013823', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
-        third_data = Data(tender_id, award_ids[2], '23494714', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        first_data = Data(tender_id, award_ids[0], '14360570', 'awards', {'meta': {'sourceRequests': [request_id]}})
+        second_data = Data(tender_id, award_ids[1], '0013823', 'awards', {'meta': {'sourceRequests': [request_id]}})
+        third_data = Data(tender_id, award_ids[2], '23494714', 'awards', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, 2, 1)
         for edrpou in [first_data, second_data, third_data]:
             self.check_data_objects(edrpou_codes_queue.get(), edrpou)
@@ -275,7 +274,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                   }]}
                                                                                  ]
                                                                       }}))]
-        data = Data(tender_id, award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        data = Data(tender_id, award_id, '14360570', 'awards', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, 2, 1)
         self.check_data_objects(edrpou_codes_queue.get(), data)
         worker.shutdown()
@@ -316,7 +315,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                   }]}
                                                                                  ]
                                                                       }}))]
-        data = Data(tender_id, award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        data = Data(tender_id, award_id, '14360570', 'awards', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, 2, 1)
         self.check_data_objects(edrpou_codes_queue.get(), data)
         worker.shutdown()
@@ -367,7 +366,7 @@ class TestFilterWorker(unittest.TestCase):
                                           ]
                                }}))
         ]
-        data = Data(tender_id, award_ids[0], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        data = Data(tender_id, award_ids[0], '14360570', 'awards', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         self.check_data_objects(edrpou_codes_queue.get(), data)
@@ -425,8 +424,8 @@ class TestFilterWorker(unittest.TestCase):
                               {'identifier': {'scheme': 'UA-EDR',
                                               'id': '14360570'}
                                }]}]}}))]
-        first_data = Data(tender_id, award_ids[0], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_ids[0]]}})
-        second_data = Data(tender_id, award_ids[1], '14360570', 'awards', None, {'meta': {'sourceRequests': [request_ids[1]]}})
+        first_data = Data(tender_id, award_ids[0], '14360570', 'awards', {'meta': {'sourceRequests': [request_ids[0]]}})
+        second_data = Data(tender_id, award_ids[1], '14360570', 'awards', {'meta': {'sourceRequests': [request_ids[1]]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
         self.check_data_objects(edrpou_codes_queue.get(), first_data)
         worker.job.kill(timeout=1)
@@ -467,7 +466,7 @@ class TestFilterWorker(unittest.TestCase):
                               {'identifier': {'scheme': 'UA-EDR',
                                               'id': '14360570'}}]
                           }]}}))
-        first_data = Data(tender_id, first_award_id, '14360570', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        first_data = Data(tender_id, first_award_id, '14360570', 'awards', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
         self.check_data_objects(edrpou_codes_queue.get(), first_data)
 
@@ -520,7 +519,7 @@ class TestFilterWorker(unittest.TestCase):
                                         ]
                                }}))
 
-        data = Data(tender_id, award_ids[1], '0013823', 'awards', None, {'meta': {'sourceRequests': [request_id]}})
+        data = Data(tender_id, award_ids[1], '0013823', 'awards', {'meta': {'sourceRequests': [request_id]}})
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
 
         for edrpou in [data]:
@@ -661,7 +660,7 @@ class TestFilterWorker(unittest.TestCase):
         client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
         self.assertEqual(client.headers['Cookie'], 'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items)
-        data = Data('123', '124', '14360570', 'awards', None, {'meta': {'sourceRequests': ['125']}})
+        data = Data('123', '124', '14360570', 'awards', {'meta': {'sourceRequests': ['125']}})
 
         for i in [data]:
             self.check_data_objects(edrpou_codes_queue.get(), i)

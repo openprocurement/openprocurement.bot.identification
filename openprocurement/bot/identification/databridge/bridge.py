@@ -75,9 +75,6 @@ class EdrDataBridge(object):
         # init queues for workers
         self.filtered_tender_ids_queue = Queue(maxsize=buffers_size)  # queue of tender IDs with appropriate status
         self.edrpou_codes_queue = Queue(maxsize=buffers_size)  # queue with edrpou codes (Data objects stored in it)
-        # edr_ids_queue - queue with unique identification of the edr object (Data.edr_ids in Data object),
-        # received from EDR Api. Later used to make second request to EDR to get detailed info
-        self.edr_ids_queue = Queue(maxsize=buffers_size)
         self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with detailed info from EDR (Data.file_content)
         # upload_to_tender_queue - queue with  file's get_url
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
@@ -111,7 +108,6 @@ class EdrDataBridge(object):
         self.edr_handler = partial(EdrHandler.spawn,
                                    proxyClient=self.proxyClient,
                                    edrpou_codes_queue=self.edrpou_codes_queue,
-                                   edr_ids_queue=self.edr_ids_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    processing_items=self.processing_items,
                                    delay=self.delay)
