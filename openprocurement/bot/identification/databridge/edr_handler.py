@@ -88,7 +88,7 @@ class EdrHandler(Greenlet):
                 data_list = []
                 try:
                     for i, obj in enumerate(response.json()['data']):
-                        document_id = check_add_suffix(response.json()['data'], meta_id, response.json()['data'].index(obj) + 1)
+                        document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
                         file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
                                         'data': obj}
                         file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
@@ -97,8 +97,8 @@ class EdrHandler(Greenlet):
                         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                     tender_data.item_name, file_content)
                         data_list.append(data)
-                except KeyError as e:
-                    logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
+                except (KeyError, IndexError) as e:
+                    logger.info('Error {}. {}'.format(data_string(tender_data), e))
                     self.retry_edrpou_codes_queue.put(tender_data)
                 else:
                     self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json()['data'])
@@ -175,7 +175,7 @@ class EdrHandler(Greenlet):
                     data_list = []
                     try:
                         for i, obj in enumerate(response.json()['data']):
-                            document_id = check_add_suffix(response.json()['data'], meta_id, response.json()['data'].index(obj) + 1)
+                            document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
                             file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
                                             'data': obj}
                             file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
@@ -184,8 +184,8 @@ class EdrHandler(Greenlet):
                             data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                                         tender_data.item_name, file_content)
                             data_list.append(data)
-                    except KeyError as e:
-                        logger.info('Error data type {}. {}'.format(data_string(tender_data), e))
+                    except (KeyError, IndexError) as e:
+                        logger.info('Error {}. {}'.format(data_string(tender_data), e))
                         self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                     else:
                         for data in data_list:

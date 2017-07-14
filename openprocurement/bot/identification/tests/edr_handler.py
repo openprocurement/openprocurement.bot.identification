@@ -254,14 +254,17 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_get_edr_data_two_ids(self, mrequest, gevent_sleep):
-        """Accept 429 status code in first request with header 'Retry-After'"""
+        """Accept wrong format in first request, put to retry, check the results"""
         gevent_sleep.side_effect = custom_sleep
-        edr_req_id = generate_request_id()
+        edr_req_ids = [generate_request_id() for _ in range(2)]
         proxy_client = ProxyClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.get("{uri}".format(uri=proxy_client.verify_url),
                      [{'json': {'data': [{"test": 1}, {"test": 2}],
+                                "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00"]}},
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[0]}},
+                      {'json': {'data': [{"test": 1}, {"test": 2}],
                                 "meta": {"detailsSourceDate": ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"]}},
-                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_id}}
+                       'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}
                       ])
 
         edrpou_codes_queue = Queue(10)
@@ -280,14 +283,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                           "version": version, 'author': author,
                                                           "sourceRequests": [
                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                              edr_req_id]}}))  # result
+                                                              edr_req_ids[0], edr_req_ids[1]]}}))  # result
         expected_result.append(Data(tender_id, award_id, edr_id, "awards",
                                     {"data": {"test": 2}, "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
                                                           "id": document_id+".2.2",
                                                           "version": version, 'author': author,
                                                           "sourceRequests": [
                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                              edr_req_id]}}))  # result
+                                                              edr_req_ids[0], edr_req_ids[1]]}}))  # result
 
         worker = EdrHandler.spawn(proxy_client, edrpou_codes_queue, check_queue, MagicMock())
 
