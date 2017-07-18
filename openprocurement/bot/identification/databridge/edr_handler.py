@@ -89,7 +89,7 @@ class EdrHandler(Greenlet):
                 try:
                     for i, obj in enumerate(response.json()['data']):
                         document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
-                        file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
+                        file_content = {'meta': {'detailsSourceDate': response.json()['meta']['detailsSourceDate'][i]},
                                         'data': obj}
                         file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                         file_content['meta'].update({"version": version})  # add filed meta.version
@@ -176,7 +176,7 @@ class EdrHandler(Greenlet):
                     try:
                         for i, obj in enumerate(response.json()['data']):
                             document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
-                            file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
+                            file_content = {'meta': {'detailsSourceDate': response.json()['meta']['detailsSourceDate'][i]},
                                             'data': obj}
                             file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                             file_content['meta'].update({"version": version})  # add filed meta.version
@@ -196,7 +196,7 @@ class EdrHandler(Greenlet):
                         self.processing_items['{}_{}'.format(tender_data.tender_id, tender_data.item_id)] = len(response.json()['data'])
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1)
     def get_edr_data_request(self, param, code, document_id):
         """Execute request to EDR Api for retry queue objects."""
         self.until_too_many_requests_event.wait()
