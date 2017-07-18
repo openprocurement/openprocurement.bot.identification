@@ -9,6 +9,7 @@ from datetime import datetime
 from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
 from restkit import ResourceError
+import re as regex
 
 from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file, data_string
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
@@ -264,10 +265,21 @@ class UploadFile(Greenlet):
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     continue
                 else:
-                    logger.info('Exception while retry uploading file to {} doc_id: {}. Message: {}'.format(
-                        data_string(tender_data), document_id, re.message),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                    err_desc = re.message["errors"][0]["description"]
+                    curr_ten_stat = regex.findall(r'\((.*?)\)', err_desc)
+                    if err_desc == "Can't add document in current ({}) tender status".format(curr_ten_stat[0]):
+                        logger.info('ResourceError while retry uploading file to {} doc_id: {}. Message: {}'.format(
+                            data_string(tender_data), document_id, re.message))
+                        logger.info('Trying to update processing items')
+                        self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                        self.retry_upload_to_tender_queue.get()
+                    else:
+                        logger.info('ResourceError while retry uploading file to {} doc_id: {}. Message: {}'.format(
+                            data_string(tender_data), document_id, re.message),
+                            extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
+                                                  params={"TENDER_ID": tender_data.tender_id,
+                                                          item_name_id: tender_data.item_id,
+                                                          "DOCUMENT_ID": document_id}))
             except Exception as e:
                 logger.info('Exception while retry uploading file to {} doc_id: {}. Message: {}'.format(
                     data_string(tender_data), document_id, e.message),
