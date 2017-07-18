@@ -78,12 +78,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def file_con(data_info, doc_id, suf_1, suf_2, source_req):
         if suf_1 == 1 and suf_2 == 1:
             return {'data': data_info,
-                    "meta": {"detailsSourceDate": "2017-04-25T11:56:36+00:00", "id": "{}".format(doc_id),
+                    "meta": {"SourceDate": "2017-04-25T11:56:36+00:00", "id": "{}".format(doc_id),
                              "version": version, 'author': author,
                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220'] + source_req}}
         else:
             return {'data': data_info,
-                    "meta": {"detailsSourceDate": "2017-04-25T11:56:36+00:00",
+                    "meta": {"SourceDate": "2017-04-25T11:56:36+00:00",
                              "id": "{}.{}.{}".format(doc_id, suf_1, suf_2),
                              "version": version, 'author': author,
                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220'] + source_req}}
@@ -569,7 +569,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(obj.code, '14360570')
         self.assertEqual(obj.item_name, 'awards')
         self.assertEqual(obj.file_content['data'], {})
-        self.assertEqual(obj.file_content['meta']['detailsSourceDate'], self.source_date[0])
+        self.assertEqual(obj.file_content['meta']['SourceDate'], self.source_date[0])
         self.assertIsNotNone(obj.file_content['meta']['id'])
         self.assertEqual(obj.file_content['meta']['version'], version)
         self.assertEqual(obj.file_content['meta']['author'], author)
