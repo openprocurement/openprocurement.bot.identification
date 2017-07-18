@@ -89,7 +89,7 @@ class EdrHandler(Greenlet):
                 try:
                     for i, obj in enumerate(response.json()['data']):
                         document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
-                        file_content = {'meta': {'SourceDate': response.json()['meta']['detailsSourceDate'][i]},
+                        file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
                                         'data': obj}
                         file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                         file_content['meta'].update({"version": version})  # add filed meta.version
@@ -176,7 +176,7 @@ class EdrHandler(Greenlet):
                     try:
                         for i, obj in enumerate(response.json()['data']):
                             document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
-                            file_content = {'meta': {'SourceDate': response.json()['meta']['detailsSourceDate'][i]},
+                            file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
                                             'data': obj}
                             file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
                             file_content['meta'].update({"version": version})  # add filed meta.version
