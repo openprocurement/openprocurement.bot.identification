@@ -111,7 +111,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_proxy_client(self, mrequest, gevent_sleep):
         """ Test that proxy return json with id """
         gevent_sleep.side_effect = custom_sleep
-        mrequest.get(self.uri, [self.stat_200([{}], self.source_date, self.edr_req_ids[0]),
+        mrequest.get(self.url, [self.stat_200([{}], self.source_date, self.edr_req_ids[0]),
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         expected_result = []
         for i in range(2):
@@ -429,20 +429,22 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def test_job_retry_get_edr_data_dead(self, mrequest, gevent_sleep):
         """Accept dict instead of list in first response to /verify endpoint. Check that worker get up"""
         gevent_sleep.side_effect = custom_sleep
-        edr_details_req_id = self.gen_req_id[0]
         edr_req_id = self.gen_req_id[0:3]
         mrequest.get(self.url, [self.stat_c(403, 0, '', edr_req_id[0]),
-                                self.stat_200([{}], self.source_date, edr_req_id[1]),
+                                {'json': {'data': [{}]}, 'status_code': 200,
+                                 'headers': {'X-Request-ID': edr_req_id[1]}},
                                 self.stat_200([{}], self.source_date, edr_req_id[2])])
-        mrequest.get(self.url_id(321), [self.stat_200([{}], self.source_date, edr_details_req_id)])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        edrpou_codes_queue = Queue(10)
+        edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.worker = EdrHandler.spawn(self.proxy_client, edrpou_codes_queue, self.upload_to_doc_service_queue, MagicMock())
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_id, 1, 1, [edr_req_id[0], edr_req_id[1]])))
-        self.assertEqual(mrequest.call_count, 2)
+                               self.file_con({}, self.document_id, 1, 1, [edr_req_id[0], edr_req_id[1], edr_req_id[2]])))
+        self.assertEqual(mrequest.call_count, 3)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[1].url, self.urls('verify?id={}'.format(self.edr_ids)))
-        self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
+        self.assertEqual(mrequest.request_history[2].url, self.urls('verify?id={}'.format(self.edr_ids)))
+        self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
