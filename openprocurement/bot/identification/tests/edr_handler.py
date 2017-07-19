@@ -83,8 +83,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220'] + source_req}}
         else:
             return {'data': data_info,
-                    "meta": {"sourceDate": "2017-04-25T11:56:36+00:00",
-                             "id": "{}.{}.{}".format(doc_id, suf_1, suf_2),
+                    "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": "{}.{}.{}".format(doc_id, suf_1, suf_2),
                              "version": version, 'author': author,
                              'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220'] + source_req}}
 
@@ -338,7 +337,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_retry_get_edr_data_mock_403(self, mrequest, gevent_sleep):
+    def test_retry_get_edr_data_mock_404(self, mrequest, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         edr_req_id = self.gen_req_id[0]
@@ -356,7 +355,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                            'sourceRequests': [
                                                                'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
         self.worker.get_edr_data_request = MagicMock(side_effect=[
-            RetryException("test", MagicMock(status_code=403)),
             RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': edr_req_id},
                                              json=MagicMock(return_value=
                                              {"errors":
@@ -448,65 +446,31 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_job_get_edr_details_dead(self, mrequest, gevent_sleep):
-        """Accept list instead of dict in response to /details/{id} endpoint. Check that worker get up"""
+    def test_retry_5_times_get_edr_data(self, mrequest, gevent_sleep):
+        """Accept 6 times errors in response while requesting /verify"""
         gevent_sleep.side_effect = custom_sleep
-        edr_req_id = self.gen_req_id[0]
-        edr_details_req_id = self.gen_req_id[0:2]
-        mrequest.get(self.url, [self.stat_200([{}], self.source_date, edr_req_id)])
-        mrequest.get(self.url_id(321), [{'json': [], 'status_code': 200,
-                                         'headers': {'X-Request-ID': edr_details_req_id[0]}},
-                                        # list instead of dict in data
-                                        self.stat_200([{}], self.source_date, edr_details_req_id[1])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
-        self.assertEquals(self.upload_to_doc_service_queue.get(),
+        edr_req_id = self.gen_req_id[0:8]
+        mrequest.get(self.url,
+                     [self.stat_c(403, 0, '', edr_req_id[0]),
+                      self.stat_c(403, 0, '', edr_req_id[1]),
+                      self.stat_c(403, 0, '', edr_req_id[2]),
+                      self.stat_c(403, 0, '', edr_req_id[3]),
+                      self.stat_c(403, 0, '', edr_req_id[4]),
+                      self.stat_c(403, 0, '', edr_req_id[5]),
+                      self.stat_200([{}], self.source_date, edr_req_id[6])])
+        edrpou_codes_queue = Queue(10)
+        upload_to_doc_service_queue = Queue(10)
+        edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.worker = EdrHandler.spawn(self.proxy_client, edrpou_codes_queue, upload_to_doc_service_queue, MagicMock())
+        self.assertEquals(upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_id, 1, 1,
-                                             [edr_req_id])))
-        self.assertEqual(mrequest.call_count, 1)
-        self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_job_retry_get_edr_details_dead(self, mrequest, gevent_sleep):
-        """Accept list instead of dict in response to /details/{id} endpoint. Check that worker get up"""
-        gevent_sleep.side_effect = custom_sleep
-        edr_req_id = self.gen_req_id[0]
-        edr_details_req_id = self.gen_req_id[0:3]
-        mrequest.get(self.url, [self.stat_200([{}], self.source_date, edr_req_id)])
-        mrequest.get(self.url_id(321), [self.stat_c(403, 0, '', edr_details_req_id[0]),
-                                        {'json': [], 'status_code': 200,
-                                         'headers': {'X-Request-ID': edr_details_req_id[1]}},
-                                        # list instead of dict in data
-                                        self.stat_200([{}], self.source_date, edr_details_req_id[2])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
-        self.assertEquals(self.upload_to_doc_service_queue.get(),
-                          Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_id, 1, 1,
-                                             [edr_req_id])))
-        self.assertEqual(mrequest.call_count, 1)
-        self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
-
-    @requests_mock.Mocker()
-    @patch('gevent.sleep')
-    def test_retry_get_edr_details(self, mrequest, gevent_sleep):
-        """Accept 6 times errors in response while requesting /details"""
-        gevent_sleep.side_effect = custom_sleep
-        edr_req_id = self.gen_req_id[0]
-        edr_details_req_id = self.gen_req_id[0:7]
-        mrequest.get(self.url, [self.stat_200([{}], self.source_date, edr_req_id)])
-        mrequest.get(self.url_id(321),
-                     [self.stat_c(403, 0, '', edr_details_req_id[0]), self.stat_c(403, 0, '', edr_details_req_id[1]),
-                      self.stat_c(403, 0, '', edr_details_req_id[2]), self.stat_c(403, 0, '', edr_details_req_id[3]),
-                      self.stat_c(403, 0, '', edr_details_req_id[4]), self.stat_c(403, 0, '', edr_details_req_id[5]),
-                      self.stat_200([{}], self.source_date, edr_details_req_id[6])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
-        self.assertEquals(self.upload_to_doc_service_queue.get(),
-                          Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_id, 1, 1,
-                                             [edr_req_id])))
-        self.assertEqual(mrequest.call_count, 1)
-        self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
+                               self.file_con({}, self.document_id, 1, 1, [edr_req_id[0], edr_req_id[6]])))
+        self.assertEqual(mrequest.call_count, 7)  # processing 7 requests
+        self.assertEqual(mrequest.request_history[0].url,
+                         self.urls('verify?id={}'.format(self.edr_ids)))  # check first url
+        self.assertEqual(mrequest.request_history[6].url,
+                         self.urls('verify?id={}'.format(self.edr_ids)))  # check 7th url
+        self.assertIsNotNone(mrequest.request_history[6].headers['X-Client-Request-ID'])
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -825,8 +789,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         edr_req_id = self.gen_req_id[0:2]
         mrequest.get(self.url,
-                     [{'json': {'errors': [{'description': [{u'message': u'Gateway Timeout Error'}]}]},
-                       'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[0]}},
+                     [self.stat_c(403, 0, [{u'message': u'Gateway Timeout Error'}], edr_req_id[0]),
                       {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
                       {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
                       {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': edr_req_id[1]}},
