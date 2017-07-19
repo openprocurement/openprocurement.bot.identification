@@ -58,6 +58,7 @@ class EdrDataBridge(object):
         self.decrement_step = self.config_get('decrement_step') or 1
         self.doc_service_host = self.config_get('doc_service_server')
         self.doc_service_port = self.config_get('doc_service_port') or 6555
+        self.sandbox_mode = os.environ.get('SANDBOX_MODE', 'False')
 
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
@@ -137,10 +138,11 @@ class EdrDataBridge(object):
             return True
 
     def check_proxy(self):
+        """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
-            self.proxyClient.health()
+            self.proxyClient.health(self.sandbox_mode)
         except RequestException as e:
-            logger.info('Proxy server connection error, message {}'.format(e),
+            logger.info('Proxy server connection error, message {} {}'.format(e, self.sandbox_mode),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
             raise e
         else:

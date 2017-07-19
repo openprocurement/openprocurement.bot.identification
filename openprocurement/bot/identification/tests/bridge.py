@@ -9,7 +9,7 @@ from mock import patch, MagicMock
 from restkit import RequestError, ResourceError
 
 from gevent.pywsgi import WSGIServer
-from bottle import Bottle, response
+from bottle import Bottle, response, request
 
 from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement_client.client import TendersClientSync, TendersClient
@@ -105,6 +105,8 @@ def doc_response():
 
 
 def proxy_response():
+    if request.headers.get("sandbox-mode") != "True":  # Imitation of health comparison
+        response.status = 400
     return response
 
 
@@ -198,14 +200,24 @@ class TestBridgeWorker(BaseServersTest):
 
     def test_proxy_server_failure(self):
         self.worker = EdrDataBridge(config)
+        self.worker.sandbox_mode = "True"
         self.proxy_server.stop()
         with self.assertRaises(RequestException):
             self.worker.check_proxy()
         self.proxy_server.start()
         self.assertTrue(self.worker.check_proxy())
 
+    def test_proxy_sandmox_mismatch(self):
+        self.worker = EdrDataBridge(config)
+        self.worker.sandbox_mode = "False"
+        with self.assertRaises(RequestException):
+            self.worker.check_proxy()
+        self.worker.sandbox_mode = "True"
+        self.assertTrue(self.worker.check_proxy())
+
     def test_proxy_server_success(self):
         self.worker = EdrDataBridge(config)
+        self.worker.sandbox_mode = "True"
         self.assertTrue(self.worker.check_proxy())
 
     def test_doc_service_failure(self):

@@ -20,9 +20,10 @@ class ProxyClient(object):
 
         return response
 
-    def health(self):
+    def health(self, sandbox_mode):
         """Send request to the Proxy server to get whether its active"""
-        response = self.session.get(url=self.health_url, auth=(self.user, self.password), timeout=self.timeout)
+        response = self.session.get(url=self.health_url, auth=(self.user, self.password),
+                                    headers={"sandbox-mode": sandbox_mode}, timeout=self.timeout)
         if response.status_code == 200:
             return response
         raise requests.RequestException("{} {} {}".format(response.url, response.status_code, response.reason), response=response)
