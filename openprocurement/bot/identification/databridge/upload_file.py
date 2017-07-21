@@ -8,8 +8,7 @@ import gevent
 from datetime import datetime
 from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
-from restkit import ResourceError
-import re as regex
+from restkit import ResourceError, Unauthorized
 
 from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file, data_string
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
@@ -28,7 +27,6 @@ class UploadFile(Greenlet):
     pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
     sleep_change_value = 0
-    start_of_retry_uploading_error_message = "Can't add document"
 
     def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, increment_step=1, decrement_step=1, delay=15):
         super(UploadFile, self).__init__()
@@ -239,7 +237,7 @@ class UploadFile(Greenlet):
             item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
                 self.client_upload_to_tender(tender_data)
-            except ResourceError as re:
+            except (ResourceError, Unauthorized(http_code=401)) as re:
                 if re.status_int == 422:  # WARNING and don't retry
                     logger.warning("Accept 422, skip {} doc_id: {}. Message {}".format(data_string(tender_data), document_id, re.msg),
                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
@@ -254,11 +252,22 @@ class UploadFile(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                     UploadFile.sleep_change_value += self.increment_step
-                elif re.status_int == 403 or self.start_of_retry_uploading_error_message in re.message["errors"][0]["description"]:
+                elif re.status_int == 403:
                     logger.warning("Accept 403 while uploading to {} doc_id: {}. Message {}".format(
                         data_string(tender_data), document_id, re.msg),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id})
+                    )
+                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    self.retry_upload_to_tender_queue.get()
+                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    continue
+                elif re.status_int == 401:
+                    logger.warning("Accept 401 while uploading to {} doc_id: {}. Message {}".format(
+                        data_string(tender_data), document_id, re.msg),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
+                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                               "DOCUMENT_ID": document_id})
                     )
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
