@@ -58,6 +58,7 @@ class EdrDataBridge(object):
         self.decrement_step = self.config_get('decrement_step') or 1
         self.doc_service_host = self.config_get('doc_service_server')
         self.doc_service_port = self.config_get('doc_service_port') or 6555
+        self.sandbox_mode = os.environ.get('SANDBOX_MODE', 'False')
 
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
@@ -75,9 +76,6 @@ class EdrDataBridge(object):
         # init queues for workers
         self.filtered_tender_ids_queue = Queue(maxsize=buffers_size)  # queue of tender IDs with appropriate status
         self.edrpou_codes_queue = Queue(maxsize=buffers_size)  # queue with edrpou codes (Data objects stored in it)
-        # edr_ids_queue - queue with unique identification of the edr object (Data.edr_ids in Data object),
-        # received from EDR Api. Later used to make second request to EDR to get detailed info
-        self.edr_ids_queue = Queue(maxsize=buffers_size)
         self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with detailed info from EDR (Data.file_content)
         # upload_to_tender_queue - queue with  file's get_url
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
@@ -114,7 +112,6 @@ class EdrDataBridge(object):
         self.edr_handler = partial(EdrHandler.spawn,
                                    proxyClient=self.proxyClient,
                                    edrpou_codes_queue=self.edrpou_codes_queue,
-                                   edr_ids_queue=self.edr_ids_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    processing_items=self.processing_items,
                                    services_not_available=self.services_not_available,
@@ -146,10 +143,11 @@ class EdrDataBridge(object):
             return True
 
     def check_proxy(self):
+        """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
-            self.proxyClient.health()
+            self.proxyClient.health(self.sandbox_mode)
         except RequestException as e:
-            logger.info('Proxy server connection error, message {}'.format(e),
+            logger.info('Proxy server connection error, message {} {}'.format(e, self.sandbox_mode),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
             raise e
         else:
@@ -199,14 +197,12 @@ class EdrDataBridge(object):
                 self.check_services()
                 if counter == 20:
                     counter = 0
-                    logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {}; '
-                                'Edr ids queue {}; Retry edr ids queue {}; Upload to doc service {}; Retry upload to doc service {}; '
+                    logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {};'
+                                'Upload to doc service {}; Retry upload to doc service {}; '
                                 'Upload to tender {}; Retry upload to tender {}'.format(
                                     self.filtered_tender_ids_queue.qsize(),
                                     self.edrpou_codes_queue.qsize(),
                                     self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
-                                    self.edr_ids_queue.qsize(),
-                                    self.jobs['edr_handler'].retry_edr_ids_queue.qsize() if self.jobs['edr_handler'] else 0,
                                     self.upload_to_doc_service_queue.qsize(),
                                     self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
                                     self.upload_to_tender_queue.qsize(),
