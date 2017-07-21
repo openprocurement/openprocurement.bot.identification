@@ -166,6 +166,17 @@ class UploadFile(Greenlet):
                                                          {'data': document_data},
                                                          '{}/{}/documents'.format(tender_data.item_name,
                                                                                   tender_data.item_id))
+            except Unauthorized as u:
+                if u.status_int == None:
+                    logger.warning("Unauthorized while uploading to {} doc_id: {}. Message {}".format(
+                        data_string(tender_data), document_id, u.msg),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
+                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                               "DOCUMENT_ID": document_id}))
+                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    self.upload_to_tender_queue.get()
+                    continue
             except ResourceError as re:
                 if re.status_int == 422:  # WARNING and don't retry
                     logger.warning("Accept 422, skip {} doc_id: {}. Message: {}".format(data_string(tender_data), document_id, re.msg),
@@ -237,7 +248,7 @@ class UploadFile(Greenlet):
             item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
                 self.client_upload_to_tender(tender_data)
-            except (ResourceError, Unauthorized(http_code=401)) as re:
+            except ResourceError as re:
                 if re.status_int == 422:  # WARNING and don't retry
                     logger.warning("Accept 422, skip {} doc_id: {}. Message {}".format(data_string(tender_data), document_id, re.msg),
                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
@@ -257,17 +268,6 @@ class UploadFile(Greenlet):
                         data_string(tender_data), document_id, re.msg),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id})
-                    )
-                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
-                    self.retry_upload_to_tender_queue.get()
-                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
-                    continue
-                elif re.status_int == 401:
-                    logger.warning("Accept 401 while uploading to {} doc_id: {}. Message {}".format(
-                        data_string(tender_data), document_id, re.msg),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
-                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                               "DOCUMENT_ID": document_id})
                     )
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
