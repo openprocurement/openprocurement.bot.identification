@@ -227,7 +227,7 @@ class TestUploadFileWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_upload_to_tender_exception_unauthorized(self, mrequest, gevent_sleep):
+    def test_upload_to_tender_exception_status_int_none(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         tender_id = uuid.uuid4().hex
@@ -243,8 +243,7 @@ class TestUploadFileWorker(unittest.TestCase):
         client = MagicMock()
         client._create_tender_resource_item = MagicMock(side_effect=[Unauthorized()])
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
-                                  processed_items,
-                                  doc_service_client)
+                                  processed_items, doc_service_client)
         worker.client = client
         worker.client_upload_to_tender = MagicMock(side_effect=Unauthorized())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
