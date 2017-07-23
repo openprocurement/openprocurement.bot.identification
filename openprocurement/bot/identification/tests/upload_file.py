@@ -245,7 +245,6 @@ class TestUploadFileWorker(unittest.TestCase):
         worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
                                   processed_items, doc_service_client)
         worker.client = client
-        worker.client_upload_to_tender = MagicMock(side_effect=Unauthorized())
         while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
                    worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
             sleep(1)  # sleep while at least one queue is not empty
