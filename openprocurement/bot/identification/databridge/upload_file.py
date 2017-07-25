@@ -182,9 +182,9 @@ class UploadFile(Greenlet):
                     self.upload_to_tender_queue.get()
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     continue
-                elif re.status_int == 403:
-                    logger.warning("Accept 403 while uploading to {} doc_id: {}. Message {}".format(
-                        data_string(tender_data), document_id, re.msg),
+                elif re.status_int == 403 or re.status_int is None:
+                    logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
+                        re.status_int, data_string(tender_data), document_id, re.msg),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                "DOCUMENT_ID": document_id})
@@ -200,7 +200,7 @@ class UploadFile(Greenlet):
                                                "DOCUMENT_ID": document_id}))
                     UploadFile.sleep_change_value += self.increment_step
                 else:
-                    logger.warning('Exception while retry uploading file to {} doc_id: {}. Message: {}'.format(
+                    logger.warning('ResourceError while uploading file to {} doc_id: {}. Message: {}'.format(
                         data_string(tender_data), document_id, re.message),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
@@ -209,7 +209,6 @@ class UploadFile(Greenlet):
                     self.upload_to_tender_queue.get()
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
             except Exception as e:
-
                 logger.info('Exception while uploading file to {} doc_id: {}. Message: {}'.format(
                     data_string(tender_data), document_id, e.message),
                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER},
@@ -260,19 +259,20 @@ class UploadFile(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                     UploadFile.sleep_change_value += self.increment_step
-                elif re.status_int == 403:
-                    logger.warning("Accept 403 while uploading to {} doc_id: {}. Message {}".format(
-                        data_string(tender_data), document_id, re.msg),
+                elif re.status_int == 403 or re.status_int is None:
+                    logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
+                        re.status_int, data_string(tender_data), document_id, re.msg),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
-                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id})
+                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                               "DOCUMENT_ID": document_id})
                     )
                     self.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     continue
                 else:
-                    logger.info('Exception while retry uploading file to {} doc_id: {}. Message: {}'.format(
-                        data_string(tender_data), document_id, re.message),
+                    logger.info('ResourceError while retry uploading file to {} doc_id: {}. ResourceErrorStatus_int: {}. Message: {}'.format(
+                        data_string(tender_data), document_id, re.status_int, re.message),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
             except Exception as e:

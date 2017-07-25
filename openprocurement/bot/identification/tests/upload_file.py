@@ -226,6 +226,33 @@ class TestUploadFileWorker(unittest.TestCase):
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
+    def test_upload_to_tender_exception_status_int_none(self, mrequest, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
+        tender_id = uuid.uuid4().hex
+        award_id = uuid.uuid4().hex
+        document_id = generate_doc_id()
+        key = '{}_{}'.format(tender_id, award_id)
+        processing_items = {key: 1}
+        processed_items = {}
+        upload_to_doc_service_queue = Queue(10)
+        upload_to_tender_queue = Queue(10)
+        upload_to_tender_queue.put(Data(tender_id, award_id, '123', 'awards',
+                                        {'meta': {'id': document_id}, 'test_data': 'test_data'}))
+        client = MagicMock()
+        client._create_tender_resource_item = MagicMock(side_effect=[Unauthorized()])
+        worker = UploadFile.spawn(client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items,
+                                  processed_items, doc_service_client)
+        worker.client = client
+        while (upload_to_doc_service_queue.qsize() or upload_to_tender_queue.qsize() or
+                   worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize()):
+            sleep(1)  # sleep while at least one queue is not empty
+        worker.shutdown()
+        self.assertEqual(upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
+        self.assertEqual(worker.sleep_change_value, 0)
+
+    @requests_mock.Mocker()
+    @patch('gevent.sleep')
     def test_retry_upload_to_tender(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
