@@ -30,7 +30,7 @@ class FilterTenders(Greenlet):
     identification_scheme = u'UA-EDR'
     sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, processed_items, increment_step=1, decrement_step=1,  delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, services_not_available, processed_items, increment_step=1, decrement_step=1,  delay=15):
         super(FilterTenders, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -47,10 +47,14 @@ class FilterTenders(Greenlet):
         self.increment_step = increment_step
         self.decrement_step = decrement_step
 
+        # blockers
+        self.services_not_available = services_not_available
+
     def prepare_data(self):
         """Get tender_id from filtered_tender_ids_queue, check award/qualification status, documentType; get
         identifier's id and put into edrpou_codes_queue."""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_id = self.filtered_tender_ids_queue.peek()
             except LoopExit:

@@ -25,7 +25,7 @@ class Scanner(Greenlet):
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
     sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, services_not_available, increment_step=1, decrement_step=1, delay=15):
         super(Scanner, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -41,6 +41,7 @@ class Scanner(Greenlet):
         self.initialization_event = Event()
         self.increment_step = increment_step
         self.decrement_step = decrement_step
+        self.services_not_available = services_not_available
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def initialize_sync(self, params=None, direction=None):
@@ -137,11 +138,13 @@ class Scanner(Greenlet):
 
     def _run(self):
         logger.info('Start Scanner', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_SCANNER}, {}))
+        self.services_not_available.wait()
         self._start_synchronization_workers()
         backward_worker, forward_worker = self.jobs
 
         try:
             while not self.exit:
+                self.services_not_available.wait()
                 gevent.sleep(self.delay)
                 if forward_worker.dead or (backward_worker.dead and
                                            not backward_worker.value):
