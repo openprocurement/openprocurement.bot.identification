@@ -280,6 +280,8 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(f(1), 1)
 
     def test_check_services(self):
+        t = os.environ.get("SANDBOX_MODE", "False")
+        os.environ["SANDBOX_MODE"] = "True"
         self.worker = EdrDataBridge(config)
         self.worker.services_not_available = MagicMock(set=MagicMock(), clear=MagicMock())
         self.proxy_server.stop()
@@ -288,6 +290,7 @@ class TestBridgeWorker(BaseServersTest):
         self.proxy_server.start()
         self.worker.check_services()
         self.assertTrue(self.worker.services_not_available.set.called)
+        os.environ["SANDBOX_MODE"] = t
 
     def test_check_services_mock(self):
         self.worker = EdrDataBridge(config)

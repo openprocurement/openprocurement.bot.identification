@@ -155,7 +155,6 @@ class EdrDataBridge(object):
 
     def check_openprocurement_api(self):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
-        logger.debug("Checking status of openprocurement api")
         try:
             self.client.head('/api/{}/spore'.format(self.api_version))
         except RequestError as e:
@@ -171,21 +170,34 @@ class EdrDataBridge(object):
     def set_wake_up(self):
         self.services_not_available.set()
 
-    def check_services(self):
+    def all_available(self):
         try:
             self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
         except Exception as e:
             logger.info("Service is unavailable, message {}".format(e))
-            self.set_sleep()
+            return False
         else:
+            return True
+
+    def check_services(self):
+        if self.all_available():
             logger.info("All services are available")
             self.set_wake_up()
+        else:
+            self.set_sleep()
 
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),
                      'filter_tender': self.filter_tender(),
                      'edr_handler': self.edr_handler(),
                      'upload_file': self.upload_file()}
+
+    def launch(self):
+        while True:
+            if self.all_available():
+                self.run()
+                break
+            gevent.sleep(self.delay)
 
     def run(self):
         logger.info('Start EDR API Data Bridge', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START}, {}))
@@ -232,8 +244,7 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_proxy() and bridge.check_doc_service()
-        bridge.run()
+        bridge.launch()
     else:
         logger.info('Invalid configuration file. Exiting...')
 
