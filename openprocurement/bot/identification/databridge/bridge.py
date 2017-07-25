@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from retrying import retry
+
 monkey.patch_all()
 
 import logging
@@ -132,6 +134,7 @@ class EdrDataBridge(object):
     def config_get(self, name):
         return self.config.get('main').get(name)
 
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def check_doc_service(self):
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
@@ -142,6 +145,7 @@ class EdrDataBridge(object):
         else:
             return True
 
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def check_proxy(self):
         """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
@@ -153,6 +157,7 @@ class EdrDataBridge(object):
         else:
             return True
 
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def check_openprocurement_api(self):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:
