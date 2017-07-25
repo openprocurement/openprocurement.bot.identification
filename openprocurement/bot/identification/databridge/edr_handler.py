@@ -3,7 +3,6 @@ from gevent import monkey
 from gevent.queue import Queue
 from retrying import retry
 from simplejson import JSONDecodeError
-
 monkey.patch_all()
 
 import logging.config
@@ -30,7 +29,7 @@ class EdrHandler(Greenlet):
     identification_scheme = u"UA-EDR"
     activityKind_scheme = u'КВЕД'
 
-    def __init__(self, proxyClient, edrpou_codes_queue, upload_to_doc_service_queue, processing_items, delay=15):
+    def __init__(self, proxyClient, edrpou_codes_queue, upload_to_doc_service_queue, processing_items, services_not_available, delay=15):
         super(EdrHandler, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -48,6 +47,7 @@ class EdrHandler(Greenlet):
 
         # blockers
         self.until_too_many_requests_event = gevent.event.Event()
+        self.services_not_available = services_not_available
 
         self.until_too_many_requests_event.set()
 
@@ -58,6 +58,7 @@ class EdrHandler(Greenlet):
         """Get data from edrpou_codes_queue; make request to EDR Api, passing EDRPOU (IPN, passport); Received data put
         into upload_to_doc_service_queue"""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_data = self.edrpou_codes_queue.peek()
             except LoopExit:
@@ -118,6 +119,7 @@ class EdrHandler(Greenlet):
         """Get data from retry_edrpou_codes_queue; Put data into upload_to_doc_service_queue if request is successful,
         otherwise put data back to retry_edrpou_codes_queue."""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_data = self.retry_edrpou_codes_queue.peek()
             except LoopExit:

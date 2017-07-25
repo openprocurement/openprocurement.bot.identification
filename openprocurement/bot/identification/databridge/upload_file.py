@@ -28,7 +28,7 @@ class UploadFile(Greenlet):
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
     sleep_change_value = 0
 
-    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, services_not_available, increment_step=1, decrement_step=1, delay=15):
         super(UploadFile, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -52,10 +52,14 @@ class UploadFile(Greenlet):
         self.retry_upload_to_doc_service_queue = Queue(maxsize=500)
         self.retry_upload_to_tender_queue = Queue(maxsize=500)
 
+        # blockers
+        self.services_not_available = services_not_available
+
     def upload_to_doc_service(self):
         """Get data from upload_to_doc_service_queue; Create file of the Data.file_content data; If upload successful put Data
         object to upload_file_to_tender, otherwise put Data to retry_upload_file_queue."""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_data = self.upload_to_doc_service_queue.peek()
                 document_id = tender_data.file_content.get('meta', {}).get('id')
@@ -100,6 +104,7 @@ class UploadFile(Greenlet):
         """Get data from retry_upload_to_doc_service_queue; If upload were successful put Data obj to
         upload_to_tender_queue, otherwise put Data obj back to retry_upload_file_queue"""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_data = self.retry_upload_to_doc_service_queue.peek()
                 document_id = tender_data.file_content.get('meta', {}).get('id')
@@ -151,6 +156,7 @@ class UploadFile(Greenlet):
         If upload to tender were unsuccessful put Data object to retry_upload_to_tender_queue, otherwise delete given
         award/qualification from processing_items."""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_data = self.upload_to_tender_queue.peek()
             except LoopExit:
@@ -228,6 +234,7 @@ class UploadFile(Greenlet):
         """Get data from retry_upload_to_tender_queue; If upload was unsuccessful put Data obj back to
         retry_upload_to_tender_queue"""
         while not self.exit:
+            self.services_not_available.wait()
             try:
                 tender_data = self.retry_upload_to_tender_queue.peek()
             except LoopExit:

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from retrying import retry
+
 monkey.patch_all()
 
 import logging
@@ -50,7 +52,7 @@ class EdrDataBridge(object):
         self.config = config
 
         api_server = self.config_get('tenders_api_server')
-        api_version = self.config_get('tenders_api_version')
+        self.api_version = self.config_get('tenders_api_version')
         ro_api_server = self.config_get('public_tenders_api_server') or api_server
         buffers_size = self.config_get('buffers_size') or 500
         self.delay = self.config_get('delay') or 15
@@ -61,8 +63,8 @@ class EdrDataBridge(object):
         self.sandbox_mode = os.environ.get('SANDBOX_MODE', 'False')
 
         # init clients
-        self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=api_version)
-        self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=api_version)
+        self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
+        self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=self.api_version)
         self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
                                        user=self.config_get('proxy_user'),
                                        password=self.config_get('proxy_password'),
@@ -82,6 +84,7 @@ class EdrDataBridge(object):
 
         # blockers
         self.initialization_event = gevent.event.Event()
+        self.services_not_available = gevent.event.Event()
 
         # dictionary with processing awards/qualifications
         self.processing_items = {}
@@ -92,6 +95,7 @@ class EdrDataBridge(object):
         self.scanner = partial(Scanner.spawn,
                                tenders_sync_client=self.tenders_sync_client,
                                filtered_tender_ids_queue=self.filtered_tender_ids_queue,
+                               services_not_available=self.services_not_available,
                                increment_step=self.increment_step,
                                decrement_step=self.decrement_step,
                                delay=self.delay)
@@ -101,6 +105,7 @@ class EdrDataBridge(object):
                                      filtered_tender_ids_queue=self.filtered_tender_ids_queue,
                                      edrpou_codes_queue=self.edrpou_codes_queue,
                                      processing_items=self.processing_items,
+                                     services_not_available=self.services_not_available,
                                      processed_items=self.processed_items,
                                      increment_step=self.increment_step,
                                      decrement_step=self.decrement_step,
@@ -111,6 +116,7 @@ class EdrDataBridge(object):
                                    edrpou_codes_queue=self.edrpou_codes_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    processing_items=self.processing_items,
+                                   services_not_available=self.services_not_available,
                                    delay=self.delay)
 
         self.upload_file = partial(UploadFile.spawn,
@@ -120,6 +126,7 @@ class EdrDataBridge(object):
                                    processing_items=self.processing_items,
                                    processed_items=self.processed_items,
                                    doc_service_client=self.doc_service_client,
+                                   services_not_available=self.services_not_available,
                                    increment_step=self.increment_step,
                                    decrement_step=self.decrement_step,
                                    delay=self.delay)
@@ -127,6 +134,7 @@ class EdrDataBridge(object):
     def config_get(self, name):
         return self.config.get('main').get(name)
 
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def check_doc_service(self):
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
@@ -137,6 +145,7 @@ class EdrDataBridge(object):
         else:
             return True
 
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
     def check_proxy(self):
         """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
@@ -148,11 +157,52 @@ class EdrDataBridge(object):
         else:
             return True
 
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    def check_openprocurement_api(self):
+        """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
+        try:
+            self.client.head('/api/{}/spore'.format(self.api_version))
+        except RequestError as e:
+            logger.info('TendersServer connection error, message {}'.format(e),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
+            raise e
+        else:
+            return True
+
+    def set_sleep(self):
+        self.services_not_available.clear()
+
+    def set_wake_up(self):
+        self.services_not_available.set()
+
+    def all_available(self):
+        try:
+            self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
+        except Exception as e:
+            logger.info("Service is unavailable, message {}".format(e))
+            return False
+        else:
+            return True
+
+    def check_services(self):
+        if self.all_available():
+            logger.info("All services are available")
+            self.set_wake_up()
+        else:
+            self.set_sleep()
+
     def _start_jobs(self):
         self.jobs = {'scanner': self.scanner(),
                      'filter_tender': self.filter_tender(),
                      'edr_handler': self.edr_handler(),
                      'upload_file': self.upload_file()}
+
+    def launch(self):
+        while True:
+            if self.all_available():
+                self.run()
+                break
+            gevent.sleep(self.delay)
 
     def run(self):
         logger.info('Start EDR API Data Bridge', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START}, {}))
@@ -161,7 +211,9 @@ class EdrDataBridge(object):
         try:
             while True:
                 gevent.sleep(self.delay)
+                self.check_services()
                 if counter == 20:
+                    counter = 0
                     logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {};'
                                 'Upload to doc service {}; Retry upload to doc service {}; '
                                 'Upload to tender {}; Retry upload to tender {}'.format(
@@ -173,9 +225,9 @@ class EdrDataBridge(object):
                                     self.upload_to_tender_queue.qsize(),
                                     self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
                                 ))
-                    counter = 0
                 counter += 1
                 for name, job in self.jobs.items():
+                    logger.debug("{}.dead: {}".format(name, job.dead))
                     if job.dead:
                         logger.warning('Restarting {} worker'.format(name),
                                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
@@ -197,8 +249,7 @@ def main():
             config = load(config_file_obj.read())
         logging.config.dictConfig(config)
         bridge = EdrDataBridge(config)
-        bridge.check_proxy() and bridge.check_doc_service()
-        bridge.run()
+        bridge.launch()
     else:
         logger.info('Invalid configuration file. Exiting...')
 
