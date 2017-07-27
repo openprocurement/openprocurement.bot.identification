@@ -21,8 +21,7 @@ class ProcessTracker(object):
     def __init__(self, db=None):
         self.processing_items = {}
         self.processed_items = {}
-        self.processed_tenders = {}
-        self.db = db
+        self._db = db
         self.tender_documents_to_process = {}
 
     def set_item(self, tender_id, item_id, docs_amount=0):
@@ -39,7 +38,7 @@ class ProcessTracker(object):
         if self.tender_documents_to_process[tender_id] > 1:
             self.tender_documents_to_process[tender_id] -= 1
         else:
-            self.db.put(db_key(tender_id), datetime.now().isoformat(), 300)
+            self._db.put(db_key(tender_id), datetime.now().isoformat(), 300)
             del self.tender_documents_to_process[tender_id]
 
     def check_processing_item(self, tender_id, item_id):
@@ -47,12 +46,11 @@ class ProcessTracker(object):
         return item_key(tender_id, item_id) in self.processing_items.keys()
 
     def check_processed_item(self, tender_id, item_id):
-        """Check if current tender_id, item_id was already processing"""
+        """Check if current tender_id, item_id was already processed"""
         return item_key(tender_id, item_id) in self.processed_items.keys()
 
     def check_processed_tenders(self, tender_id):
-        t = self.db.has(db_key(tender_id)) or False
-        return t
+        return self._db.has(db_key(tender_id)) or False
 
     def update_processing_items(self, tender_id, item_id):
         key = item_key(tender_id, item_id)
@@ -61,6 +59,9 @@ class ProcessTracker(object):
         else:
             self.processed_items[key] = datetime.now()
             del self.processing_items[key]
+
+    def update_items_and_tender(self, tender_id, item_id):
+        self.update_processing_items(tender_id, item_id)
         self.remove_docs_amount_from_tender(tender_id)
 
 
