@@ -15,14 +15,15 @@ from yaml import load
 from gevent.queue import Queue
 from restkit import request, RequestError
 from requests import RequestException
-
+from constants import retry_mult
 from openprocurement_client.client import TendersClientSync as BaseTendersClientSync, TendersClient as BaseTendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.upload_file import UploadFile
-from openprocurement.bot.identification.databridge.utils import journal_context, check_412
+from openprocurement.bot.identification.databridge.utils import journal_context, check_412, ProcessTracker
+from caching import Db
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
     DATABRIDGE_PROXY_SERVER_CONN_ERROR)
@@ -85,17 +86,15 @@ class EdrDataBridge(object):
         # blockers
         self.initialization_event = gevent.event.Event()
         self.services_not_available = gevent.event.Event()
-
-        # dictionary with processing awards/qualifications
-        self.processing_items = {}
-        # dictionary with already processed awards/qualifications for prevent duplicates
-        self.processed_items = {}
+        self.db = Db(config)
+        self.process_tracker = ProcessTracker(self.db)
 
         # Workers
         self.scanner = partial(Scanner.spawn,
                                tenders_sync_client=self.tenders_sync_client,
                                filtered_tender_ids_queue=self.filtered_tender_ids_queue,
                                services_not_available=self.services_not_available,
+                               process_tracker=self.process_tracker,
                                increment_step=self.increment_step,
                                decrement_step=self.decrement_step,
                                delay=self.delay)
@@ -104,9 +103,8 @@ class EdrDataBridge(object):
                                      tenders_sync_client=self.tenders_sync_client,
                                      filtered_tender_ids_queue=self.filtered_tender_ids_queue,
                                      edrpou_codes_queue=self.edrpou_codes_queue,
-                                     processing_items=self.processing_items,
+                                     process_tracker=self.process_tracker,
                                      services_not_available=self.services_not_available,
-                                     processed_items=self.processed_items,
                                      increment_step=self.increment_step,
                                      decrement_step=self.decrement_step,
                                      delay=self.delay)
@@ -115,7 +113,7 @@ class EdrDataBridge(object):
                                    proxyClient=self.proxyClient,
                                    edrpou_codes_queue=self.edrpou_codes_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
-                                   processing_items=self.processing_items,
+                                   process_tracker=self.process_tracker,
                                    services_not_available=self.services_not_available,
                                    delay=self.delay)
 
@@ -123,8 +121,7 @@ class EdrDataBridge(object):
                                    client=self.client,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    upload_to_tender_queue=self.upload_to_tender_queue,
-                                   processing_items=self.processing_items,
-                                   processed_items=self.processed_items,
+                                   process_tracker=self.process_tracker,
                                    doc_service_client=self.doc_service_client,
                                    services_not_available=self.services_not_available,
                                    increment_step=self.increment_step,
@@ -134,7 +131,7 @@ class EdrDataBridge(object):
     def config_get(self, name):
         return self.config.get('main').get(name)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def check_doc_service(self):
         try:
             request("{host}:{port}/".format(host=self.doc_service_host, port=self.doc_service_port))
@@ -145,7 +142,7 @@ class EdrDataBridge(object):
         else:
             return True
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def check_proxy(self):
         """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
@@ -157,7 +154,7 @@ class EdrDataBridge(object):
         else:
             return True
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def check_openprocurement_api(self):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:

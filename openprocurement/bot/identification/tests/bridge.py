@@ -124,12 +124,8 @@ class TestBridgeWorker(BaseServersTest):
         self.assertTrue(isinstance(self.worker.client, TendersClient))
         self.assertTrue(isinstance(self.worker.proxyClient, ProxyClient))
         self.assertTrue(isinstance(self.worker.doc_service_client, DocServiceClient))
-
-        # check events
         self.assertFalse(self.worker.initialization_event.is_set())
-
-        # check processing items
-        self.assertEqual(self.worker.processing_items, {})
+        self.assertEqual(self.worker.process_tracker.processing_items, {})
 
     @patch('openprocurement.bot.identification.databridge.bridge.ProxyClient')
     @patch('openprocurement.bot.identification.databridge.bridge.DocServiceClient')

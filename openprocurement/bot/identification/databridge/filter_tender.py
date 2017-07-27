@@ -30,7 +30,7 @@ class FilterTenders(Greenlet):
     identification_scheme = u'UA-EDR'
     sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, processing_items, services_not_available, processed_items, increment_step=1, decrement_step=1,  delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, process_tracker, services_not_available, increment_step=1, decrement_step=1,  delay=15):
         super(FilterTenders, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -42,8 +42,7 @@ class FilterTenders(Greenlet):
         # init queues for workers
         self.filtered_tender_ids_queue = filtered_tender_ids_queue
         self.edrpou_codes_queue = edrpou_codes_queue
-        self.processing_items = processing_items
-        self.processed_items = processed_items
+        self.process_tracker = process_tracker
         self.increment_step = increment_step
         self.decrement_step = decrement_step
 
@@ -93,11 +92,10 @@ class FilterTenders(Greenlet):
                         logger.info('Processing tender {} bid {} award {}'.format(tender['id'], award['bid_id'], award['id']),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_PROCESS},
                                     params={"TENDER_ID": tender['id'], "BID_ID": award['bid_id'], "AWARD_ID": award['id']}))
-                        if award['status'] == 'pending' and not [document for document in award.get('documents', [])
-                                                                 if document.get('documentType') == 'registerExtract']:
+                        if self.should_process_item(award):
                             for supplier in award['suppliers']:
                                 code = supplier['identifier']['id']
-                                if not (type(code) == int or(type(code) == str and code.isdigit()) or (type(code) == unicode and code.isdigit())):
+                                if self.is_code_invalid(code):
                                     self.filtered_tender_ids_queue.get()
                                     logger.info(u'Tender {} bid {} award {} identifier id {} is not valid.'.format(
                                         tender['id'], award['bid_id'], award['id'], code),
@@ -105,16 +103,13 @@ class FilterTenders(Greenlet):
                                                               params={"TENDER_ID": tender['id'], "BID_ID": award['bid_id'], "AWARD_ID": award['id']}))
                                     continue
                                  # quick check if item was already processed
-                                if self.check_processed_item(tender['id'], award['id']):
+                                if self.process_tracker.check_processed_item(tender['id'], award['id']):
                                     logger.info('Tender {} bid {} award {} was already processed.'.format(
                                         tender['id'], award['bid_id'], award['id']),
                                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
                                                               params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id'], "AWARD_ID": award['id']}))
-                                # check first identification scheme, if yes then check if item is already in process or not
-                                elif (supplier['identifier']['scheme'] == self.identification_scheme and
-                                        self.check_related_lot_status(tender, award) and
-                                        not self.check_processing_item(tender['id'], award['id'])):
-                                    self.processing_items['{}_{}'.format(tender['id'], award['id'])] = 0
+                                elif self.should_process_award(supplier, tender, award):
+                                    self.process_tracker.set_item(tender['id'], award['id'])
                                     document_id = generate_doc_id()
                                     tender_data = Data(tender['id'], award['id'], str(code),
                                                        'awards', {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
@@ -130,11 +125,10 @@ class FilterTenders(Greenlet):
                                         extra=journal_context(params={"TENDER_ID": tender['id'], "BID_ID":  award['bid_id'], "AWARD_ID": award['id']}))
                 elif 'qualifications' in tender:
                     for qualification in tender['qualifications']:
-                        if (qualification['status'] == 'pending' and
-                                not [doc for doc in qualification.get('documents', []) if doc.get('documentType') == 'registerExtract']):
+                        if self.should_process_item(qualification):
                             appropriate_bid = [b for b in tender['bids'] if b['id'] == qualification['bidID']][0]
                             code = appropriate_bid['tenderers'][0]['identifier']['id']
-                            if not (type(code) == int or (type(code) == str and code.isdigit()) or (type(code) == unicode and code.isdigit())):
+                            if self.is_code_invalid(code):
                                 self.filtered_tender_ids_queue.get()
                                 logger.info(u'Tender {} bid {} qualification {} identifier id {} is not valid.'.format(
                                     tender['id'], qualification['bidID'], qualification['id'], code),
@@ -143,15 +137,15 @@ class FilterTenders(Greenlet):
                                                               qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                                 continue
                             # quick check if item was already processed
-                            if self.check_processed_item(tender['id'], qualification['id']):
+                            if self.process_tracker.check_processed_item(tender['id'], qualification['id']):
                                 logger.info('Tender {} bid {} qualification {} was already processed.'.format(
                                         tender['id'], qualification['bidID'], qualification['id']),
                                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
                                                           params={"TENDER_ID": tender['id'],
                                                                   "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                             # check first identification scheme, if yes then check if item is already in process or not
-                            elif appropriate_bid['tenderers'][0]['identifier']['scheme'] == self.identification_scheme and not self.check_processing_item(tender['id'], qualification['id']):
-                                self.processing_items['{}_{}'.format(tender['id'], qualification['id'])] = 0
+                            elif self.should_process_qualification(appropriate_bid, tender, qualification):
+                                self.process_tracker.set_item(tender['id'], qualification['id'])
                                 document_id = generate_doc_id()
                                 tender_data = Data(tender['id'], qualification['id'], str(code),
                                                    'qualifications', {'meta': {'id': document_id, 'author': author, 'sourceRequests': [response.headers['X-Request-ID']]}})
@@ -170,18 +164,27 @@ class FilterTenders(Greenlet):
                             logger.info('Tender {} bid {} qualification {} is not in status pending or qualification has '
                                         'already document with documentType registerExtract.'.format(
                                             tender_id, qualification['bidID'], qualification['id']),
-                                            extra=journal_context(params={"TENDER_ID": tender['id'],
-                                                                          "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
+                                        extra=journal_context(params={"TENDER_ID": tender['id'],
+                                                                      "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                 self.filtered_tender_ids_queue.get()  # Remove elem from queue
             gevent.sleep(FilterTenders.sleep_change_value)
 
-    def check_processing_item(self, tender_id, item_id):
-        """Check if current tender_id, item_id is processing"""
-        return '{}_{}'.format(tender_id, item_id) in self.processing_items.keys()
+    def should_process_item(self, item):
+        return (item['status'] == 'pending' and not [document for document in item.get('documents', [])
+                                                     if document.get('documentType') == 'registerExtract'])
 
-    def check_processed_item(self, tender_id, item_id):
-        """Check if current tender_id, item_id was already processing"""
-        return '{}_{}'.format(tender_id, item_id) in self.processed_items.keys()
+    def is_code_invalid(self, code):
+        return (not (type(code) == int or (type(code) == str and code.isdigit()) or
+                     (type(code) == unicode and code.isdigit())))
+
+    def should_process_award(self, supplier, tender, award):
+        return (supplier['identifier']['scheme'] == self.identification_scheme and
+                self.check_related_lot_status(tender, award) and
+                not self.process_tracker.check_processing_item(tender['id'], award['id']))
+
+    def should_process_qualification(self, bid, tender, qualification):
+        return (bid['tenderers'][0]['identifier']['scheme'] == self.identification_scheme
+                and not self.process_tracker.check_processing_item(tender['id'], qualification['id']))
 
     def check_related_lot_status(self, tender, award):
         """Check if related lot not in status cancelled"""
@@ -199,7 +202,8 @@ class FilterTenders(Greenlet):
             while not self.exit:
                 gevent.sleep(self.delay)
                 if self.job.dead:
-                    logger.warning("Filter tender job die. Try to restart.",  extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_FILTER_TENDER}, {}))
+                    logger.warning("Filter tender job die. Try to restart.",
+                                   extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_FILTER_TENDER}, {}))
                     self.job = spawn(self.prepare_data)
                     logger.info("filter tenders job restarted.")
         except Exception as e:

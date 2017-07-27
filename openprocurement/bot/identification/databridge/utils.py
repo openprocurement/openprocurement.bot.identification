@@ -3,12 +3,69 @@ import yaml
 import io
 
 from uuid import uuid4
-from collections import namedtuple
+from caching import db_key
+from logging import getLogger
+from datetime import datetime
 from restkit import ResourceError
+from collections import namedtuple
 
 from openprocurement.bot.identification.databridge.constants import file_name
 
+LOGGER = getLogger(__name__)
+
 id_passport_len = 9
+
+
+class ProcessTracker(object):
+
+    def __init__(self, db=None):
+        self.processing_items = {}
+        self.processed_items = {}
+        self.processed_tenders = {}
+        self.db = db
+        self.tender_documents_to_process = {}
+
+    def set_item(self, tender_id, item_id, docs_amount=0):
+        self.processing_items[item_key(tender_id, item_id)] = docs_amount
+        self.add_docs_amount_to_tender(tender_id, docs_amount)
+
+    def add_docs_amount_to_tender(self, tender_id, docs_amount):
+        if self.tender_documents_to_process.get(tender_id):
+            self.tender_documents_to_process[tender_id] += docs_amount
+        else:
+            self.tender_documents_to_process[tender_id] = docs_amount
+
+    def remove_docs_amount_from_tender(self, tender_id):
+        if self.tender_documents_to_process[tender_id] > 1:
+            self.tender_documents_to_process[tender_id] -= 1
+        else:
+            self.db.put(db_key(tender_id), datetime.now().isoformat(), 300)
+            del self.tender_documents_to_process[tender_id]
+
+    def check_processing_item(self, tender_id, item_id):
+        """Check if current tender_id, item_id is processing"""
+        return item_key(tender_id, item_id) in self.processing_items.keys()
+
+    def check_processed_item(self, tender_id, item_id):
+        """Check if current tender_id, item_id was already processing"""
+        return item_key(tender_id, item_id) in self.processed_items.keys()
+
+    def check_processed_tenders(self, tender_id):
+        t = self.db.has(db_key(tender_id)) or False
+        return t
+
+    def update_processing_items(self, tender_id, item_id):
+        key = item_key(tender_id, item_id)
+        if self.processing_items[key] > 1:
+            self.processing_items[key] -= 1
+        else:
+            self.processed_items[key] = datetime.now()
+            del self.processing_items[key]
+        self.remove_docs_amount_from_tender(tender_id)
+
+
+def item_key(tender_id, item_id):
+    return '{}_{}'.format(tender_id, item_id)
 
 Data = namedtuple('Data', [
     'tender_id',  # tender ID
@@ -18,8 +75,10 @@ Data = namedtuple('Data', [
     'file_content'  # details for file
 ])
 
+
 def data_string(data):
     return "tender {} {} id: {}".format(data.tender_id, data.item_name[:-1], data.item_id)
+
 
 def journal_context(record={}, params={}):
     for k, v in params.items():
@@ -62,7 +121,6 @@ def check_add_suffix(list_ids, document_id, number):
 
 
 def check_412(func):
-
     def func_wrapper(obj, *args, **kwargs):
         try:
             response = func(obj, *args, **kwargs)
@@ -73,4 +131,5 @@ def check_412(func):
             else:
                 raise ResourceError(re)
         return response
+
     return func_wrapper

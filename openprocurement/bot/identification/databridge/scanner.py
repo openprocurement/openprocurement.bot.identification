@@ -5,6 +5,7 @@ import logging.config
 import gevent
 from gevent.event import Event
 from gevent import Greenlet, spawn
+from openprocurement.bot.identification.databridge.constants import retry_mult
 from retrying import retry
 from restkit import ResourceError
 
@@ -25,11 +26,10 @@ class Scanner(Greenlet):
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
     sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, services_not_available, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, services_not_available, process_tracker, increment_step=1, decrement_step=1, delay=15):
         super(Scanner, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
-
         self.delay = delay
         # init clients
         self.tenders_sync_client = tenders_sync_client
@@ -37,13 +37,15 @@ class Scanner(Greenlet):
         # init queues for workers
         self.filtered_tender_ids_queue = filtered_tender_ids_queue
 
+        self.process_tracker = process_tracker
+
         # blockers
         self.initialization_event = Event()
+        self.services_not_available = services_not_available
         self.increment_step = increment_step
         self.decrement_step = decrement_step
-        self.services_not_available = services_not_available
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def initialize_sync(self, params=None, direction=None):
         if direction == "backward":
             self.initialization_event.clear()
@@ -71,10 +73,7 @@ class Scanner(Greenlet):
             tenders = response.data if response else []
             params['offset'] = response.next_page.offset
             for tender in tenders:
-                if (tender['status'] == "active.qualification" and
-                    tender['procurementMethodType'] in self.qualification_procurementMethodType) \
-                    or (tender['status'] == 'active.pre-qualification' and
-                        tender['procurementMethodType'] in self.pre_qualification_procurementMethodType):
+                if self.should_process_tender(tender):
                     yield tender
                 else:
                     logger.info('Skipping tender {} with status {} with procurementMethodType {}'.format(
@@ -92,6 +91,18 @@ class Scanner(Greenlet):
                     logger.info("Received 429, will sleep for {}".format(Scanner.sleep_change_value))
                 else:
                     raise re
+
+    def should_process_tender(self, tender):
+        return (not self.process_tracker.check_processed_tenders(tender['id']) and
+                (self.valid_qualification_tender(tender) or self.valid_prequal_tender(tender)))
+
+    def valid_qualification_tender(self, tender):
+        return (tender['status'] == "active.qualification" and
+                tender['procurementMethodType'] in self.qualification_procurementMethodType)
+
+    def valid_prequal_tender(self, tender):
+        return (tender['status'] == 'active.pre-qualification' and
+                tender['procurementMethodType'] in self.pre_qualification_procurementMethodType)
 
     def get_tenders_forward(self):
         logger.info('Start forward data sync worker...')
@@ -146,8 +157,7 @@ class Scanner(Greenlet):
             while not self.exit:
                 self.services_not_available.wait()
                 gevent.sleep(self.delay)
-                if forward_worker.dead or (backward_worker.dead and
-                                           not backward_worker.value):
+                if forward_worker.dead or (backward_worker.dead and not backward_worker.value):
                     self._restart_synchronization_workers()
                     backward_worker, forward_worker = self.jobs
         except Exception as e:

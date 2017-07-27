@@ -16,7 +16,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER,
     DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
     DATABRIDGE_422_UPLOAD_TO_TENDER, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING)
-from openprocurement.bot.identification.databridge.constants import file_name
+from openprocurement.bot.identification.databridge.constants import file_name, retry_mult
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +28,13 @@ class UploadFile(Greenlet):
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
     sleep_change_value = 0
 
-    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, services_not_available, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client, services_not_available, increment_step=1, decrement_step=1, delay=15):
         super(UploadFile, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
 
         self.delay = delay
-        self.processing_items = processing_items
-        self.processed_items = processed_items
+        self.process_tracker = process_tracker
 
         # init clients
         self.client = client
@@ -124,7 +123,7 @@ class UploadFile(Greenlet):
                                                              item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                 logger.exception("Message: {}".format(e.message))
                 self.retry_upload_to_doc_service_queue.get()
-                self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                 raise e
             else:
                 if response.status_code == 200:
@@ -145,7 +144,7 @@ class UploadFile(Greenlet):
                                                               item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
         return self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
@@ -178,7 +177,7 @@ class UploadFile(Greenlet):
                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
                                                          {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                           "DOCUMENT_ID": document_id}))
-                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     self.upload_to_tender_queue.get()
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     continue
@@ -189,7 +188,7 @@ class UploadFile(Greenlet):
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                "DOCUMENT_ID": document_id})
                     )
-                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     self.upload_to_tender_queue.get()
                 elif re.status_int == 429:
@@ -224,7 +223,7 @@ class UploadFile(Greenlet):
                                           params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                   "DOCUMENT_ID": document_id}))
                 # delete current tender after successful upload file (to avoid reloading file)
-                self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                 self.upload_to_tender_queue.get()
                 UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
             gevent.sleep(UploadFile.sleep_change_value)
@@ -249,7 +248,7 @@ class UploadFile(Greenlet):
                     logger.warning("Accept 422, skip {} doc_id: {}. Message {}".format(data_string(tender_data), document_id, re.msg),
                                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
                                                          {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     continue
@@ -266,7 +265,7 @@ class UploadFile(Greenlet):
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                "DOCUMENT_ID": document_id})
                     )
-                    self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                    self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
                     UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
                     continue
@@ -288,12 +287,12 @@ class UploadFile(Greenlet):
                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
                                           params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                 # delete current tender after successful upload file (to avoid reloading file)
-                self.update_processing_items(tender_data.tender_id, tender_data.item_id)
+                self.process_tracker.update_processing_items(tender_data.tender_id, tender_data.item_id)
                 self.retry_upload_to_tender_queue.get()
                 UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
             gevent.sleep(UploadFile.sleep_change_value)
 
-    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=1000)
+    @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def client_upload_to_tender(self, tender_data):
         """Process upload to tender request for retry queue objects."""
         document_data = tender_data.file_content.get('data', {})
@@ -303,15 +302,6 @@ class UploadFile(Greenlet):
                                                  {'data': document_data},
                                                  '{}/{}/documents'.format(tender_data.item_name,
                                                                           tender_data.item_id))
-
-    def update_processing_items(self, tender_id, item_id):
-        key = '{}_{}'.format(tender_id, item_id)
-        if self.processing_items[key] > 1:
-            self.processing_items[key] -= 1
-        else:
-            # push to global dict with processed items
-            self.processed_items[key] = datetime.now()
-            del self.processing_items[key]
 
     def _run(self):
         logger.info('Start UploadFile worker', extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_UPLOAD}, {}))
