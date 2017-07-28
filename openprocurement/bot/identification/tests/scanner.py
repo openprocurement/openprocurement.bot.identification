@@ -16,18 +16,21 @@ from restkit.errors import (
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.tests.utils import custom_sleep
 
+from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
+
 
 class TestScannerWorker(unittest.TestCase):
+    def setUp(self):
+        self.sleep_change_value = APIRateController()
 
     def test_init(self):
         client = MagicMock()
         tender_queue = Queue(10)
-        worker = Scanner.spawn(client, tender_queue, MagicMock())
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
         self.assertGreater(datetime.datetime.now().isoformat(), worker.start_time.isoformat())
         self.assertEqual(worker.tenders_sync_client, client)
         self.assertEqual(worker.filtered_tender_ids_queue, tender_queue)
-        self.assertEqual(worker.increment_step, 1)
-        self.assertEqual(worker.decrement_step, 1)
+        self.assertEqual(worker.sleep_change_value.time_between_requests, 0)
         self.assertEqual(worker.delay, 15)
         self.assertEqual(worker.exit, False)
 
@@ -62,7 +65,7 @@ class TestScannerWorker(unittest.TestCase):
                                 'procurementMethodType': 'aboveThresholdEU'}]})
         ]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock())
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
@@ -101,7 +104,9 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdUA'}]})]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 2, 1)
+        self.sleep_change_value.increment_step = 2
+        self.sleep_change_value.decrement_step = 1
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
@@ -109,8 +114,7 @@ class TestScannerWorker(unittest.TestCase):
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(Scanner.sleep_change_value, 1)
-        Scanner.sleep_change_value = 0
+        self.assertEqual(self.sleep_change_value.time_between_requests, 1)
 
     @patch('gevent.sleep')
     def test_429_sleep_change_value(self, gevent_sleep):
@@ -149,17 +153,18 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 1, 0.5)
+        self.sleep_change_value.increment_step = 1
+        self.sleep_change_value.decrement_step = 0.5
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
 
-        self.assertEqual(Scanner.sleep_change_value, 2.5)
+        self.assertEqual(self.sleep_change_value.time_between_requests, 2.5)
 
         # Kill worker
         worker.shutdown()
         del worker
-        Scanner.sleep_change_value = 0
 
     @patch('gevent.sleep')
     def test_backward_dead(self, gevent_sleep):
@@ -189,7 +194,9 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 1, 0.5)
+        self.sleep_change_value.increment_step = 1
+        self.sleep_change_value.decrement_step = 0.5
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
@@ -224,7 +231,9 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": tenders_id[1],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 1, 0.5)
+        self.sleep_change_value.increment_step = 1
+        self.sleep_change_value.decrement_step = 0.5
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
@@ -261,7 +270,9 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": tenders_id[2],
                                 'procurementMethodType': 'aboveThresholdEU'}]})]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 1, 0.5)
+        self.sleep_change_value.increment_step = 1
+        self.sleep_change_value.decrement_step = 0.5
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
@@ -310,7 +321,9 @@ class TestScannerWorker(unittest.TestCase):
                                 'procurementMethodType': 'aboveThresholdEU'}]})
         ]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 1, 0.5)
+        self.sleep_change_value.increment_step = 1
+        self.sleep_change_value.decrement_step = 0.5
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
 
         for tender_id in tenders_id:
             self.assertEqual(tender_queue.get(), tender_id)
@@ -334,25 +347,28 @@ class TestScannerWorker(unittest.TestCase):
                                 "id": tender_id,
                                 'procurementMethodType': 'aboveThresholdUA'}]})]
 
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 2, 1)
+        self.sleep_change_value.increment_step = 2
+        self.sleep_change_value.decrement_step = 1
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
         self.assertEqual(tender_queue.get(), tender_id)
 
         # Kill worker
         worker.shutdown()
         del worker
-        self.assertEqual(Scanner.sleep_change_value, 0)
-        Scanner.sleep_change_value = 0
+        self.assertEqual(self.sleep_change_value.time_between_requests, 0)
 
     @patch('gevent.sleep')
     def test_kill_jobs_with_exception(self, gevent_sleep):
         """Kill job and check Exception"""
         gevent_sleep.side_effect = custom_sleep
-        worker = Scanner.spawn(MagicMock(), MagicMock(), MagicMock(), 2, 1)
+        self.sleep_change_value.increment_step = 2
+        self.sleep_change_value.decrement_step = 1
+        worker = Scanner.spawn(MagicMock(), MagicMock(), MagicMock(), self.sleep_change_value)
         sleep(1)
         for job in worker.jobs:
             job.kill(exception=Exception)
         sleep(4)
-        self.assertEqual(worker.ready(), False)
+        self.assertFalse(worker.ready(), False)
 
     @patch('gevent.sleep')
     def test_forward_exception(self, gevent_sleep):
@@ -362,7 +378,9 @@ class TestScannerWorker(unittest.TestCase):
         tender_queue = Queue(10)
         client = MagicMock()
         tender_id = uuid.uuid4().hex
-        worker = Scanner.spawn(client, tender_queue, MagicMock(), 1, 0.5)
+        self.sleep_change_value.increment_step = 1
+        self.sleep_change_value.decrement_step = 0.5
+        worker = Scanner.spawn(client, tender_queue, MagicMock(), self.sleep_change_value)
         worker.initialize_sync = MagicMock(side_effect=[
             ResourceError(msg=RequestFailed()),
                 munchify({'prev_page': {'offset': '123'},
