@@ -205,7 +205,7 @@ class EdrHandler(Greenlet):
         response = self.proxyClient.verify(param, code, headers={'X-Client-Request-ID': document_id})
         if response.status_code not in (200, 429):
             logger.info(
-                'Get unsuccessful response {} in get_edr_id_request code={} document_id={}, header {}'.format(response.status_code, param, code, response.headers.get('X-Request-ID')))
+                'Get unsuccessful response {} in get_edr_id_request code={} document_id={}, header {}'.format(response.status_code, code, document_id, response.headers.get('X-Request-ID')))
             raise RetryException('Unsuccessful retry request to EDR.', response)
         return response
 
