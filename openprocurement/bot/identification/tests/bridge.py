@@ -116,8 +116,7 @@ class TestBridgeWorker(BaseServersTest):
     def test_init(self):
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, 15)
-        self.assertEqual(self.worker.increment_step, 1)
-        self.assertEqual(self.worker.decrement_step, 1)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
 
         # check clients
         self.assertTrue(isinstance(self.worker.tenders_sync_client, TendersClientSync))
