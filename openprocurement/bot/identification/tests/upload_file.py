@@ -101,7 +101,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.worker.shutdown()
 
     def test_init(self):
-        worker = UploadFile.spawn(None, None, None, None, None, None)
+        worker = UploadFile.spawn(None, None, None, None, None, None, None)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
         self.assertEqual(worker.client, None)
@@ -185,7 +185,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.upload_to_tender_queue.put(self.data)
         self.shutdown_when_done(self.worker)
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(self.worker.sleep_change_value, 1)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 1)
 
     @patch('gevent.sleep')
     def test_upload_to_tender_exception(self, gevent_sleep):
@@ -195,7 +195,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.worker.client_upload_to_tender = MagicMock(side_effect=ResourceError(http_code=403))
         self.shutdown_when_done(self.worker)
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(self.worker.sleep_change_value, 0)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
 
     @patch('gevent.sleep')
     def test_upload_to_tender_exception_status_int_none(self, gevent_sleep):
@@ -205,7 +205,7 @@ class TestUploadFileWorker(unittest.TestCase):
         client._create_tender_resource_item = MagicMock(side_effect=[Unauthorized()])
         self.shutdown_when_done(self.worker)
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(self.worker.sleep_change_value, 0)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -314,7 +314,7 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_request_failed_in_retry(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         self.worker = UploadFile.spawn(self.client, self.upload_to_doc_service_queue, self.upload_to_tender_queue,
-                                       self.process_tracker, self.doc_service_client, MagicMock(), 3, 1.5)
+                                       self.process_tracker, self.doc_service_client, MagicMock(), self.sleep_change_value)
         self.worker.client_upload_to_tender = MagicMock()
         self.worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429),
                                                       ResourceError(http_code=429),
@@ -329,7 +329,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(self.worker.retry_upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
-        self.assertEqual(self.worker.sleep_change_value, 13.5)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 13.5)
         self.assertEqual(self.process_tracker.processing_items, {})
         self.assertEqual(self.worker.client_upload_to_tender.call_count, 6)  # check that processed just 1 request
 
