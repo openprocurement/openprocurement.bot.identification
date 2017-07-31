@@ -4,7 +4,7 @@ from uuid import uuid4
 from json import dumps
 
 
-def custom_sleep(seconds):
+def custom_sleep(seconds=0):
     return gsleep(seconds=0)
 
 
