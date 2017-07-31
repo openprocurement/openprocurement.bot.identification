@@ -18,11 +18,12 @@ id_passport_len = 9
 
 class ProcessTracker(object):
 
-    def __init__(self, db=None):
+    def __init__(self, db=None, ttl=300):
         self.processing_items = {}
         self.processed_items = {}
         self._db = db
         self.tender_documents_to_process = {}
+        self.ttl = ttl
 
     def set_item(self, tender_id, item_id, docs_amount=0):
         self.processing_items[item_key(tender_id, item_id)] = docs_amount
@@ -38,7 +39,7 @@ class ProcessTracker(object):
         if self.tender_documents_to_process[tender_id] > 1:
             self.tender_documents_to_process[tender_id] -= 1
         else:
-            self._db.put(db_key(tender_id), datetime.now().isoformat(), 300)
+            self._db.put(db_key(tender_id), datetime.now().isoformat(), self.ttl)
             del self.tender_documents_to_process[tender_id]
 
     def check_processing_item(self, tender_id, item_id):

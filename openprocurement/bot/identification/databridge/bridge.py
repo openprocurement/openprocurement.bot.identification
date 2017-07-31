@@ -65,6 +65,7 @@ class EdrDataBridge(object):
         self.doc_service_host = self.config_get('doc_service_server')
         self.doc_service_port = self.config_get('doc_service_port') or 6555
         self.sandbox_mode = os.environ.get('SANDBOX_MODE', 'False')
+        self.time_to_live = self.config_get('time_to_live') or 300
 
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
@@ -90,7 +91,7 @@ class EdrDataBridge(object):
         self.initialization_event = gevent.event.Event()
         self.services_not_available = gevent.event.Event()
         self.db = Db(config)
-        self.process_tracker = ProcessTracker(self.db)
+        self.process_tracker = ProcessTracker(self.db, self.time_to_live)
 
         # Workers
         self.scanner = partial(Scanner.spawn,
