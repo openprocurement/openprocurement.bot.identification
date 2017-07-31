@@ -24,9 +24,8 @@ class Scanner(Greenlet):
 
     pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
-    sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, services_not_available, process_tracker, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, services_not_available, process_tracker, sleep_change_value, delay=15):
         super(Scanner, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -41,9 +40,8 @@ class Scanner(Greenlet):
 
         # blockers
         self.initialization_event = Event()
+        self.sleep_change_value = sleep_change_value
         self.services_not_available = services_not_available
-        self.increment_step = increment_step
-        self.decrement_step = decrement_step
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def initialize_sync(self, params=None, direction=None):
@@ -81,14 +79,14 @@ class Scanner(Greenlet):
                                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_INFO},
                                                       params={"TENDER_ID": tender['id']}))
             logger.info('Sleep {} sync...'.format(direction), extra=journal_context({"MESSAGE_ID": DATABRIDGE_SYNC_SLEEP}))
-            gevent.sleep(self.delay + Scanner.sleep_change_value)
+            gevent.sleep(self.delay + self.sleep_change_value.time_between_requests)
             try:
                 response = self.tenders_sync_client.sync_tenders(params, extra_headers={'X-Client-Request-ID': generate_req_id()})
-                Scanner.sleep_change_value = Scanner.sleep_change_value - self.decrement_step if self.decrement_step < Scanner.sleep_change_value else 0
+                self.sleep_change_value.decrement()
             except ResourceError as re:
                 if re.status_int == 429:
-                    Scanner.sleep_change_value += self.increment_step
-                    logger.info("Received 429, will sleep for {}".format(Scanner.sleep_change_value))
+                    self.sleep_change_value.increment()
+                    logger.info("Received 429, will sleep for {}".format(self.sleep_change_value.time_between_requests))
                 else:
                     raise re
 

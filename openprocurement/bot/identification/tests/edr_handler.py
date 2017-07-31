@@ -24,6 +24,7 @@ from openprocurement.bot.identification.tests.utils import custom_sleep, generat
     ResponseMock
 from openprocurement.bot.identification.client import ProxyClient
 from openprocurement.bot.identification.databridge.constants import version, author
+from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 
 def get_random_edr_ids(count=1):
@@ -50,6 +51,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.process_tracker = ProcessTracker()
         self.worker = EdrHandler.spawn(self.proxy_client, self.edrpou_codes_queue,
                                        self.upload_to_doc_service_queue, self.process_tracker, MagicMock())
+        self.sleep_change_value = APIRateController()
 
     def meta(self):
         return {'meta': {'id': self.document_id, 'author': author, 'sourceRequests': [
@@ -529,7 +531,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                                   }]}, ]}}))
         mrequest.get(self.url, [self.stat_200([{}], self.source_date, edr_req_id)])
         filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue,
-                                                    self.process_tracker, MagicMock())
+                                                    self.process_tracker, MagicMock(), self.sleep_change_value)
         self.worker = EdrHandler.spawn(self.proxy_client, edrpou_codes_queue, upload_to_doc_service_queue,
                                        MagicMock(), MagicMock())
 

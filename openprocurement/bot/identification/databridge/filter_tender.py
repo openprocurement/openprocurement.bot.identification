@@ -28,9 +28,8 @@ logger = logging.getLogger(__name__)
 class FilterTenders(Greenlet):
     """ Edr API Data Bridge """
     identification_scheme = u'UA-EDR'
-    sleep_change_value = 0
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, process_tracker, services_not_available, increment_step=1, decrement_step=1,  delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, process_tracker, services_not_available, sleep_change_value, delay=15):
         super(FilterTenders, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -43,8 +42,7 @@ class FilterTenders(Greenlet):
         self.filtered_tender_ids_queue = filtered_tender_ids_queue
         self.edrpou_codes_queue = edrpou_codes_queue
         self.process_tracker = process_tracker
-        self.increment_step = increment_step
-        self.decrement_step = decrement_step
+        self.sleep_change_value = sleep_change_value
 
         # blockers
         self.services_not_available = services_not_available
@@ -64,8 +62,8 @@ class FilterTenders(Greenlet):
                                                             headers={'X-Client-Request-ID': generate_req_id()})
             except ResourceError as re:
                 if re.status_int == 429:
-                    FilterTenders.sleep_change_value += self.increment_step
-                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(tender_id, FilterTenders.sleep_change_value))
+                    self.sleep_change_value.increment()
+                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(tender_id, self.sleep_change_value.time_between_requests))
                 else:
                     logger.warning('Fail to get tender info {}'.format(tender_id),
                                    extra=journal_context(params={"TENDER_ID": tender_id}))
@@ -81,7 +79,7 @@ class FilterTenders(Greenlet):
                             extra=journal_context(params={"TENDER_ID": tender_id}))
                 gevent.sleep(0)
             else:
-                FilterTenders.sleep_change_value = FilterTenders.sleep_change_value - self.decrement_step if self.decrement_step < FilterTenders.sleep_change_value else 0
+                self.sleep_change_value.decrement()
                 if response.status_int == 200:
                     tender = munchify(loads(response.body_string()))['data']
                 logger.info('Get tender {} from filtered_tender_ids_queue'.format(tender_id),
@@ -167,7 +165,7 @@ class FilterTenders(Greenlet):
                                         extra=journal_context(params={"TENDER_ID": tender['id'],
                                                                       "BID_ID": qualification['bidID'], "QUALIFICATION_ID": qualification['id']}))
                 self.filtered_tender_ids_queue.get()  # Remove elem from queue
-            gevent.sleep(FilterTenders.sleep_change_value)
+            gevent.sleep(self.sleep_change_value.time_between_requests)
 
     def should_process_item(self, item):
         return (item['status'] == 'pending' and not [document for document in item.get('documents', [])

@@ -26,9 +26,8 @@ class UploadFile(Greenlet):
 
     pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
     qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
-    sleep_change_value = 0
 
-    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client, services_not_available, increment_step=1, decrement_step=1, delay=15):
+    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client, services_not_available, sleep_change_value, delay=15):
         super(UploadFile, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -44,9 +43,7 @@ class UploadFile(Greenlet):
         self.upload_to_doc_service_queue = upload_to_doc_service_queue
         self.upload_to_tender_queue = upload_to_tender_queue
 
-        self.increment_step = increment_step
-        self.decrement_step = decrement_step
-
+        self.sleep_change_value = sleep_change_value
         # retry queues for workers
         self.retry_upload_to_doc_service_queue = Queue(maxsize=500)
         self.retry_upload_to_tender_queue = Queue(maxsize=500)
@@ -179,7 +176,7 @@ class UploadFile(Greenlet):
                                                           "DOCUMENT_ID": document_id}))
                     self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
                     self.upload_to_tender_queue.get()
-                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    self.sleep_change_value.decrement()
                     continue
                 elif re.status_int == 403 or re.status_int is None:
                     logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
@@ -189,7 +186,7 @@ class UploadFile(Greenlet):
                                                "DOCUMENT_ID": document_id})
                     )
                     self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    self.sleep_change_value.decrement()
                     self.upload_to_tender_queue.get()
                 elif re.status_int == 429:
                     logger.info("Accept 429 while uploading to tender {} {} {} doc_id: {}. Message {}".format(
@@ -197,7 +194,7 @@ class UploadFile(Greenlet):
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
                                                "DOCUMENT_ID": document_id}))
-                    UploadFile.sleep_change_value += self.increment_step
+                    self.sleep_change_value.increment()
                 else:
                     logger.warning('ResourceError while uploading file to {} doc_id: {}. Message: {}'.format(
                         data_string(tender_data), document_id, re.message),
@@ -206,7 +203,7 @@ class UploadFile(Greenlet):
                                                       "DOCUMENT_ID": document_id}))
                     self.retry_upload_to_tender_queue.put(tender_data)
                     self.upload_to_tender_queue.get()
-                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    self.sleep_change_value.decrement()
             except Exception as e:
                 logger.info('Exception while uploading file to {} doc_id: {}. Message: {}'.format(
                     data_string(tender_data), document_id, e.message),
@@ -215,7 +212,7 @@ class UploadFile(Greenlet):
                                                   "DOCUMENT_ID": document_id}))
                 self.retry_upload_to_tender_queue.put(tender_data)
                 self.upload_to_tender_queue.get()
-                UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                self.sleep_change_value.decrement()
             else:
                 logger.info('Successfully uploaded file to {} doc_id: {}'.format(
                     data_string(tender_data), document_id),
@@ -225,8 +222,8 @@ class UploadFile(Greenlet):
                 # delete current tender after successful upload file (to avoid reloading file)
                 self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
                 self.upload_to_tender_queue.get()
-                UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
-            gevent.sleep(UploadFile.sleep_change_value)
+                self.sleep_change_value.decrement()
+            gevent.sleep(self.sleep_change_value.time_between_requests)
 
     def retry_upload_to_tender(self):
         """Get data from retry_upload_to_tender_queue; If upload was unsuccessful put Data obj back to
@@ -250,14 +247,14 @@ class UploadFile(Greenlet):
                                                          {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                     self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
-                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    self.sleep_change_value.decrement()
                     continue
                 elif re.status_int == 429:
                     logger.info("Accept 429 while uploading to tender {} {} {} doc_id: {}. Message {}".format(
                         tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.msg),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                               {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                    UploadFile.sleep_change_value += self.increment_step
+                    self.sleep_change_value.increment()
                 elif re.status_int == 403 or re.status_int is None:
                     logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
                         re.status_int, data_string(tender_data), document_id, re.msg),
@@ -267,20 +264,21 @@ class UploadFile(Greenlet):
                     )
                     self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
                     self.retry_upload_to_tender_queue.get()
-                    UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                    self.sleep_change_value.decrement()
                     continue
                 else:
                     logger.info('ResourceError while retry uploading file to {} doc_id: {}. ResourceErrorStatus_int: {}. Message: {}'.format(
                         data_string(tender_data), document_id, re.status_int, re.message),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
                                               params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                    self.sleep_change_value.decrement()
             except Exception as e:
                 logger.info('Exception while retry uploading file to {} doc_id: {}. Message: {}'.format(
                     data_string(tender_data), document_id, e.message),
                     extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
                                           params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                 logger.exception("Message: {}".format(e.message))
-                UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
+                self.sleep_change_value.decrement()
             else:
                 logger.info('Successfully uploaded file to {} doc_id: {} in retry'.format(
                     data_string(tender_data), document_id),
@@ -289,8 +287,8 @@ class UploadFile(Greenlet):
                 # delete current tender after successful upload file (to avoid reloading file)
                 self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
                 self.retry_upload_to_tender_queue.get()
-                UploadFile.sleep_change_value = UploadFile.sleep_change_value - self.decrement_step if self.decrement_step < UploadFile.sleep_change_value else 0
-            gevent.sleep(UploadFile.sleep_change_value)
+                self.sleep_change_value.decrement()
+            gevent.sleep(self.sleep_change_value.time_between_requests)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def client_upload_to_tender(self, tender_data):

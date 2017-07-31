@@ -28,6 +28,8 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
     DATABRIDGE_PROXY_SERVER_CONN_ERROR)
 
+from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +61,7 @@ class EdrDataBridge(object):
         self.delay = self.config_get('delay') or 15
         self.increment_step = self.config_get('increment_step') or 1
         self.decrement_step = self.config_get('decrement_step') or 1
+        self.sleep_change_value = APIRateController(self.increment_step, self.decrement_step)
         self.doc_service_host = self.config_get('doc_service_server')
         self.doc_service_port = self.config_get('doc_service_port') or 6555
         self.sandbox_mode = os.environ.get('SANDBOX_MODE', 'False')
@@ -95,8 +98,7 @@ class EdrDataBridge(object):
                                filtered_tender_ids_queue=self.filtered_tender_ids_queue,
                                services_not_available=self.services_not_available,
                                process_tracker=self.process_tracker,
-                               increment_step=self.increment_step,
-                               decrement_step=self.decrement_step,
+                               sleep_change_value=self.sleep_change_value,
                                delay=self.delay)
 
         self.filter_tender = partial(FilterTenders.spawn,
@@ -105,8 +107,7 @@ class EdrDataBridge(object):
                                      edrpou_codes_queue=self.edrpou_codes_queue,
                                      process_tracker=self.process_tracker,
                                      services_not_available=self.services_not_available,
-                                     increment_step=self.increment_step,
-                                     decrement_step=self.decrement_step,
+                                     sleep_change_value=self.sleep_change_value,
                                      delay=self.delay)
 
         self.edr_handler = partial(EdrHandler.spawn,
@@ -124,8 +125,7 @@ class EdrDataBridge(object):
                                    process_tracker=self.process_tracker,
                                    doc_service_client=self.doc_service_client,
                                    services_not_available=self.services_not_available,
-                                   increment_step=self.increment_step,
-                                   decrement_step=self.decrement_step,
+                                   sleep_change_value=self.sleep_change_value,
                                    delay=self.delay)
 
     def config_get(self, name):

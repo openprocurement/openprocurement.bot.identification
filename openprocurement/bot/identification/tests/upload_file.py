@@ -22,6 +22,7 @@ from openprocurement.bot.identification.databridge.utils import Data, generate_d
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
 from openprocurement.bot.identification.databridge.constants import file_name
 from openprocurement.bot.identification.databridge.bridge import TendersClientSync
+from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 SERVER_RESPONSE_FLAG = 0
 SPORE_COOKIES = ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
@@ -76,6 +77,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.process_tracker.set_item(self.tender_id, self.award_id, 1)
         self.upload_to_doc_service_queue = Queue(10)
         self.upload_to_tender_queue = Queue(10)
+        self.sleep_change_value = APIRateController()
         self.data = Data(self.tender_id, self.award_id, '123', 'awards',
                          {'meta': {'id': self.document_id}, 'test_data': 'test_data'})
         self.qualification_data = Data(self.tender_id, self.qualification_id, '123', 'qualifications',
@@ -83,7 +85,7 @@ class TestUploadFileWorker(unittest.TestCase):
         self.client = MagicMock()
         self.doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         self.worker = UploadFile(self.client, self.upload_to_doc_service_queue, self.upload_to_tender_queue,
-                                 self.process_tracker, self.doc_service_client, MagicMock())
+                                 self.process_tracker, self.doc_service_client, MagicMock(), self.sleep_change_value)
 
     def tearDown(self):
         del self.worker
@@ -102,12 +104,12 @@ class TestUploadFileWorker(unittest.TestCase):
         worker = UploadFile.spawn(None, None, None, None, None, None)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
-
         self.assertEqual(worker.client, None)
         self.assertEqual(worker.upload_to_doc_service_queue, None)
         self.assertEqual(worker.upload_to_tender_queue, None)
         self.assertEqual(worker.process_tracker, None)
         self.assertEqual(worker.doc_service_client, None)
+        self.assertEqual(worker.sleep_change_value, None)
         self.assertEqual(worker.delay, 15)
         self.assertEqual(worker.exit, False)
 
@@ -320,6 +322,8 @@ class TestUploadFileWorker(unittest.TestCase):
                                                       ResourceError(http_code=429),
                                                       ResourceError(http_code=429),
                                                       ResourceError(http_code=403)]
+        self.sleep_change_value.increment_step = 3
+        self.sleep_change_value.decrement_step = 1.5
         self.worker.retry_upload_to_tender_queue.put(self.data)
         self.shutdown_when_done(self.worker)
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
