@@ -17,7 +17,6 @@ from openprocurement_client.client import TendersClientSync, TendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 from openprocurement.bot.identification.databridge.utils import check_412
 
-
 config = {
     'main':
         {
@@ -43,7 +42,6 @@ config = {
 
 
 class AlmostAlwaysTrue(object):
-
     def __init__(self, total_iterations=1):
         self.total_iterations = total_iterations
         self.current_iteration = 0
@@ -112,7 +110,6 @@ def proxy_response():
 
 
 class TestBridgeWorker(BaseServersTest):
-
     def test_init(self):
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, 15)
@@ -280,7 +277,6 @@ class TestBridgeWorker(BaseServersTest):
         self.worker.check_services()
         self.assertTrue(self.worker.set_sleep.called)
 
-
     @patch("gevent.sleep")
     def test_check_log(self, gevent_sleep):
         gevent_sleep = custom_sleep
@@ -289,5 +285,3 @@ class TestBridgeWorker(BaseServersTest):
         self.worker.check_services = MagicMock(return_value=True)
         self.worker.run()
         self.assertTrue(self.worker.edrpou_codes_queue.qsize.called)
-
-

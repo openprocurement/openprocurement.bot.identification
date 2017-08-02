@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+
 monkey.patch_all()
 
 import uuid
@@ -67,7 +68,6 @@ def generate_response():
 
 
 class TestUploadFileWorker(unittest.TestCase):
-
     def setUp(self):
         self.tender_id = uuid.uuid4().hex
         self.award_id = uuid.uuid4().hex
@@ -95,10 +95,10 @@ class TestUploadFileWorker(unittest.TestCase):
                 worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize())
 
     def shutdown_when_done(self, worker):
-        self.worker.start()
-        while self.is_working(self.worker):
+        worker.start()
+        while self.is_working(worker):
             sleep(0.1)
-        self.worker.shutdown()
+        worker.shutdown()
 
     def test_init(self):
         worker = UploadFile.spawn(None, None, None, None, None, None, None)
@@ -122,15 +122,16 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_successful_upload(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/yaml',
-                                    'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': file_name}},
+                      json={'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
                       status_code=200)
         self.client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
-                                                                     'documentOf': 'tender',
-                                                                     'documentType': 'registerExtract',
-                                                                     'url': 'url'}}]
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}}]
         self.upload_to_doc_service_queue.put(self.data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), [item_key(self.tender_id, self.award_id)])
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 1)
@@ -141,7 +142,8 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
-        self.assertItemsEqual(self.process_tracker.processing_items.keys(), [])  # test that item removed from processing_items
+        self.assertItemsEqual(self.process_tracker.processing_items.keys(),
+                              [])  # test that item removed from processing_items
         self.assertEqual(self.client._create_tender_resource_item.call_count, 1)  # check upload to tender
 
     @requests_mock.Mocker()
@@ -150,21 +152,16 @@ class TestUploadFileWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         mrequest.post('{url}'.format(url=doc_service_client.url),
-                      [{'text': '', 'status_code': 401},
-                       {'text': '', 'status_code': 401},
-                       {'text': '', 'status_code': 401},
-                       {'text': '', 'status_code': 401},
-                       {'text': '', 'status_code': 401},
-                       {'text': '', 'status_code': 401},
-                      {'json': {'data': {'url': 'test url',
-                                         'format': 'application/yaml',
-                                         'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                         'title': file_name}},
-                       'status_code': 200}])
+                      [{'text': '', 'status_code': 401} for _ in range(6)] + [
+                          {'json': {'data': {'url': 'test url',
+                                             'format': 'application/yaml',
+                                             'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                                             'title': file_name}},
+                           'status_code': 200}])
         self.client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
-                                                                     'documentOf': 'tender',
-                                                                     'documentType': 'registerExtract',
-                                                                     'url': 'url'}}]
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}}]
         self.upload_to_doc_service_queue.put(self.data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), [item_key(self.tender_id, self.award_id)])
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 1)
@@ -174,7 +171,8 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(mrequest.call_count, 7)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
-        self.assertItemsEqual(self.process_tracker.processing_items.keys(), [])  # test that item removed from processing_items
+        self.assertItemsEqual(self.process_tracker.processing_items.keys(),
+                              [])  # test that item removed from processing_items
         self.assertEqual(self.client._create_tender_resource_item.call_count, 1)  # check upload to tender
 
     @patch('gevent.sleep')
@@ -212,18 +210,19 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_retry_upload_to_tender(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/yaml',
-                                    'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': file_name}},
+                      json={'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
                       status_code=200)
         self.client._create_tender_resource_item.side_effect = [Unauthorized(http_code=401),
-                                                           Unauthorized(http_code=403),
-                                                           Unauthorized(http_code=429),
-                                                           {'data': {'id': uuid.uuid4().hex,
-                                                                     'documentOf': 'tender',
-                                                                     'documentType': 'registerExtract',
-                                                                     'url': 'url'}}]
+                                                                Unauthorized(http_code=403),
+                                                                Unauthorized(http_code=429),
+                                                                {'data': {'id': uuid.uuid4().hex,
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}}]
         self.upload_to_doc_service_queue.put(self.data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), [item_key(self.tender_id, self.award_id)])
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 1)
@@ -249,7 +248,8 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_retry_upload_to_tender_429(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        self.client.client_upload_to_tender = MagicMock(side_effect=[ResourceError(http_code=429), ResourceError(http_code=403)])
+        self.client.client_upload_to_tender = MagicMock(
+            side_effect=[ResourceError(http_code=429), ResourceError(http_code=403)])
         self.worker.retry_upload_to_tender_queue = Queue(10)
         self.worker.retry_upload_to_tender_queue.put(self.data)
         self.shutdown_when_done(self.worker)
@@ -270,10 +270,11 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_request_failed(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/yaml',
-                                    'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': file_name}},
+                      json={'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
                       status_code=200)
         self.client._create_tender_resource_item.side_effect = ResourceError(http_code=422)
         self.upload_to_doc_service_queue.put(self.data)
@@ -291,13 +292,13 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_request_failed_item_status_change(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/yaml',
-                                    'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': file_name}},
+                      json={'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
                       status_code=200)
-        self.client._create_tender_resource_item.side_effect = [ResourceError(http_code=403),
-                                                                ResourceError(http_code=403)]
+        self.client._create_tender_resource_item.side_effect = [ResourceError(http_code=403) for _ in range(2)]
         self.process_tracker.set_item(self.tender_id, self.qualification_id, 1)
         self.upload_to_doc_service_queue.put(self.data)
         self.upload_to_doc_service_queue.put(self.qualification_data)
@@ -313,15 +314,9 @@ class TestUploadFileWorker(unittest.TestCase):
     @patch('gevent.sleep')
     def test_request_failed_in_retry(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
-        self.worker = UploadFile.spawn(self.client, self.upload_to_doc_service_queue, self.upload_to_tender_queue,
-                                       self.process_tracker, self.doc_service_client, MagicMock(), self.sleep_change_value)
         self.worker.client_upload_to_tender = MagicMock()
-        self.worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429),
-                                                      ResourceError(http_code=429),
-                                                      ResourceError(http_code=429),
-                                                      ResourceError(http_code=429),
-                                                      ResourceError(http_code=429),
-                                                      ResourceError(http_code=403)]
+        self.worker.client_upload_to_tender.side_effect = [ResourceError(http_code=429) for _ in range(5)] + [
+            ResourceError(http_code=403)]
         self.sleep_change_value.increment_step = 3
         self.sleep_change_value.decrement_step = 1.5
         self.worker.retry_upload_to_tender_queue.put(self.data)
@@ -338,17 +333,14 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_request_failed_in_retry_item_status(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                     'format': 'application/yaml',
-                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                     'title': file_name}},
+                      json={'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
                       status_code=200)
-        self.client._create_tender_resource_item.side_effect = [ResourceError(http_code=429),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403),
-                                                           ResourceError(http_code=403)
-                                                           ]
+        self.client._create_tender_resource_item.side_effect = [ResourceError(http_code=429)] + [
+            ResourceError(http_code=403) for _ in range(4)]
         self.worker.retry_upload_to_tender_queue.put(self.data)
         self.shutdown_when_done(self.worker)
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
@@ -361,25 +353,26 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_processing_items(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      [{'json': {'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                    'format': 'application/yaml',
-                                    'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                    'title': file_name}},
-                       'status_code': 200},
-                       {'json': {'data': {
-                           'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                           'format': 'application/yaml',
-                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                           'title': file_name}},
-                        'status_code': 200}])
+                      [{'json': {'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
+                          'status_code': 200},
+                          {'json': {'data': {
+                              'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                              'format': 'application/yaml',
+                              'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                              'title': file_name}},
+                              'status_code': 200}])
         self.client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
-                                                                     'documentOf': 'tender',
-                                                                     'documentType': 'registerExtract',
-                                                                     'url': 'url'}},
-                                                           {'data': {'id': uuid.uuid4().hex,
-                                                                     'documentOf': 'tender',
-                                                                     'documentType': 'registerExtract',
-                                                                     'url': 'url'}}]
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}},
+                                                                {'data': {'id': uuid.uuid4().hex,
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}}]
         self.process_tracker.set_item(self.tender_id, self.award_id, 2)
         self.upload_to_doc_service_queue.put(self.data)
         self.upload_to_doc_service_queue.put(self.data)
@@ -405,25 +398,19 @@ class TestUploadFileWorker(unittest.TestCase):
                           'format': 'application/yaml',
                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
                           'title': file_name}},
-                        'status_code': 200},
-                       {'json': {'data': {
-                           'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                           'format': 'application/yaml',
-                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                           'title': file_name}},
-                           'status_code': 200}])
-        self.client._create_tender_resource_item.side_effect = [
-            {'data': {'id': uuid.uuid4().hex,
-                      'documentOf': 'tender',
-                      'documentType': 'registerExtract',
-                      'url': 'url'}},
-            {'data': {'id': uuid.uuid4().hex,
-                      'documentOf': 'tender',
-                      'documentType': 'registerExtract',
-                      'url': 'url'}}]
+                          'status_code': 200},
+                          {'json': {'data': {
+                              'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                              'format': 'application/yaml',
+                              'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                              'title': file_name}},
+                              'status_code': 200}])
+        self.client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}} for _ in range(2)]
         self.worker.start()
         sleep(1)
-        self.worker.shutdown()
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
@@ -470,7 +457,7 @@ class TestUploadFileWorker(unittest.TestCase):
             default=LoopExit())
         self.worker.start()
         sleep(1)
-        self.worker.shutdown()
+        self.shutdown_when_done(self.worker)
         self.assertEqual(self.process_tracker.processing_items, {})
         self.assertIsNotNone(self.client.request_history[0].headers['X-Client-Request-ID'])
         self.assertIsNotNone(self.client.request_history[1].headers['X-Client-Request-ID'])
@@ -531,22 +518,11 @@ class TestUploadFileWorker(unittest.TestCase):
                           'format': 'application/yaml',
                           'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
                           'title': file_name}},
-                          'status_code': 200},
-                          {'json': {'data': {
-                              'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                              'format': 'application/yaml',
-                              'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                              'title': file_name}},
-                              'status_code': 200}])
-        self.client._create_tender_resource_item.side_effect = [
-            {'data': {'id': uuid.uuid4().hex,
-                      'documentOf': 'tender',
-                      'documentType': 'registerExtract',
-                      'url': 'url'}},
-            {'data': {'id': uuid.uuid4().hex,
-                      'documentOf': 'tender',
-                      'documentType': 'registerExtract',
-                      'url': 'url'}}]
+                          'status_code': 200} for _ in range(2)])
+        self.client._create_tender_resource_item.side_effect = [{'data': {'id': uuid.uuid4().hex,
+                                                                          'documentOf': 'tender',
+                                                                          'documentType': 'registerExtract',
+                                                                          'url': 'url'}} for _ in range(2)]
         self.process_tracker.set_item(self.tender_id, self.award_id, 2)
         self.worker.retry_upload_to_doc_service_queue = MagicMock()
         self.worker.retry_upload_to_doc_service_queue.peek.side_effect = generate_answers(
@@ -565,10 +541,11 @@ class TestUploadFileWorker(unittest.TestCase):
     def test_412(self, mrequest, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         mrequest.post('{url}'.format(url=self.doc_service_client.url),
-                      json={'data': {'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
-                                     'format': 'application/yaml',
-                                     'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
-                                     'title': file_name}},
+                      json={'data': {
+                          'url': 'http://docs-sandbox.openprocurement.org/get/8ccbfde0c6804143b119d9168452cb6f',
+                          'format': 'application/yaml',
+                          'hash': 'md5:9a0364b9e99bb480dd25e1f0284c8555',
+                          'title': file_name}},
                       status_code=200)
         api_server_bottle = Bottle()
         api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
@@ -579,16 +556,19 @@ class TestUploadFileWorker(unittest.TestCase):
         self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
         setup_routing(api_server_bottle, generate_response, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
             self.tender_id, self.award_id), method='POST')
-        self.assertEqual(self.worker.client.headers['Cookie'], 'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
+        self.assertEqual(self.worker.client.headers['Cookie'],
+                         'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
         self.upload_to_doc_service_queue.put(self.data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), [item_key(self.tender_id, self.award_id)])
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 1)
         self.worker.start()
         self.shutdown_when_done(self.worker)
-        self.assertEqual(self.worker.client.headers['Cookie'], 'SERVER_ID={}'.format(COOKIES_412))  # check that response_412 change cookies
+        self.assertEqual(self.worker.client.headers['Cookie'],
+                         'SERVER_ID={}'.format(COOKIES_412))  # check that response_412 change cookies
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertEqual(mrequest.call_count, 1)
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
-        self.assertItemsEqual(self.process_tracker.processing_items.keys(), [])  # test that item removed from processing_items
+        self.assertItemsEqual(self.process_tracker.processing_items.keys(),
+                              [])  # test that item removed from processing_items
