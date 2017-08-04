@@ -36,7 +36,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.source_date = ["2017-04-25T11:56:36+00:00"]
         self.gen_req_id = [generate_request_id() for _ in xrange(10)]
         self.edrpou_codes_queue = Queue(10)
-        self.check_queue = Queue(10)
         self.edr_ids_queue = Queue(10)
         self.upload_to_doc_service_queue = Queue(10)
         self.filtered_tender_ids_queue = Queue(10)
@@ -82,7 +81,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                 'status_code': 200, 'headers': {'X-Request-ID': x_req_id}}
 
     @staticmethod
-    def file_con(data_info, doc_id, suf_1, suf_2, source_req):
+    def file_con(data_info={}, doc_id=generate_request_id(), suf_1=1, suf_2=1, source_req=generate_request_id()):
         if suf_1 == 1 and suf_2 == 1:
             return {'data': data_info,
                     "meta": {"sourceDate": "2017-04-25T11:56:36+00:00", "id": "{}".format(doc_id),
@@ -122,11 +121,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         expected_result = []
         for i in range(2):
-            self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                                             self.file_con({}, self.document_ids[0], 1, 1, [])))  # data
+            self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                             self.file_con(source_req=[])))  # data
             expected_result.append(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                     self.file_con({}, self.document_ids[0], 1, 1, [self.edr_req_ids[i]])))
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                     self.file_con(source_req=[self.edr_req_ids[i]])))
         for result in expected_result:
             self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}').format(self.edr_ids))
@@ -144,11 +143,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         expected_result = []
         for i in range(2):
-            self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+            self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
             expected_result.append(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                     self.file_con({}, self.document_ids[0], 1, 1,
-                                   [self.edr_req_ids[i], self.edr_req_ids[i]])))  # result
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                     self.file_con(doc_id=self.document_ids[0], source_req=[self.edr_req_ids[i], self.edr_req_ids[i]])))
         for result in expected_result:
             self.assertEquals(self.upload_to_doc_service_queue.get(), result)
 
@@ -170,10 +168,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
             mrequest.get(self.url_id(self.local_edr_ids[i]),
                          [self.stat_200([{}], self.source_date, self.edr_req_ids[i])])
             self.edrpou_codes_queue.put(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
             expected_result.append(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                     self.file_con({}, self.document_ids[0], 1, 1, [self.edr_req_ids[i], self.edr_req_ids[i]])))
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                     self.file_con(doc_id=self.document_ids[0], source_req=[self.edr_req_ids[i], self.edr_req_ids[i]])))
         for result in expected_result:
             self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertIsNotNone(mrequest.request_history[3].headers['X-Client-Request-ID'])
@@ -190,10 +188,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         expected_result = []
         for i in range(1):
             self.edrpou_codes_queue.put(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
-            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                                        self.file_con({}, self.document_ids[0], 1, 1,
-                                                      [self.edr_req_ids[0], self.edr_req_ids[0]])))
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
+            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                        self.file_con(doc_id=self.document_ids[0],
+                                                      source_req=[self.edr_req_ids[0], self.edr_req_ids[0]])))
         self.assertEquals(self.upload_to_doc_service_queue.get(), expected_result[0])
         self.assertIsNotNone(mrequest.request_history[2].headers['X-Client-Request-ID'])
 
@@ -208,7 +206,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                  "code": "notFound"},
                                                        "meta": {"detailsSourceDate": self.source_date}}]}]},
                      status_code=404, headers={'X-Request-ID': self.edr_req_ids[0]})
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                {"error": {"errorDetails": "Couldn't find this code in EDR.",
@@ -232,19 +230,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       self.stat_200([{"test": 1}, {"test": 2}],
                                     ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"], self.edr_req_ids[1])])
         expected_result = []
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))  # data
-        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                                    self.file_con({"test": 1}, self.document_ids[0], 2, 1,
-                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))  # result
-        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                                    self.file_con({"test": 2}, self.document_ids[0], 2, 2,
-                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))  # result
-        self.worker.upload_to_doc_service_queue = self.check_queue
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                    self.file_con(data_info={"test": 1}, doc_id=self.document_ids[0], suf_1=2, suf_2=1,
+                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                    self.file_con(data_info={"test": 2}, doc_id=self.document_ids[0], suf_1=2, suf_2=2,
+                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertEqual(self.worker.retry_edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(self.check_queue.qsize(), 0, 'Queue must be empty')
+        self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue must be empty')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -256,19 +254,19 @@ class TestEdrHandlerWorker(unittest.TestCase):
                       self.stat_200([{"test": 1}, {"test": 2}],
                                     ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"], self.edr_req_ids[1])])
         expected_result = []
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))  # data
-        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                                    self.file_con({"test": 1}, self.document_ids[0], 2, 1,
-                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))  # result
-        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                                    self.file_con({"test": 2}, self.document_ids[0], 2, 2,
-                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))
-        self.worker.upload_to_doc_service_queue = self.check_queue
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                    self.file_con(data_info={"test": 1}, doc_id=self.document_ids[0], suf_1=2, suf_2=1,
+                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                    self.file_con(data_info={"test": 2}, doc_id=self.document_ids[0], suf_1=2, suf_2=2,
+                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertEqual(self.worker.retry_edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
-        self.assertEqual(self.check_queue.qsize(), 0, 'Queue must be empty')
+        self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue must be empty')
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -277,16 +275,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         message 'EDRPOU not found'"""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.uri,
-                     [self.stat_c(403, 0, '', self.edr_req_ids[0]), self.stat_c(403, 0, '', self.edr_req_ids[0]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[0]), self.stat_c(403, 0, '', self.edr_req_ids[0]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[0]),
-                      {'json': {
-                          'errors': [
-                              {'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
-                                                          "code": "notFound"},
-                                                "meta": {"detailsSourceDate": self.source_date}}]}]},
-                          'status_code': 404, 'headers': {'X-Request-ID': self.edr_req_ids[0]}}])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+                     [self.stat_c(403, 0, '', self.edr_req_ids[0]) for _ in range(5)] + [
+                         {'json': {
+                             'errors': [
+                                 {'description': [{"error": {"errorDetails": "Couldn't find this code in EDR.",
+                                                             "code": "notFound"},
+                                                   "meta": {"detailsSourceDate": self.source_date}}]}]},
+                             'status_code': 404, 'headers': {'X-Request-ID': self.edr_req_ids[0]}}])
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                {"error": {"errorDetails": "Couldn't find this code in EDR.",
@@ -307,18 +303,18 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         expected_result = []
-        self.worker.upload_to_doc_service_queue = self.check_queue
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
-            Data(self.tender_id, self.award_id, '123', "awards", self.meta()))  # data
-        expected_result.append(Data(self.tender_id, self.award_id, '123', "awards",
+            Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                     file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                             "code": "notFound"},
                                                   "meta": {"detailsSourceDate": self.source_date,
                                                            'id': self.document_ids[0], "version": version,
                                                            'author': author,
                                                            'sourceRequests': [
-                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         self.worker.get_edr_data_request = MagicMock(side_effect=[
             RetryException("test", MagicMock(status_code=403)),
             RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': self.edr_req_ids[0]},
@@ -334,7 +330,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                              'author': author
                                                          }}]}]})))])
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -342,18 +338,18 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         expected_result = []
-        self.worker.upload_to_doc_service_queue = self.check_queue
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
-            Data(self.tender_id, self.award_id, '123', "awards", self.meta()))  # data
-        expected_result.append(Data(self.tender_id, self.award_id, '123', "awards",
+            Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                     file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                             "code": "notFound"},
                                                   "meta": {"detailsSourceDate": self.source_date,
                                                            'id': self.document_ids[0], "version": version,
                                                            'author': author,
                                                            'sourceRequests': [
-                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         self.worker.get_edr_data_request = MagicMock(side_effect=[
             RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': self.edr_req_ids[0]},
                                              json=MagicMock(return_value=
@@ -367,7 +363,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                              'id': self.document_ids[0], "version": version,
                                                              'author': author}}]}]})))])
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -375,18 +371,18 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         expected_result = []
-        self.worker.upload_to_doc_service_queue = self.check_queue
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
-            Data(self.tender_id, self.award_id, '123', "awards", self.meta()))  # data
-        expected_result.append(Data(self.tender_id, self.award_id, '123', "awards",
+            Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+        expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                     file_content={"error": {"errorDetails": "Couldn't find this code in EDR.",
                                                             "code": "notFound"},
                                                   "meta": {"detailsSourceDate": self.source_date,
                                                            'id': self.document_ids[0], "version": version,
                                                            'author': author,
                                                            'sourceRequests': [
-                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # result
+                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
         self.worker.get_edr_data_request = MagicMock(side_effect=[
             Exception(),
             RetryException("test", MagicMock(status_code=404, headers={'X-Request-ID': self.edr_req_ids[0]},
@@ -401,7 +397,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                              'id': self.document_ids[0], "version": version,
                                                              'author': author}}]}]})))])
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -413,11 +409,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 # data contains dict, instead of list
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         mrequest.get(self.url_id(321), [self.stat_200([{}], self.source_date, self.edr_req_ids[0])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[1]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
         self.assertEqual(mrequest.call_count, 2)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[1].url, self.urls('verify?id={}'.format(self.edr_ids)))
@@ -432,12 +428,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 {'json': {'data': [{}]}, 'status_code': 200,
                                  'headers': {'X-Request-ID': self.edr_req_ids[1]}},
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[2])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.worker.process_tracker = MagicMock()
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[1], self.edr_req_ids[2]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[1],
+                                                         self.edr_req_ids[2]])))
         self.assertEqual(mrequest.call_count, 3)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[1].url, self.urls('verify?id={}'.format(self.edr_ids)))
@@ -450,19 +447,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 6 times errors in response while requesting /verify"""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.url,
-                     [self.stat_c(403, 0, '', self.edr_req_ids[0]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[1]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[2]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[3]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[4]),
-                      self.stat_c(403, 0, '', self.edr_req_ids[5]),
-                      self.stat_200([{}], self.source_date, self.edr_req_ids[6])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+                     [self.stat_c(403, 0, '', self.edr_req_ids[i]) for i in range(6)] + [
+                         self.stat_200([{}], self.source_date, self.edr_req_ids[6])])
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.worker.process_tracker = MagicMock()
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[6]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[6]])))
         self.assertEqual(mrequest.call_count, 7)  # processing 7 requests
         self.assertEqual(mrequest.request_history[0].url,
                          self.urls('verify?id={}'.format(self.edr_ids)))  # check first url
@@ -480,11 +472,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
         mrequest.get(self.url_id(321), [self.stat_c(403, 0, [{u'message': u'Gateway Timeout Error'}],
                                                     self.edr_req_ids[0]),
                                         self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[1]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
         self.assertEqual(mrequest.call_count, 2)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[1].url, self.urls('verify?id={}'.format(self.edr_ids)))
@@ -540,16 +532,16 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         award_key = item_key(self.tender_id, self.award_id)
         qualification_key = item_key(self.tender_id, self.qualification_id)
-        data_1 = Data(self.tender_id, self.award_id, '123', "awards",
-                      self.file_con({}, self.document_ids[0], 2, 1, [self.edr_req_ids[0]]))
-        data_2 = Data(self.tender_id, self.award_id, '123', "awards",
-                      self.file_con({}, self.document_ids[0], 2, 2, [self.edr_req_ids[0]]))
-        data_3 = Data(self.tender_id, self.qualification_id, '124', 'qualifications',
-                      self.file_con({}, self.document_ids[1], 3, 1, [self.edr_req_ids[1]]))
-        data_4 = Data(self.tender_id, self.qualification_id, '124', 'qualifications',
-                      self.file_con({}, self.document_ids[1], 3, 2, [self.edr_req_ids[1]]))
-        data_5 = Data(self.tender_id, self.qualification_id, '124', 'qualifications',
-                      self.file_con({}, self.document_ids[1], 3, 3, [self.edr_req_ids[1]]))
+        data_1 = Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                      self.file_con(doc_id=self.document_ids[0], suf_1=2, suf_2=1, source_req=[self.edr_req_ids[0]]))
+        data_2 = Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                      self.file_con(doc_id=self.document_ids[0], suf_1=2, suf_2=2, source_req=[self.edr_req_ids[0]]))
+        data_3 = Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
+                      self.file_con(doc_id=self.document_ids[1], suf_1=3, suf_2=1, source_req=[self.edr_req_ids[1]]))
+        data_4 = Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
+                      self.file_con(doc_id=self.document_ids[1], suf_1=3, suf_2=2, source_req=[self.edr_req_ids[1]]))
+        data_5 = Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
+                      self.file_con(doc_id=self.document_ids[1], suf_1=3, suf_2=3, source_req=[self.edr_req_ids[1]]))
         mrequest.get(self.url, [
             self.stat_200([{}, {}], ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"], self.edr_req_ids[0]),
             self.stat_200([{}, {}, {}],
@@ -557,10 +549,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
                            "2017-04-25T11:56:36+00:00"], self.edr_req_ids[1])])
 
         #  create queues
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, '123', "awards",
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                          {'meta': {'id': self.document_ids[0], 'author': author,
                                                    'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.qualification_id, '124', 'qualifications',
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
                                          {'meta': {'id': self.document_ids[1], 'author': author,
                                                    'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
 
@@ -580,11 +572,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         mrequest.get(self.url_id(321), [self.stat_c(403, 0, [{u'message': u'Forbidden'}], self.edr_req_ids[0]),
                                         self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[1]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
         self.assertEqual(mrequest.call_count, 2)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[1].url, self.urls('verify?id={}'.format(self.edr_ids)))
@@ -605,13 +597,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
         expected_result = []
         edrpou_codes_queue_list = [LoopExit()]
         for i in range(2):
-            edrpou_codes_queue_list.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
+            edrpou_codes_queue_list.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                                 {'meta': {'id': self.document_ids[i], 'author': author,
                                                           'sourceRequests': [
                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                     self.file_con({}, self.document_ids[i], 1, 1, [self.edr_req_ids[i]])))  # result
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                     self.file_con(doc_id=self.document_ids[i], source_req=[self.edr_req_ids[i]])))
         edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list, default=LoopExit())
         self.worker.retry_edrpou_codes_queue = MagicMock()
         self.worker.process_tracker = MagicMock()
@@ -634,13 +626,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
         edrpou_codes_queue_list = [LoopExit()]
         expected_result = []
         for i in range(2):
-            edrpou_codes_queue_list.append(Data(self.tender_id, self.award_id, self.edr_ids, "awards",
+            edrpou_codes_queue_list.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                                 {"meta": {"id": self.document_ids[i], 'author': author,
                                                           'sourceRequests': [
                                                               'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
             expected_result.append(
-                Data(self.tender_id, self.award_id, self.edr_ids, "awards",
-                     self.file_con({}, self.document_ids[i], 1, 1, [self.edr_req_ids[i]])))  # result
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                     self.file_con(doc_id=self.document_ids[i], source_req=[self.edr_req_ids[i]])))
         self.worker.retry_edrpou_codes_queue = MagicMock()
         self.worker.retry_edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list,
                                                                                  default=LoopExit())
@@ -658,25 +650,21 @@ class TestEdrHandlerWorker(unittest.TestCase):
         retry_response = MagicMock()
         retry_response.status_code = 500
         mrequest.get(self.url,
-                     [{'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'exc': RetryException('Retry Exception', retry_response)},
-                      {'json': {'data': [{}], "meta": {"detailsSourceDate": self.source_date}},
-                       'status_code': 200, 'headers': {'X-Request-ID': self.edr_req_ids[1]}}])
+                     [{'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}} for _ in range(5)] + [
+                         {'exc': RetryException('Retry Exception', retry_response)},
+                         {'json': {'data': [{}], "meta": {"detailsSourceDate": self.source_date}},
+                          'status_code': 200, 'headers': {'X-Request-ID': self.edr_req_ids[1]}}])
         expected_result = []
         for i in range(1):
             self.edrpou_codes_queue.put(
-                Data(self.tender_id, self.award_id, self.edr_ids[i], "awards", self.meta()))  # data
-            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids[i], "awards",
-                                        self.file_con({}, self.document_ids[0], 1, 1,
-                                                      [self.edr_req_ids[0], self.edr_req_ids[1]])))  # result
-        self.worker.upload_to_doc_service_queue = self.check_queue
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                        self.file_con(doc_id=self.document_ids[0],
+                                                      source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(expected_result[0].code)))
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[6].url, self.urls('verify?id={}'.format(expected_result[0].code)))
@@ -695,31 +683,25 @@ class TestEdrHandlerWorker(unittest.TestCase):
             {'description': [{'error': {"errorDetails": "Couldn't find this code in EDR.", 'code': "notFound"},
                               'meta': {"detailsSourceDate": self.source_date}}]}]}
         mrequest.get(self.url,
-                     [{'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'exc': RetryException('Retry Exception', retry_response)}])
+                     [{'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}} for _ in range(5)] + [
+                         {'exc': RetryException('Retry Exception', retry_response)}])
 
         expected_result = []
         for i in range(1):
             self.edrpou_codes_queue.put(
-                Data(self.tender_id, self.award_id, self.edr_ids[i], "awards", self.meta()))  # data
-            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids[i], "awards",
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                         {'error': {'errorDetails': "Couldn't find this code in EDR.",
                                                    'code': 'notFound'},
                                          'meta': {'detailsSourceDate': self.source_date,
                                                   'id': self.document_ids[0], "version": version, 'author': author,
                                                   'sourceRequests': [
                                                       'req-db3ed1c6-9843-415f-92c9-7d4b08d39220',
-                                                      self.edr_req_ids[0]]}}))  # result
-
-            self.worker.upload_to_doc_service_queue = self.check_queue
+                                                      self.edr_req_ids[0]]}}))
+            self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
             self.worker.process_tracker = MagicMock()
-
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(expected_result[0].code)))
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.call_count, 6)
@@ -730,23 +712,20 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """ Raise Exception  in retry_get_edr_data"""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.url,
-                     [{'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                      {'exc': Exception()}, self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
+                     [{'status_code': 500, 'headers': {'X-Request-ID': self.edr_req_ids[0]}} for _ in range(5)] + [
+                         {'exc': Exception()}, self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         expected_result = []
         for i in range(1):
             self.edrpou_codes_queue.put(
-                Data(self.tender_id, self.award_id, self.edr_ids[i], "awards", self.meta()))  # data
-            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids[i], "awards",
-                                        self.file_con({}, self.document_ids[0], 1, 1,
-                                                      [self.edr_req_ids[0], self.edr_req_ids[1]])))  # result
-        self.worker.upload_to_doc_service_queue = self.check_queue
+                Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
+            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
+                                        self.file_con(doc_id=self.document_ids[0],
+                                                      source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+
+        self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
-            self.assertEquals(self.check_queue.get(), result)
+            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(expected_result[0].code)))
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.request_history[6].url, self.urls('verify?id={}'.format(expected_result[0].code)))
@@ -759,19 +738,17 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Accept 'Gateway Timeout Error'  while requesting /verify, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.url,
-                     [self.stat_c(403, 0, [{u'message': u'Gateway Timeout Error'}], self.edr_req_ids[0]),
-                      {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': self.edr_req_ids[1]}},
-                      {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': self.edr_req_ids[1]}},
-                      {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': self.edr_req_ids[1]}},
-                      {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': self.edr_req_ids[1]}},
-                      {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': self.edr_req_ids[1]}},
-                      self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
-        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+                     [self.stat_c(403, 0, [{u'message': u'Gateway Timeout Error'}], self.edr_req_ids[0])] + [
+                         {"text": "resp", 'status_code': 403, 'headers': {'X-Request-ID': self.edr_req_ids[1]}} for _ in
+                         range(5)] + [
+                         self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
+        self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.worker.retry_edr_ids_queue = MagicMock()
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[1]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+
         self.assertEqual(mrequest.call_count, 7)
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[1].url, self.urls('verify?id={}'.format(self.edr_ids)))
@@ -785,7 +762,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.worker.retry_edr_ids_queue = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
-            Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+            Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.worker.get_edr_data_request = MagicMock(side_effect=[RetryException("Exception", Response()),
                                                                   MagicMock(
                                                                       headers={'X-Request-ID': self.edr_req_ids[0]},
@@ -796,7 +773,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                                   self.source_date}})))])
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1, [self.edr_req_ids[0]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0]])))
 
     @requests_mock.Mocker()
     @patch('gevent.sleep')
@@ -805,7 +783,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.worker.retry_edr_ids_queue = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
-            Data(self.tender_id, self.award_id, self.edr_ids, "awards", self.meta()))
+            Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
         self.worker.get_edr_data_request = MagicMock(
             side_effect=[MagicMock(headers={'X-Request-ID': self.edr_req_ids[0], 'Retry-After': '1'}, status_code=429),
                          MagicMock(headers={'X-Request-ID': self.edr_req_ids[1]}, status_code=200,
@@ -813,5 +791,5 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                        {'data': [{}], "meta": {"detailsSourceDate": self.source_date}})))])
         self.assertEquals(self.upload_to_doc_service_queue.get(),
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                               self.file_con({}, self.document_ids[0], 1, 1,
-                                             [self.edr_req_ids[0], self.edr_req_ids[1]])))
+                               self.file_con(doc_id=self.document_ids[0],
+                                             source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))

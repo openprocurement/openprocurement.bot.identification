@@ -11,7 +11,7 @@ from gevent.queue import Queue
 from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
-from restkit.errors import (Unauthorized, RequestFailed, ResourceError)
+from restkit.errors import Unauthorized, RequestFailed, ResourceError
 
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.tests.utils import custom_sleep
@@ -34,16 +34,16 @@ class TestScannerWorker(unittest.TestCase):
         del self.worker
 
     @staticmethod
-    def munchify(prev_p, next_p, status, id, procurementMethodType, data=True):
+    def munchify(status, id, procurementMethodType, data=True):
         if data:
-            return munchify({'prev_page': {'offset': prev_p},
-                             'next_page': {'offset': next_p},
+            return munchify({'prev_page': {'offset': '123'},
+                             'next_page': {'offset': '1234'},
                              'data': [{'status': status,
                                        "id": id,
                                        'procurementMethodType': 'aboveThreshold{}'.format(procurementMethodType)}]})
         else:
-            return munchify({'prev_page': {'offset': prev_p},
-                             'next_page': {'offset': next_p},
+            return munchify({'prev_page': {'offset': '123'},
+                             'next_page': {'offset': '1234'},
                              'data': []})
 
     def test_init(self):
@@ -58,13 +58,12 @@ class TestScannerWorker(unittest.TestCase):
     def test_worker(self, gevent_sleep):
         """ Returns tenders, check queue elements after filtering """
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            RequestFailed(),
-            # worker must restart
-            self.munchify('123', '1234', "active.qualification", self.tenders_id[0], 'UA'),
-            Unauthorized(),
-            self.munchify('123', '1234', "active.tendering", uuid.uuid4().hex, 'UA'),
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[1], 'EU')]
+        self.client.sync_tenders.side_effect = [RequestFailed(),
+                                                # worker must restart
+                                                self.munchify("active.qualification", self.tenders_id[0], 'UA'),
+                                                Unauthorized(),
+                                                self.munchify("active.tendering", uuid.uuid4().hex, 'UA'),
+                                                self.munchify("active.pre-qualification", self.tenders_id[1], 'EU')]
         for tender_id in self.tenders_id[0:2]:
             self.assertEqual(self.tender_queue.get(), tender_id)
 
@@ -72,12 +71,11 @@ class TestScannerWorker(unittest.TestCase):
     def test_429(self, gevent_sleep):
         """Receive 429 status, check queue, check sleep_change_value"""
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            self.munchify('1234', '1235', "active.pre-qualification", self.tenders_id[0], 'EU'),
-            self.munchify('1235', '1236', "active.tendering", uuid.uuid4().hex, 'UA'),
-            self.munchify('1236', '1237', "active.qualification", self.tenders_id[1], 'UA'),
-            ResourceError(http_code=429),
-            self.munchify('1237', '1238', "active.qualification", self.tenders_id[2], 'UA')]
+        self.client.sync_tenders.side_effect = [self.munchify("active.pre-qualification", self.tenders_id[0], 'EU'),
+                                                self.munchify("active.tendering", uuid.uuid4().hex, 'UA'),
+                                                self.munchify("active.qualification", self.tenders_id[1], 'UA'),
+                                                ResourceError(http_code=429),
+                                                self.munchify("active.qualification", self.tenders_id[2], 'UA')]
         self.sleep_change_value.increment_step = 2
         self.sleep_change_value.decrement_step = 1
         for tender_id in self.tenders_id[0:3]:
@@ -88,15 +86,14 @@ class TestScannerWorker(unittest.TestCase):
     def test_429_sleep_change_value(self, gevent_sleep):
         """Three times receive 429, check queue, check sleep_change_value"""
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[0], 'EU'),
-            self.munchify('123', '1234', "active.tendering", uuid.uuid4().hex, 'UA'),
-            self.munchify('123', '1234', "active.tendering", uuid.uuid4().hex, 'UA'),
-            self.munchify('123', '1234', "active.tendering", uuid.uuid4().hex, 'UA'),
-            ResourceError(http_code=429),
-            ResourceError(http_code=429),
-            ResourceError(http_code=429),
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[1], 'EU')]
+        self.client.sync_tenders.side_effect = [self.munchify("active.pre-qualification", self.tenders_id[0], 'EU'),
+                                                self.munchify("active.tendering", uuid.uuid4().hex, 'UA'),
+                                                self.munchify("active.tendering", uuid.uuid4().hex, 'UA'),
+                                                self.munchify("active.tendering", uuid.uuid4().hex, 'UA'),
+                                                ResourceError(http_code=429),
+                                                ResourceError(http_code=429),
+                                                ResourceError(http_code=429),
+                                                self.munchify("active.pre-qualification", self.tenders_id[1], 'EU')]
         self.sleep_change_value.increment_step = 1
         self.sleep_change_value.decrement_step = 0.5
         for tender_id in self.tenders_id[0:2]:
@@ -107,12 +104,11 @@ class TestScannerWorker(unittest.TestCase):
     def test_backward_dead(self, gevent_sleep):
         """Test when backward dies """
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[0], 'EU'),
-            self.munchify('1234', '1235', "active.pre-qualification", self.tenders_id[1], 'EU'),
-            ResourceError(http_code=403),
-            self.munchify('1235', '1236', None, None, False),
-            self.munchify('1236', '1237', "active.pre-qualification", self.tenders_id[2], 'EU')]
+        self.client.sync_tenders.side_effect = [self.munchify("active.pre-qualification", self.tenders_id[0], 'EU'),
+                                                self.munchify("active.pre-qualification", self.tenders_id[1], 'EU'),
+                                                ResourceError(http_code=403),
+                                                self.munchify(None, None, False),
+                                                self.munchify("active.pre-qualification", self.tenders_id[2], 'EU')]
         self.sleep_change_value.increment_step = 1
         self.sleep_change_value.decrement_step = 0.5
         for tender_id in self.tenders_id[0:3]:
@@ -122,12 +118,11 @@ class TestScannerWorker(unittest.TestCase):
     def test_forward_dead(self, gevent_sleep):
         """ Test when forward dies"""
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            self.munchify('1234', '123', None, None, None, False),
-            self.munchify('1234', '123', None, None, None, False),
-            self.munchify('1234', '1235', "active.pre-qualification", self.tenders_id[0], 'EU'),
-            ResourceError(http_code=403),
-            self.munchify('1234', '1235', "active.pre-qualification", self.tenders_id[1], 'EU')]
+        self.client.sync_tenders.side_effect = [self.munchify(None, None, None, False),
+                                                self.munchify(None, None, None, False),
+                                                self.munchify("active.pre-qualification", self.tenders_id[0], 'EU'),
+                                                ResourceError(http_code=403),
+                                                self.munchify("active.pre-qualification", self.tenders_id[1], 'EU')]
         self.sleep_change_value.increment_step = 1
         self.sleep_change_value.decrement_step = 0.5
         for tender_id in self.tenders_id[0:2]:
@@ -138,11 +133,10 @@ class TestScannerWorker(unittest.TestCase):
         """  Run forward when backward get empty response and
             prev_page.offset is equal to next_page.offset """
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[0], 'EU'),
-            self.munchify('1234', '1235', "active.pre-qualification", self.tenders_id[1], 'EU'),
-            self.munchify('1235', '1235', None, None, None, False),
-            self.munchify('1236', '1237', "active.pre-qualification", self.tenders_id[2], 'EU')]
+        self.client.sync_tenders.side_effect = [self.munchify("active.pre-qualification", self.tenders_id[0], 'EU'),
+                                                self.munchify("active.pre-qualification", self.tenders_id[1], 'EU'),
+                                                self.munchify(None, None, None, False),
+                                                self.munchify("active.pre-qualification", self.tenders_id[2], 'EU')]
         self.sleep_change_value.increment_step = 1
         self.sleep_change_value.decrement_step = 0.5
         for tender_id in self.tenders_id[0:3]:
@@ -153,14 +147,13 @@ class TestScannerWorker(unittest.TestCase):
         """ Catch exception in backward worker and after that put 2 tenders to process.Then catch exception for forward
         and after that put tender to process."""
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[0], 'EU'),
-            self.munchify('123', '1234', None, None, None, False),
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[1], 'EU'),
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[2], 'EU'),
-            self.munchify('123', '1234', None, None, None, False),
-            self.munchify('1234', None, None, None, None, False),
-            self.munchify('1234', '1234', "active.pre-qualification", self.tenders_id[3], 'EU')]
+        self.client.sync_tenders.side_effect = [self.munchify("active.pre-qualification", self.tenders_id[0], 'EU'),
+                                                self.munchify(None, None, None, False),
+                                                self.munchify("active.pre-qualification", self.tenders_id[1], 'EU'),
+                                                self.munchify("active.pre-qualification", self.tenders_id[2], 'EU'),
+                                                self.munchify(None, None, None, False),
+                                                self.munchify(None, None, None, False),
+                                                self.munchify("active.pre-qualification", self.tenders_id[3], 'EU')]
         self.sleep_change_value.increment_step = 1
         self.sleep_change_value.decrement_step = 0.5
         for tender_id in self.tenders_id:
@@ -170,9 +163,8 @@ class TestScannerWorker(unittest.TestCase):
     def test_resource_error(self, gevent_sleep):
         """Raise Resource error, check queue, check sleep_change_value"""
         gevent_sleep.side_effect = custom_sleep
-        self.client.sync_tenders.side_effect = [
-            ResourceError(http_code=429),
-            self.munchify('1237', '1238', "active.qualification", self.tenders_id[0], 'UA')]
+        self.client.sync_tenders.side_effect = [ResourceError(http_code=429),
+                                                self.munchify("active.qualification", self.tenders_id[0], 'UA')]
         self.sleep_change_value.increment_step = 2
         self.sleep_change_value.decrement_step = 1
         self.assertEqual(self.tender_queue.get(), self.tenders_id[0])
@@ -184,12 +176,13 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.sleep_change_value.increment_step = 2
         self.sleep_change_value.decrement_step = 1
-        worker = Scanner.spawn(MagicMock(), MagicMock(), MagicMock(), self.process_tracker, self.sleep_change_value)
+        self.worker.tenders_sync_client = MagicMock()
+        self.worker.filtered_tender_ids_queue = MagicMock()
         sleep(1)
-        for job in worker.jobs:
+        for job in self.worker.jobs:
             job.kill(exception=Exception)
         sleep(4)
-        self.assertFalse(worker.ready())
+        self.assertFalse(self.worker.ready())
 
     @patch('gevent.sleep')
     def test_forward_exception(self, gevent_sleep):
@@ -198,8 +191,8 @@ class TestScannerWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.sleep_change_value.increment_step = 1
         self.sleep_change_value.decrement_step = 0.5
-        self.worker.initialize_sync = MagicMock(side_effect=[
-            ResourceError(msg=RequestFailed()),
-            self.munchify('123', '1234', "active.pre-qualification", self.tenders_id[0], 'EU')])
+        self.worker.initialize_sync = MagicMock(side_effect=[ResourceError(msg=RequestFailed()),
+                                                             self.munchify("active.pre-qualification",
+                                                                           self.tenders_id[0], 'EU')])
         self.assertEqual(self.tender_queue.get(), self.tenders_id[0])
         self.assertEqual(self.worker.initialize_sync.call_count, 2)

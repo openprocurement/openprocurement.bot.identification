@@ -25,6 +25,7 @@ SPORE_COOKIES = ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
 COOKIES_412 = ("b7afc9b1fc79e640f2487ba48243ca071c07a823d27"
                "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
                "96a11693fa8bd38623e4daee121f60b4301aef012c")
+CODES = ('14360570', '0013823', '23494714')
 
 
 def setup_routing(app, func, path='/api/2.3/spore', method='GET'):
@@ -55,7 +56,7 @@ def response_get_tender():
                                        'status': 'pending',
                                        'suppliers': [{'identifier': {
                                            'scheme': 'UA-EDR',
-                                           'id': '14360570'}}]}]}})
+                                           'id': CODES[0]}}]}]}})
 
 
 def generate_response():
@@ -76,7 +77,7 @@ class TestFilterWorker(unittest.TestCase):
         self.sleep_change_value = APIRateController()
         self.client = MagicMock()
         self.worker = FilterTenders.spawn(self.client, self.filtered_tender_ids_queue, self.edrpou_codes_queue,
-                                    self.process_tracker, MagicMock(), self.sleep_change_value)
+                                          self.process_tracker, MagicMock(), self.sleep_change_value)
         self.bid_ids = [uuid.uuid4().hex for _ in range(5)]
         self.qualification_ids = [uuid.uuid4().hex for _ in range(5)]
         self.award_ids = [uuid.uuid4().hex for _ in range(5)]
@@ -90,8 +91,8 @@ class TestFilterWorker(unittest.TestCase):
         return {'id': self.award_ids[counter_id], 'bid_id': self.bid_ids[counter_bid_id], 'status': status,
                 'suppliers': [{'identifier': {'scheme': 'UA-EDR', 'id': sup_id}}]}
 
-    def bids(self, counter_id, ten_id):
-        return {'id': self.bid_ids[counter_id], 'tenderers': [{'identifier': {'scheme': 'UA-EDR', 'id': ten_id}}]}
+    def bids(self, counter_id, edr_id):
+        return {'id': self.bid_ids[counter_id], 'tenderers': [{'identifier': {'scheme': 'UA-EDR', 'id': edr_id}}]}
 
     def qualifications(self, status, counter_qual_id, counter_bid_id):
         return {'status': status, 'id': self.qualification_ids[counter_qual_id], 'bidID': self.bid_ids[counter_bid_id]}
@@ -133,27 +134,23 @@ class TestFilterWorker(unittest.TestCase):
                                                              'data': {'status': "active.pre-qualification",
                                                                       'id': self.tender_id,
                                                                       'procurementMethodType': 'aboveThresholdEU',
-                                                                      'bids': [self.bids(0, '14360570'),
-                                                                               self.bids(1, '0013823'),
-                                                                               self.bids(2, '23494714'),
-                                                                               self.bids(3, '23494714'),
+                                                                      'bids': [self.bids(0, CODES[0]),
+                                                                               self.bids(1, CODES[1]),
+                                                                               self.bids(2, CODES[2]),
+                                                                               self.bids(3, CODES[2]),
                                                                                {'id': self.bid_ids[4],
                                                                                 'tenderers': [{'identifier': {
                                                                                     'scheme': 'UA-ED',
-                                                                                    'id': '23494714'}}]}],
+                                                                                    'id': CODES[2]}}]}],
                                                                       'qualifications': [
                                                                           self.qualifications('pending', 0, 0),
                                                                           self.qualifications('pending', 1, 1),
                                                                           self.qualifications('pending', 2, 2),
                                                                           self.qualifications('unsuccessful', 3, 3),
                                                                           self.qualifications('pending', 4, 4)]}}))
-        first_data = Data(self.tender_id, self.qualification_ids[0], '14360570', 'qualifications',
-                          {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        second_data = Data(self.tender_id, self.qualification_ids[1], '0013823', 'qualifications',
-                           {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        third_data = Data(self.tender_id, self.qualification_ids[2], '23494714', 'qualifications',
-                          {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        for data in [first_data, second_data, third_data]:
+        for i in range(3):
+            data = Data(self.tender_id, self.qualification_ids[i], CODES[i], 'qualifications',
+                        {'meta': {'sourceRequests': [self.request_ids[0]]}})
             self.check_data_objects(self.edrpou_codes_queue.get(), data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(),
                               [item_key(self.tender_id, self.qualification_ids[i]) for i in range(3)])
@@ -168,25 +165,19 @@ class TestFilterWorker(unittest.TestCase):
                                                                            'id': self.tender_id,
                                                                            'procurementMethodType': 'aboveThresholdEU',
                                                                            'awards': [
-                                                                               self.awards(0, 0, 'pending', '14360570'),
-                                                                               self.awards(1, 1, 'pending', '0013823'),
-                                                                               self.awards(2, 2, 'pending', '23494714'),
+                                                                               self.awards(0, 0, 'pending', CODES[0]),
+                                                                               self.awards(1, 1, 'pending', CODES[1]),
+                                                                               self.awards(2, 2, 'pending', CODES[2]),
                                                                                self.awards(3, 3, 'unsuccessful',
-                                                                                           '23494714'),
+                                                                                           CODES[2]),
                                                                                {'id': self.bid_ids[4],
                                                                                 'tenderers': [{'identifier': {
                                                                                     'scheme': 'UA-ED',
-                                                                                    'id': '23494714'}}]}]}}))]
-        first_data = Data(self.tender_id, self.award_ids[0], '14360570', 'awards',
+                                                                                    'id': CODES[2]}}]}]}}))]
+        for i in range(3):
+            data = Data(self.tender_id, self.award_ids[i], CODES[i], 'awards',
                           {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        second_data = Data(self.tender_id, self.award_ids[1], '0013823', 'awards',
-                           {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        third_data = Data(self.tender_id, self.award_ids[2], '23494714', 'awards',
-                          {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        self.sleep_change_value.increment_step = 2
-        self.sleep_change_value.decrement_step = 1
-        for edrpou in [first_data, second_data, third_data]:
-            self.check_data_objects(self.edrpou_codes_queue.get(), edrpou)
+            self.check_data_objects(self.edrpou_codes_queue.get(), data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(),
                               [item_key(self.tender_id, self.award_ids[0]), item_key(self.tender_id, self.award_ids[1]),
                                item_key(self.tender_id, self.award_ids[2])])
@@ -203,8 +194,8 @@ class TestFilterWorker(unittest.TestCase):
                                                                            'id': self.tender_id,
                                                                            'procurementMethodType': 'aboveThresholdEU',
                                                                            'awards': [self.awards(0, 0, 'pending',
-                                                                                                  '14360570')]}}))]
-        data = Data(self.tender_id, self.award_ids[0], '14360570', 'awards',
+                                                                                                  CODES[0])]}}))]
+        data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                     {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.check_data_objects(self.edrpou_codes_queue.get(), data)
         self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
@@ -225,8 +216,8 @@ class TestFilterWorker(unittest.TestCase):
                                    'data': {'status': "active.pre-qualification",
                                             'id': self.tender_id,
                                             'procurementMethodType': 'aboveThresholdEU',
-                                            'awards': [self.awards(0, 0, 'pending', '14360570')]}}))]
-        data = Data(self.tender_id, self.award_ids[0], '14360570', 'awards',
+                                            'awards': [self.awards(0, 0, 'pending', CODES[0])]}}))]
+        data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                     {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.sleep_change_value.increment_step = 2
         self.sleep_change_value.decrement_step = 1
@@ -251,9 +242,9 @@ class TestFilterWorker(unittest.TestCase):
                                    'data': {'status': "active.pre-qualification",
                                             'id': self.tender_id,
                                             'procurementMethodType': 'aboveThresholdEU',
-                                            'awards': [self.awards(0, 0, 'pending', '14360570'),
-                                                       self.awards(1, 1, 'unsuccessful', '23494714')]}}))]
-        data = Data(self.tender_id, self.award_ids[0], '14360570', 'awards',
+                                            'awards': [self.awards(0, 0, 'pending', CODES[0]),
+                                                       self.awards(1, 1, 'unsuccessful', CODES[2])]}}))]
+        data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                     {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.check_data_objects(self.edrpou_codes_queue.get(), data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(),
@@ -265,31 +256,19 @@ class TestFilterWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.filtered_tender_ids_queue.put(self.tender_id)
         self.client.request.side_effect = [
-            ResponseMock({'X-Request-ID': self.request_ids[0]},
-                         munchify(
-                             {'prev_page': {'offset': '123'},
-                              'next_page': {'offset': '1234'},
-                              'data': {
-                                  'status': "active.pre-qualification",
-                                  'id': self.tender_id,
-                                  'procurementMethodType': 'aboveThresholdEU',
-                                  'awards': [self.awards(0, 0, 'pending', '14360570')]}})),
-            ResponseMock({'X-Request-ID': self.request_ids[1]},
-                         munchify(
-                             {'prev_page': {'offset': '123'},
-                              'next_page': {'offset': '1234'},
-                              'data': {
-                                  'status': "active.pre-qualification",
-                                  'id': self.tender_id,
-                                  'procurementMethodType': 'aboveThresholdEU',
-                                  'awards': [self.awards(1, 1, 'pending', '14360570')]}}))]
-        first_data = Data(self.tender_id, self.award_ids[0], '14360570', 'awards',
-                          {'meta': {'sourceRequests': [self.request_ids[0]]}})
-        second_data = Data(self.tender_id, self.award_ids[1], '14360570', 'awards',
-                           {'meta': {'sourceRequests': [self.request_ids[1]]}})
-        self.check_data_objects(self.edrpou_codes_queue.get(), first_data)
+            ResponseMock({'X-Request-ID': self.request_ids[i]},
+                         munchify({'prev_page': {'offset': '123'},
+                                   'next_page': {'offset': '1234'},
+                                   'data': {
+                                       'status': "active.pre-qualification",
+                                       'id': self.tender_id,
+                                       'procurementMethodType': 'aboveThresholdEU',
+                                       'awards': [self.awards(i, i, 'pending', CODES[0])]}})) for i in range(2)]
+        for i in range(2):
+            data = Data(self.tender_id, self.award_ids[i], CODES[0], 'awards',
+                              {'meta': {'sourceRequests': [self.request_ids[i]]}})
+            self.check_data_objects(self.edrpou_codes_queue.get(),  data)
         self.worker.job.kill(timeout=1)
-        self.check_data_objects(self.edrpou_codes_queue.get(), second_data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(),
                               [item_key(self.tender_id, self.award_ids[i]) for i in range(2)])
 
@@ -307,8 +286,8 @@ class TestFilterWorker(unittest.TestCase):
                                                                  'id': self.tender_id,
                                                                  'procurementMethodType': 'aboveThresholdEU',
                                                                  'awards': [
-                                                                     self.awards(0, 0, 'pending', '14360570')]}}))
-        first_data = Data(self.tender_id, self.award_ids[0], '14360570', 'awards',
+                                                                     self.awards(0, 0, 'pending', CODES[0])]}}))
+        first_data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                           {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.worker.filtered_tender_ids_queue = filtered_tender_ids_queue
         self.check_data_objects(self.edrpou_codes_queue.get(), first_data)
@@ -333,16 +312,16 @@ class TestFilterWorker(unittest.TestCase):
                                                                                        'status': 'pending',
                                                                                        'suppliers': [{'identifier': {
                                                                                            'scheme': 'UA-EDR',
-                                                                                           'id': '14360570'}}],
+                                                                                           'id': CODES[0]}}],
                                                                                        'lotID': '123456789'},
                                                                                       {'id': self.award_ids[1],
                                                                                        'bid_id': self.bid_ids[1],
                                                                                        'status': 'pending',
                                                                                        'suppliers': [{'identifier': {
                                                                                            'scheme': 'UA-EDR',
-                                                                                           'id': '0013823'}}],
+                                                                                           'id': CODES[1]}}],
                                                                                        'lotID': '12345678'}]}}))
-        data = Data(self.tender_id, self.award_ids[1], '0013823', 'awards',
+        data = Data(self.tender_id, self.award_ids[1], CODES[1], 'awards',
                     {'meta': {'sourceRequests': [self.request_ids[0]]}})
         for edrpou in [data]:
             self.check_data_objects(self.edrpou_codes_queue.get(), edrpou)
@@ -406,15 +385,13 @@ class TestFilterWorker(unittest.TestCase):
                          'SERVER_ID={}'.format(SPORE_COOKIES))  # check that response_spore set cookies
         worker = FilterTenders.spawn(client, filtered_tender_ids_queue, self.edrpou_codes_queue, self.process_tracker,
                                      MagicMock(), self.sleep_change_value)
-        data = Data('123', '124', '14360570', 'awards', {'meta': {'sourceRequests': ['125']}})
-
+        data = Data('123', '124', CODES[0], 'awards', {'meta': {'sourceRequests': ['125']}})
         for i in [data]:
             self.check_data_objects(self.edrpou_codes_queue.get(), i)
         self.assertEqual(client.headers['Cookie'],
                          'SERVER_ID={}'.format(COOKIES_412))  # check that response_412 change cookies
         self.assertEqual(self.edrpou_codes_queue.qsize(), 0)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), ['123_124'])
-
         worker.shutdown()
         del worker
         api_server.stop()
