@@ -12,10 +12,9 @@ from restkit import ResourceError
 
 from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file, data_string
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
-    DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE,
-    DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER,
-    DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
-    DATABRIDGE_422_UPLOAD_TO_TENDER, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING)
+    DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER,
+    DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
+    DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING)
 from openprocurement.bot.identification.databridge.constants import file_name, retry_mult
 
 logger = logging.getLogger(__name__)
@@ -25,9 +24,12 @@ class UploadFile(Greenlet):
     """ Upload file with details """
 
     pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
-    qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
+    qualification_procurementMethodType = (
+        'aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2',
+        'competitiveDialogueEU.stage2')
 
-    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client, services_not_available, sleep_change_value, delay=15):
+    def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client,
+                 services_not_available, sleep_change_value, delay=15):
         super(UploadFile, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -51,6 +53,67 @@ class UploadFile(Greenlet):
         # blockers
         self.services_not_available = services_not_available
 
+    def resource_errors_403_422_none(self, retry, re, tender_data, document_id, item_name_id):
+        logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
+            re.status_int, data_string(tender_data), document_id, re.msg),
+            extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
+                                  {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                   "DOCUMENT_ID": document_id}))
+        self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
+        self.sleep_change_value.decrement()
+        eval('self.{}upload_to_tender_queue.get()'.format(retry))
+
+    def resource_error_429(self, re, tender_data, document_id, item_name_id):
+        logger.info("Accept 429 while uploading to tender {} {} {} doc_id: {}. Message {}".format(
+            tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.msg),
+            extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
+                                  {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                   "DOCUMENT_ID": document_id}))
+        self.sleep_change_value.increment()
+
+    def resource_errors_else(self, retry, re, tender_data, document_id, item_name_id):
+        logger.info(
+            'ResourceError while{} uploading file to {} doc_id: {}. ResourceErrorStatus_int: {}. Message: {}'.format(
+                '' if retry == '' else ' ' + retry, data_string(tender_data), document_id, re.status_int, re.message),
+            extra=journal_context(
+                {"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER.format('' if retry == '' else '_' + retry)},
+                params={"TENDER_ID": tender_data.tender_id,
+                        item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+        self.sleep_change_value.decrement()
+
+    def exception_errors(self, retry, e, tender_data, document_id, item_name_id):
+        logger.info('Exception while{} uploading file to {} doc_id: {}. Message: {}'.format(
+            '' if retry == '' else ' ' + retry, data_string(tender_data), document_id, e.message),
+            extra=journal_context(
+                {"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER.format('' if retry == '' else '_' + retry)},
+                params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                        "DOCUMENT_ID": document_id}))
+        logger.exception("Message: {}".format(e.message))
+        self.sleep_change_value.decrement()
+
+    def succesfully_uploaded_to_tender(self, retry, tender_data, document_id, item_name_id):
+        logger.info('Successfully uploaded file to {} doc_id: {} in retry'.format(
+            data_string(tender_data), document_id),
+            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
+                                  params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
+                                          "DOCUMENT_ID": document_id}))
+        # delete current tender after successful upload file (to avoid reloading file)
+        self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
+        eval('self.{}upload_to_tender_queue.get()'.format(retry))
+        self.sleep_change_value.decrement()
+
+    def st_code_200(self, retry, tender_data, response, document_id, item_name_id):
+        data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
+                    tender_data.item_name, dict(response.json(), **{'meta': {'id': document_id}}))
+        self.upload_to_tender_queue.put(data)
+        eval('self.{}upload_to_doc_service_queue.get()'.format(retry))
+        logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(
+            data_string(tender_data), document_id),
+            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE},
+                                  params={"TENDER_ID": tender_data.tender_id,
+                                          item_name_id: tender_data.item_id,
+                                          "DOCUMENT_ID": document_id}))
+
     def upload_to_doc_service(self):
         """Get data from upload_to_doc_service_queue; Create file of the Data.file_content data; If upload successful put Data
         object to upload_file_to_tender, otherwise put Data to retry_upload_file_queue."""
@@ -64,34 +127,29 @@ class UploadFile(Greenlet):
                 continue
             item_name_id = tender_data.item_name[:-1].upper() + "_ID"
             try:
-                response = self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
+                response = self.doc_service_client.upload(file_name, create_file(tender_data.file_content),
+                                                          'application/yaml',
                                                           headers={'X-Client-Request-ID': document_id})
             except Exception as e:
                 logger.warning('Exception while uploading file to doc service {}. Message: {}. '
                                'Put tender_data to retry queue '.format(data_string(tender_data), e.message),
                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
                                                      params={"TENDER_ID": tender_data.tender_id,
-                                                             item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                                                             item_name_id: tender_data.item_id,
+                                                             "DOCUMENT_ID": document_id}))
                 logger.exception("Message: {}".format(e.message))
                 self.retry_upload_to_doc_service_queue.put(tender_data)
                 self.upload_to_doc_service_queue.get()
             else:
                 if response.status_code == 200:
-                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, dict(response.json(), **{'meta': {'id': document_id}}))
-                    self.upload_to_tender_queue.put(data)
-                    self.upload_to_doc_service_queue.get()
-                    logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(
-                        data_string(tender_data), document_id),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                      "DOCUMENT_ID": document_id}))
+                    self.st_code_200('', tender_data, response, document_id, item_name_id)
                 else:
-                    logger.info('Not successful response from document service while uploading {} doc_id: {}. Response {}'.
-                                format(data_string(tender_data), document_id, response.status_code),
-                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
-                                                      params={"TENDER_ID": tender_data.tender_id,
-                                                              item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                    logger.info(
+                        'Not successful response from document service while uploading {} doc_id: {}. Response {}'.
+                            format(data_string(tender_data), document_id, response.status_code),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
+                                              params={"TENDER_ID": tender_data.tender_id,
+                                                      item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
                     self.retry_upload_to_doc_service_queue.put(tender_data)
                     self.upload_to_doc_service_queue.get()
             gevent.sleep(0)
@@ -117,35 +175,32 @@ class UploadFile(Greenlet):
                                'Lost tender_data'.format(data_string(tender_data), document_id, e.message),
                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE},
                                                      params={"TENDER_ID": tender_data.tender_id,
-                                                             item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                                                             item_name_id: tender_data.item_id,
+                                                             "DOCUMENT_ID": document_id}))
                 logger.exception("Message: {}".format(e.message))
                 self.retry_upload_to_doc_service_queue.get()
                 self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
                 raise e
             else:
                 if response.status_code == 200:
-                    data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
-                                tender_data.item_name, dict(response.json(), **{'meta': {'id': document_id}}))
-                    self.upload_to_tender_queue.put(data)
-                    self.retry_upload_to_doc_service_queue.get()
-                    logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(
-                            data_string(tender_data), document_id),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                      "DOCUMENT_ID": document_id}))
+                    self.st_code_200('retry_', tender_data, response, document_id, item_name_id)
                 else:
-                    logger.info('Not successful response in retry from document service while uploading {} {} {} {}. Response {}'.
-                                format(tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, response.status_code),
-                                extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_DOC_SERVICE},
-                                                      params={"TENDER_ID": tender_data.tender_id,
-                                                              item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                    logger.info(
+                        'Not successful response in retry from document service while uploading {} {} {} {}. Response {}'.
+                            format(tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id,
+                                   response.status_code),
+                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE.format('_retry')},
+                                              params={"TENDER_ID": tender_data.tender_id,
+                                                      item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
     def client_upload_to_doc_service(self, tender_data):
         """Process upload request for retry queue objects."""
         return self.doc_service_client.upload(file_name, create_file(tender_data.file_content), 'application/yaml',
-                                              headers={'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get('id')})
+                                              headers={
+                                                  'X-Client-Request-ID': tender_data.file_content.get('meta', {}).get(
+                                                      'id')})
 
     def upload_to_tender(self):
         """Get data from upload_to_tender_queue; Upload get_Url and documentType;
@@ -169,60 +224,20 @@ class UploadFile(Greenlet):
                                                          '{}/{}/documents'.format(tender_data.item_name,
                                                                                   tender_data.item_id))
             except ResourceError as re:
-                if re.status_int == 422:  # WARNING and don't retry
-                    logger.warning("Accept 422, skip {} doc_id: {}. Message: {}".format(data_string(tender_data), document_id, re.msg),
-                                   extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
-                                                         {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                          "DOCUMENT_ID": document_id}))
-                    self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                    self.upload_to_tender_queue.get()
-                    self.sleep_change_value.decrement()
-                    continue
-                elif re.status_int == 403 or re.status_int is None:
-                    logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
-                        re.status_int, data_string(tender_data), document_id, re.msg),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
-                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                               "DOCUMENT_ID": document_id})
-                    )
-                    self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                    self.sleep_change_value.decrement()
-                    self.upload_to_tender_queue.get()
+                if re.status_int == 403 or re.status_int == 422 or re.status_int is None:
+                    self.resource_errors_403_422_none('', re, tender_data, document_id, item_name_id)
                 elif re.status_int == 429:
-                    logger.info("Accept 429 while uploading to tender {} {} {} doc_id: {}. Message {}".format(
-                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.msg),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
-                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                               "DOCUMENT_ID": document_id}))
-                    self.sleep_change_value.increment()
+                    self.resource_error_429(re, tender_data, document_id, item_name_id)
                 else:
-                    logger.warning('ResourceError while uploading file to {} doc_id: {}. Message: {}'.format(
-                        data_string(tender_data), document_id, re.message),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                      "DOCUMENT_ID": document_id}))
+                    self.resource_errors_else('', re, tender_data, document_id, item_name_id)
                     self.retry_upload_to_tender_queue.put(tender_data)
                     self.upload_to_tender_queue.get()
-                    self.sleep_change_value.decrement()
             except Exception as e:
-                logger.info('Exception while uploading file to {} doc_id: {}. Message: {}'.format(
-                    data_string(tender_data), document_id, e.message),
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER},
-                                          params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                  "DOCUMENT_ID": document_id}))
+                self.exception_errors('', e, tender_data, document_id, item_name_id)
                 self.retry_upload_to_tender_queue.put(tender_data)
                 self.upload_to_tender_queue.get()
-                self.sleep_change_value.decrement()
             else:
-                logger.info('Successfully uploaded file to {} doc_id: {}'.format(
-                    data_string(tender_data), document_id),
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
-                                          params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                  "DOCUMENT_ID": document_id}))
-                # delete current tender after successful upload file (to avoid reloading file)
-                self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                self.upload_to_tender_queue.get()
-                self.sleep_change_value.decrement()
+                self.succesfully_uploaded_to_tender('', tender_data, document_id, item_name_id)
             gevent.sleep(self.sleep_change_value.time_between_requests)
 
     def retry_upload_to_tender(self):
@@ -241,53 +256,17 @@ class UploadFile(Greenlet):
             try:
                 self.client_upload_to_tender(tender_data)
             except ResourceError as re:
-                if re.status_int == 422:  # WARNING and don't retry
-                    logger.warning("Accept 422, skip {} doc_id: {}. Message {}".format(data_string(tender_data), document_id, re.msg),
-                                   extra=journal_context({"MESSAGE_ID": DATABRIDGE_422_UPLOAD_TO_TENDER},
-                                                         {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                    self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                    self.retry_upload_to_tender_queue.get()
-                    self.sleep_change_value.decrement()
+                if re.status_int == 403 or re.status_int == 422 or re.status_int is None:
+                    self.resource_errors_403_422_none('retry_', re, tender_data, document_id, item_name_id)
                     continue
                 elif re.status_int == 429:
-                    logger.info("Accept 429 while uploading to tender {} {} {} doc_id: {}. Message {}".format(
-                        tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.msg),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
-                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                    self.sleep_change_value.increment()
-                elif re.status_int == 403 or re.status_int is None:
-                    logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
-                        re.status_int, data_string(tender_data), document_id, re.msg),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
-                                              {"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                               "DOCUMENT_ID": document_id})
-                    )
-                    self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                    self.retry_upload_to_tender_queue.get()
-                    self.sleep_change_value.decrement()
-                    continue
+                    self.resource_error_429(re, tender_data, document_id, item_name_id)
                 else:
-                    logger.info('ResourceError while retry uploading file to {} doc_id: {}. ResourceErrorStatus_int: {}. Message: {}'.format(
-                        data_string(tender_data), document_id, re.status_int, re.message),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                    self.sleep_change_value.decrement()
+                    self.resource_errors_else('retry', re, tender_data, document_id, item_name_id)
             except Exception as e:
-                logger.info('Exception while retry uploading file to {} doc_id: {}. Message: {}'.format(
-                    data_string(tender_data), document_id, e.message),
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_RETRY_UPLOAD_TO_TENDER},
-                                          params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                logger.exception("Message: {}".format(e.message))
-                self.sleep_change_value.decrement()
+                self.exception_errors('retry', e, tender_data, document_id, item_name_id)
             else:
-                logger.info('Successfully uploaded file to {} doc_id: {} in retry'.format(
-                    data_string(tender_data), document_id),
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
-                                          params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
-                # delete current tender after successful upload file (to avoid reloading file)
-                self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-                self.retry_upload_to_tender_queue.get()
-                self.sleep_change_value.decrement()
+                self.succesfully_uploaded_to_tender('retry_', tender_data, document_id, item_name_id)
             gevent.sleep(self.sleep_change_value.time_between_requests)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
@@ -313,7 +292,8 @@ class UploadFile(Greenlet):
                 gevent.sleep(self.delay)
                 for name, job in self.immortal_jobs.items():
                     if job.dead:
-                        logger.warning("{} worker dead try restart".format(name), extra=journal_context({"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
+                        logger.warning("{} worker dead try restart".format(name), extra=journal_context(
+                            {"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
                         self.immortal_jobs[name] = gevent.spawn(getattr(self, name))
                         logger.info("{} worker is up".format(name))
 
