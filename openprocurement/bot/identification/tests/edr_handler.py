@@ -700,18 +700,14 @@ class TestEdrHandlerWorker(unittest.TestCase):
                        'status_code': 200, 'headers': {'X-Request-ID': edr_req_ids[1]}}])
         edrpou_codes_queue = Queue(10)
         check_queue = Queue(10)
-        expected_result = []
-        for i in range(1):
-            edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids[i], "awards", self.meta()))  # data
-            expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids[i], "awards",
-                                        self.file_con({}, self.document_id, 1, 1,
-                                                      [edr_req_ids[0], edr_req_ids[1]])))  # result
+        edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids[0], "awards", self.meta()))
+        expected_result = Data(self.tender_id, self.award_id, self.edr_ids[0], "awards",
+                               self.file_con({}, self.document_id, 1, 1, [edr_req_ids[0], edr_req_ids[1]]))
         self.worker = EdrHandler.spawn(self.proxy_client, edrpou_codes_queue, check_queue, MagicMock(), MagicMock())
-        for result in expected_result:
-            self.assertEquals(check_queue.get(), result)
-        self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(expected_result[0].code)))
+        self.assertEquals(check_queue.get(), expected_result)
+        self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(expected_result.code)))
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
-        self.assertEqual(mrequest.request_history[6].url, self.urls('verify?id={}'.format(expected_result[0].code)))
+        self.assertEqual(mrequest.request_history[6].url, self.urls('verify?id={}'.format(expected_result.code)))
         self.assertIsNotNone(mrequest.request_history[6].headers['X-Client-Request-ID'])
         self.assertEqual(mrequest.call_count, 7)
 
