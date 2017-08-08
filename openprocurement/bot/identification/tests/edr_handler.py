@@ -232,11 +232,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
         expected_result = []
         self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
         expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                                    self.file_con(data_info={"test": 1}, doc_id=self.document_ids[0], suf_1=2, suf_2=1,
-                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+                                    self.file_con({"test": 1}, self.document_ids[0], 2, 1,
+                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))
         expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                                    self.file_con(data_info={"test": 2}, doc_id=self.document_ids[0], suf_1=2, suf_2=2,
-                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+                                    self.file_con({"test": 2}, self.document_ids[0], 2, 2,
+                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))
         self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
@@ -256,11 +256,11 @@ class TestEdrHandlerWorker(unittest.TestCase):
         expected_result = []
         self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))  # data
         expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                                    self.file_con(data_info={"test": 1}, doc_id=self.document_ids[0], suf_1=2, suf_2=1,
-                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+                                    self.file_con({"test": 1}, self.document_ids[0], 2, 1,
+                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))
         expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                                    self.file_con(data_info={"test": 2}, doc_id=self.document_ids[0], suf_1=2, suf_2=2,
-                                                  source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+                                    self.file_con({"test": 2}, self.document_ids[0], 2, 2,
+                                                  [self.edr_req_ids[0], self.edr_req_ids[1]])))
         self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
@@ -405,8 +405,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """Recieve 404 and not valid data (worker dies). Check that worker get up"""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.url, [{'json': {'data': [{}]},
-                                 'headers': {'X-Request-ID': self.edr_req_ids[0]}},
-                                # data contains dict, instead of list
+                                 'headers': {'X-Request-ID': self.edr_req_ids[0]}},  # contains dict instead of list
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         mrequest.get(self.url_id(321), [self.stat_200([{}], self.source_date, self.edr_req_ids[0])])
         self.edrpou_codes_queue.put(Data(self.tender_id, self.award_id, self.edr_ids, 'awards', self.meta()))
@@ -533,15 +532,15 @@ class TestEdrHandlerWorker(unittest.TestCase):
         award_key = item_key(self.tender_id, self.award_id)
         qualification_key = item_key(self.tender_id, self.qualification_id)
         data_1 = Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                      self.file_con(doc_id=self.document_ids[0], suf_1=2, suf_2=1, source_req=[self.edr_req_ids[0]]))
+                      self.file_con({}, self.document_ids[0], 2, 1, [self.edr_req_ids[0]]))
         data_2 = Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
-                      self.file_con(doc_id=self.document_ids[0], suf_1=2, suf_2=2, source_req=[self.edr_req_ids[0]]))
+                      self.file_con({}, self.document_ids[0], 2, 2, [self.edr_req_ids[0]]))
         data_3 = Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
-                      self.file_con(doc_id=self.document_ids[1], suf_1=3, suf_2=1, source_req=[self.edr_req_ids[1]]))
+                      self.file_con({}, self.document_ids[1], 3, 1, [self.edr_req_ids[1]]))
         data_4 = Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
-                      self.file_con(doc_id=self.document_ids[1], suf_1=3, suf_2=2, source_req=[self.edr_req_ids[1]]))
+                      self.file_con({}, self.document_ids[1], 3, 2, [self.edr_req_ids[1]]))
         data_5 = Data(self.tender_id, self.qualification_id, self.edr_ids, 'qualifications',
-                      self.file_con(doc_id=self.document_ids[1], suf_1=3, suf_2=3, source_req=[self.edr_req_ids[1]]))
+                      self.file_con({}, self.document_ids[1], 3, 3, [self.edr_req_ids[1]]))
         mrequest.get(self.url, [
             self.stat_200([{}, {}], ["2017-04-25T11:56:36+00:00", "2017-04-25T11:56:36+00:00"], self.edr_req_ids[0]),
             self.stat_200([{}, {}, {}],

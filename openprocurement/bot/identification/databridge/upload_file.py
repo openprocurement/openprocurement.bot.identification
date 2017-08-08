@@ -11,10 +11,9 @@ from gevent.hub import LoopExit
 from restkit import ResourceError
 
 from openprocurement.bot.identification.databridge.utils import journal_context, Data, create_file, data_string
-from openprocurement.bot.identification.databridge.journal_msg_ids import (
-    DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER,
-    DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD,
-    DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING)
+from openprocurement.bot.identification.databridge.journal_msg_ids import DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, \
+    DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER, \
+    DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_START_UPLOAD, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING
 from openprocurement.bot.identification.databridge.constants import file_name, retry_mult
 
 logger = logging.getLogger(__name__)
@@ -22,11 +21,6 @@ logger = logging.getLogger(__name__)
 
 class UploadFile(Greenlet):
     """ Upload file with details """
-
-    pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
-    qualification_procurementMethodType = (
-        'aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2',
-        'competitiveDialogueEU.stage2')
 
     def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client,
                  services_not_available, sleep_change_value, delay=15):
@@ -53,7 +47,7 @@ class UploadFile(Greenlet):
         # blockers
         self.services_not_available = services_not_available
 
-    def resource_errors_403_422_none(self, retry, re, tender_data, document_id, item_name_id):
+    def removing_data(self, retry, re, tender_data, document_id, item_name_id):
         logger.warning("Accept {} while uploading to {} doc_id: {}. Message {}".format(
             re.status_int, data_string(tender_data), document_id, re.msg),
             extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
@@ -61,9 +55,12 @@ class UploadFile(Greenlet):
                                    "DOCUMENT_ID": document_id}))
         self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
         self.sleep_change_value.decrement()
-        eval('self.{}upload_to_tender_queue.get()'.format(retry))
+        if retry == '':
+            self.upload_to_tender_queue.get()
+        elif retry == 'retry':
+            self.retry_upload_to_tender_queue.get()
 
-    def resource_error_429(self, re, tender_data, document_id, item_name_id):
+    def decrease_request_frequency(self, re, tender_data, document_id, item_name_id):
         logger.info("Accept 429 while uploading to tender {} {} {} doc_id: {}. Message {}".format(
             tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id, re.msg),
             extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
@@ -99,14 +96,20 @@ class UploadFile(Greenlet):
                                           "DOCUMENT_ID": document_id}))
         # delete current tender after successful upload file (to avoid reloading file)
         self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-        eval('self.{}upload_to_tender_queue.get()'.format(retry))
         self.sleep_change_value.decrement()
+        if retry == '':
+            self.upload_to_tender_queue.get()
+        elif retry == 'retry':
+            self.retry_upload_to_tender_queue.get()
 
-    def st_code_200(self, retry, tender_data, response, document_id, item_name_id):
+    def move_to_tender_queue(self, retry, tender_data, response, document_id, item_name_id):
         data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code,
                     tender_data.item_name, dict(response.json(), **{'meta': {'id': document_id}}))
         self.upload_to_tender_queue.put(data)
-        eval('self.{}upload_to_doc_service_queue.get()'.format(retry))
+        if retry == '':
+            self.upload_to_doc_service_queue.get()
+        elif retry == 'retry':
+            self.retry_upload_to_doc_service_queue.get()
         logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(
             data_string(tender_data), document_id),
             extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE},
@@ -142,7 +145,7 @@ class UploadFile(Greenlet):
                 self.upload_to_doc_service_queue.get()
             else:
                 if response.status_code == 200:
-                    self.st_code_200('', tender_data, response, document_id, item_name_id)
+                    self.move_to_tender_queue('', tender_data, response, document_id, item_name_id)
                 else:
                     logger.info(
                         'Not successful response from document service while uploading {} doc_id: {}. Response {}'.
@@ -183,15 +186,16 @@ class UploadFile(Greenlet):
                 raise e
             else:
                 if response.status_code == 200:
-                    self.st_code_200('retry_', tender_data, response, document_id, item_name_id)
+                    self.move_to_tender_queue('retry', tender_data, response, document_id, item_name_id)
                 else:
                     logger.info(
                         'Not successful response in retry from document service while uploading {} {} {} {}. Response {}'.
                             format(tender_data.tender_id, tender_data.item_name, tender_data.item_id, document_id,
                                    response.status_code),
-                        extra=journal_context({"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE.format('_retry')},
-                                              params={"TENDER_ID": tender_data.tender_id,
-                                                      item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
+                        extra=journal_context(
+                            {"MESSAGE_ID": DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE.format('_retry')},
+                            params={"TENDER_ID": tender_data.tender_id,
+                                    item_name_id: tender_data.item_id, "DOCUMENT_ID": document_id}))
             gevent.sleep(0)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
@@ -225,9 +229,9 @@ class UploadFile(Greenlet):
                                                                                   tender_data.item_id))
             except ResourceError as re:
                 if re.status_int == 403 or re.status_int == 422 or re.status_int is None:
-                    self.resource_errors_403_422_none('', re, tender_data, document_id, item_name_id)
+                    self.removing_data('', re, tender_data, document_id, item_name_id)
                 elif re.status_int == 429:
-                    self.resource_error_429(re, tender_data, document_id, item_name_id)
+                    self.decrease_request_frequency(re, tender_data, document_id, item_name_id)
                 else:
                     self.resource_errors_else('', re, tender_data, document_id, item_name_id)
                     self.retry_upload_to_tender_queue.put(tender_data)
@@ -257,16 +261,16 @@ class UploadFile(Greenlet):
                 self.client_upload_to_tender(tender_data)
             except ResourceError as re:
                 if re.status_int == 403 or re.status_int == 422 or re.status_int is None:
-                    self.resource_errors_403_422_none('retry_', re, tender_data, document_id, item_name_id)
+                    self.removing_data('retry', re, tender_data, document_id, item_name_id)
                     continue
                 elif re.status_int == 429:
-                    self.resource_error_429(re, tender_data, document_id, item_name_id)
+                    self.decrease_request_frequency(re, tender_data, document_id, item_name_id)
                 else:
                     self.resource_errors_else('retry', re, tender_data, document_id, item_name_id)
             except Exception as e:
                 self.exception_errors('retry', e, tender_data, document_id, item_name_id)
             else:
-                self.succesfully_uploaded_to_tender('retry_', tender_data, document_id, item_name_id)
+                self.succesfully_uploaded_to_tender('retry', tender_data, document_id, item_name_id)
             gevent.sleep(self.sleep_change_value.time_between_requests)
 
     @retry(stop_max_attempt_number=5, wait_exponential_multiplier=retry_mult)
