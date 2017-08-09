@@ -13,7 +13,7 @@ import gevent
 from functools import partial
 from yaml import load
 from gevent.queue import Queue
-from restkit import request, RequestError
+from restkit import request, RequestError, ResourceError
 from requests import RequestException
 
 from openprocurement_client.client import TendersClientSync as BaseTendersClientSync, TendersClient as BaseTendersClient
@@ -162,7 +162,7 @@ class EdrDataBridge(object):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:
             self.client.head('/api/{}/spore'.format(self.api_version))
-        except RequestError as e:
+        except (RequestError, ResourceError) as e:
             logger.info('TendersServer connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
             raise e
@@ -189,6 +189,7 @@ class EdrDataBridge(object):
             logger.info("All services are available")
             self.set_wake_up()
         else:
+            logger.info("Pausing bot")
             self.set_sleep()
 
     def _start_jobs(self):
