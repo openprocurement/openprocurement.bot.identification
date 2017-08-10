@@ -262,7 +262,6 @@ class UploadFile(Greenlet):
             except ResourceError as re:
                 if re.status_int == 403 or re.status_int == 422 or re.status_int is None:
                     self.removing_data('retry', re, tender_data, document_id, item_name_id)
-                    continue
                 elif re.status_int == 429:
                     self.decrease_request_frequency(re, tender_data, document_id, item_name_id)
                 else:
