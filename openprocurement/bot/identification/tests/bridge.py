@@ -123,12 +123,8 @@ class TestBridgeWorker(BaseServersTest):
         self.assertTrue(isinstance(self.worker.client, TendersClient))
         self.assertTrue(isinstance(self.worker.proxyClient, ProxyClient))
         self.assertTrue(isinstance(self.worker.doc_service_client, DocServiceClient))
-
-        # check events
         self.assertFalse(self.worker.initialization_event.is_set())
-
-        # check processing items
-        self.assertEqual(self.worker.processing_items, {})
+        self.assertEqual(self.worker.process_tracker.processing_items, {})
 
     @patch('openprocurement.bot.identification.databridge.bridge.ProxyClient')
     @patch('openprocurement.bot.identification.databridge.bridge.DocServiceClient')
@@ -259,24 +255,6 @@ class TestBridgeWorker(BaseServersTest):
             self.worker.check_openprocurement_api()
         self.worker.client = MagicMock()
         self.assertTrue(self.worker.check_openprocurement_api())
-
-    def test_check_412_function(self):
-        self.worker = EdrDataBridge(config)
-        # check if within except
-        func = check_412(
-            MagicMock(side_effect=ResourceError(http_code=412, response=MagicMock(headers={'Set-Cookie': 1}))))
-        with self.assertRaises(ResourceError):
-            func(MagicMock(headers={'Cookie': 1}))
-
-        # check else within except
-            func = check_412(
-            MagicMock(side_effect=ResourceError(http_code=403, response=MagicMock(headers={'Set-Cookie': 1}))))
-        with self.assertRaises(ResourceError):
-            func(MagicMock(headers={'Cookie': 1}))
-
-        # check regular return
-        f = check_412(MagicMock(side_effect=[1]))
-        self.assertEqual(f(1), 1)
 
     def test_check_services(self):
         t = os.environ.get("SANDBOX_MODE", "False")

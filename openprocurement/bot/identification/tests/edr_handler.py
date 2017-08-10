@@ -18,7 +18,8 @@ from munch import munchify
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, RetryException
+from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, RetryException, ProcessTracker, \
+    item_key
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, generate_request_id, \
     ResponseMock
 from openprocurement.bot.identification.client import ProxyClient
@@ -47,9 +48,9 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.url = "{url}".format(url=self.proxy_client.verify_url)
         self.local_edr_ids = get_random_edr_ids(2)
         self.edr_ids = get_random_edr_ids(1)[0]
-        self.processing_items = {}
+        self.process_tracker = ProcessTracker()
         self.worker = EdrHandler.spawn(self.proxy_client, self.edrpou_codes_queue,
-                                       self.upload_to_doc_service_queue, self.processing_items, MagicMock())
+                                       self.upload_to_doc_service_queue, self.process_tracker, MagicMock())
         self.sleep_change_value = APIRateController()
 
     def meta(self):
@@ -529,8 +530,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                                                                       # int instead of str type
                                                                                   }]}, ]}}))
         mrequest.get(self.url, [self.stat_200([{}], self.source_date, edr_req_id)])
-        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue, {},
-                                                    MagicMock(), {}, self.sleep_change_value)
+        filter_tenders_worker = FilterTenders.spawn(client, filtered_tender_ids_queue, edrpou_codes_queue,
+                                                    self.process_tracker, MagicMock(), self.sleep_change_value)
         self.worker = EdrHandler.spawn(self.proxy_client, edrpou_codes_queue, upload_to_doc_service_queue,
                                        MagicMock(), MagicMock())
 
@@ -558,8 +559,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         qualification_id = uuid.uuid4().hex
         document_ids = [generate_doc_id(), generate_doc_id()]
         edr_req_id = self.gen_req_id[0:2]
-        award_key = '{}_{}'.format(self.tender_id, self.award_id)
-        qualification_key = '{}_{}'.format(self.tender_id, qualification_id)
+        award_key = item_key(self.tender_id, self.award_id)
+        qualification_key = item_key(self.tender_id, qualification_id)
         data_1 = Data(self.tender_id, self.award_id, '123', "awards",
                       self.file_con({}, document_ids[0], 2, 1, [edr_req_id[0]]))
         data_2 = Data(self.tender_id, self.award_id, '123', "awards",
@@ -587,13 +588,13 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                               'sourceRequests': ['req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
 
         self.worker = EdrHandler.spawn(self.proxy_client, edrpou_codes_queue, upload_to_doc_service,
-                                       self.processing_items, MagicMock())
+                                       self.process_tracker, MagicMock())
 
         for data in [data_1, data_2, data_3, data_4, data_5]:
             self.assertEquals(upload_to_doc_service.get(), data)
         self.assertEqual(edrpou_codes_queue.qsize(), 0)
-        self.assertEqual(self.processing_items[award_key], 2)
-        self.assertEqual(self.processing_items[qualification_key], 3)
+        self.assertEqual(self.process_tracker.processing_items[award_key], 2)
+        self.assertEqual(self.process_tracker.processing_items[qualification_key], 3)
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
