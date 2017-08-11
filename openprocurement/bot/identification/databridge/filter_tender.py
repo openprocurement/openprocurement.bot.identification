@@ -21,7 +21,6 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
 from openprocurement.bot.identification.databridge.constants import author
 from restkit import ResourceError
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +28,8 @@ class FilterTenders(Greenlet):
     """ Edr API Data Bridge """
     identification_scheme = u'UA-EDR'
 
-    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, process_tracker, services_not_available, sleep_change_value, delay=15):
+    def __init__(self, tenders_sync_client, filtered_tender_ids_queue, edrpou_codes_queue, process_tracker,
+                 services_not_available, sleep_change_value, delay=15):
         super(FilterTenders, self).__init__()
         self.exit = False
         self.start_time = datetime.now()
@@ -58,12 +58,15 @@ class FilterTenders(Greenlet):
                 gevent.sleep(0)
                 continue
             try:
-                response = self.tenders_sync_client.request("GET", path='{}/{}'.format(self.tenders_sync_client.prefix_path, tender_id),
+                response = self.tenders_sync_client.request("GET",
+                                                            path='{}/{}'.format(self.tenders_sync_client.prefix_path,
+                                                                                tender_id),
                                                             headers={'X-Client-Request-ID': generate_req_id()})
             except ResourceError as re:
                 if re.status_int == 429:
                     self.sleep_change_value.increment()
-                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(tender_id, self.sleep_change_value.time_between_requests))
+                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(tender_id,
+                                                                                              self.sleep_change_value.time_between_requests))
                 else:
                     logger.warning('Fail to get tender info {}'.format(tender_id),
                                    extra=journal_context(params={"TENDER_ID": tender_id}))

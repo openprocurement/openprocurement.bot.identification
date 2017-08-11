@@ -13,7 +13,7 @@ import gevent
 from functools import partial
 from yaml import load
 from gevent.queue import Queue
-from restkit import request, RequestError
+from restkit import request, RequestError, ResourceError
 from requests import RequestException
 from constants import retry_mult
 from openprocurement_client.client import TendersClientSync as BaseTendersClientSync, TendersClient as BaseTendersClient
@@ -65,6 +65,7 @@ class EdrDataBridge(object):
         self.doc_service_host = self.config_get('doc_service_server')
         self.doc_service_port = self.config_get('doc_service_port') or 6555
         self.sandbox_mode = os.environ.get('SANDBOX_MODE', 'False')
+        self.time_to_live = self.config_get('time_to_live') or 300
 
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
@@ -90,7 +91,7 @@ class EdrDataBridge(object):
         self.initialization_event = gevent.event.Event()
         self.services_not_available = gevent.event.Event()
         self.db = Db(config)
-        self.process_tracker = ProcessTracker(self.db)
+        self.process_tracker = ProcessTracker(self.db, self.time_to_live)
 
         # Workers
         self.scanner = partial(Scanner.spawn,
@@ -159,7 +160,7 @@ class EdrDataBridge(object):
         """Makes request to the TendersClient, returns True if it's up, raises RequestError otherwise"""
         try:
             self.client.head('/api/{}/spore'.format(self.api_version))
-        except RequestError as e:
+        except (RequestError, ResourceError) as e:
             logger.info('TendersServer connection error, message {}'.format(e),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_DOC_SERVICE_CONN_ERROR}, {}))
             raise e
@@ -186,6 +187,7 @@ class EdrDataBridge(object):
             logger.info("All services are available")
             self.set_wake_up()
         else:
+            logger.info("Pausing bot")
             self.set_sleep()
 
     def _start_jobs(self):
