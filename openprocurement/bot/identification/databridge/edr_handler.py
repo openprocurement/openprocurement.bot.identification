@@ -109,8 +109,6 @@ class EdrHandler(Greenlet):
         self.upload_to_doc_service_queue.put(data)
         if is_retry:
             self.retry_edrpou_codes_queue.get()
-        else:
-            self.edrpou_codes_queue.get()
 
     def process_and_move_200(self, response, tender_data, is_retry):
         meta_id = tender_data.file_content['meta']['id']

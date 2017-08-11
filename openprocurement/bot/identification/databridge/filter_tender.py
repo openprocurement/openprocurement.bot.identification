@@ -65,8 +65,8 @@ class FilterTenders(Greenlet):
             except ResourceError as re:
                 if re.status_int == 429:
                     self.sleep_change_value.increment()
-                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(tender_id,
-                                                                                              self.sleep_change_value.time_between_requests))
+                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(
+                        tender_id, self.sleep_change_value.time_between_requests))
                 else:
                     logger.warning('Fail to get tender info {}'.format(tender_id),
                                    extra=journal_context(params={"TENDER_ID": tender_id}))
@@ -188,7 +188,6 @@ class FilterTenders(Greenlet):
                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
                                       params={"TENDER_ID": tender['id'], "BID_ID": qualification['bidID'],
                                               "QUALIFICATION_ID": qualification['id']}))
-
 
     def should_process_item(self, item):
         return (item['status'] == 'pending' and not [document for document in item.get('documents', [])
