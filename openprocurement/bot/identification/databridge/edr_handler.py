@@ -17,7 +17,7 @@ from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_EMPTY_RESPONSE
 )
 from openprocurement.bot.identification.databridge.utils import (
-    Data, journal_context, validate_param, RetryException, check_add_suffix, data_string
+    Data, journal_context, RetryException, check_add_suffix
 )
 from openprocurement.bot.identification.databridge.constants import version, retry_mult
 
@@ -64,65 +64,57 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep()
                 continue
-            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
-            logger.info('Get {} from edrpou_codes_queue'.format(data_string(tender_data)),
+            logger.info('Get {} from edrpou_codes_queue'.format(tender_data),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                                              tender_data.log_params()))
             self.until_too_many_requests_event.wait()
-            document_id = tender_data.file_content['meta']['id']
-            response = self.proxyClient.verify(validate_param(tender_data.code), tender_data.code, headers={'X-Client-Request-ID': document_id})
-            self.add_unique_req_id(response, tender_data)
+            response = self.proxyClient.verify(tender_data.param(), tender_data.code,
+                                               headers={'X-Client-Request-ID': tender_data.doc_id()})
+            tender_data.add_unique_req_id(response)
             try:
                 res_json = response.json()
             except JSONDecodeError:
                 res_json = response.text
             if self.is_no_document_in_edr(response, res_json):
-                self.process_and_move_404(response.json(), tender_data, document_id, item_name_id, False)
+                self.move_data_nonexistent_edr(response.json(), tender_data, False)
             elif response.status_code == 200:
-                self.process_and_move_200(response, tender_data, False)
+                self.move_data_existing_edr(response, tender_data, False)
             else:
                 self.handle_status_response(response, tender_data.tender_id)
                 self.retry_edrpou_codes_queue.put(tender_data)  # Put tender to retry
-                logger.info('Put {} to retry_edrpou_codes_queue'.format(data_string(tender_data)),
-                            extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                logger.info('Put {} to retry_edrpou_codes_queue'.format(tender_data),
+                            extra=journal_context(params=tender_data.log_params()))
             self.edrpou_codes_queue.get()
             gevent.sleep()
-
-    def add_unique_req_id(self, response, tender_data):
-        if response.headers.get('X-Request-ID'):
-            tender_data.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
 
     def is_no_document_in_edr(self, response, res_json):
         return (response.status_code == 404 and isinstance(res_json, dict)
                 and res_json.get('errors')[0].get('description')[0].get('error').get('code') == u"notFound")
 
-    def process_and_move_404(self, res_json, tender_data, document_id, item_name_id, is_retry):
-        logger.info('Empty response for {} doc_id {}.'.format(data_string(tender_data), document_id),
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE},
-                                          params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id,
-                                                  "DOCUMENT_ID": document_id}))
+    def move_data_nonexistent_edr(self, res_json, tender_data, is_retry):
+        logger.info('Empty response for {} doc_id {}.'.format(tender_data, tender_data.doc_id()),
+                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_EMPTY_RESPONSE}, tender_data.log_params()))
         file_content = res_json.get('errors')[0].get('description')[0]
         file_content['meta'].update(tender_data.file_content['meta'])
         file_content['meta'].update({"version": version})
-        data = Data(tender_data.tender_id, tender_data.item_id, tender_data.code, tender_data.item_name, file_content)
+        data = tender_data
+        data.file_content = file_content
         self.process_tracker.set_item(tender_data.tender_id, tender_data.item_id, 1)
         self.upload_to_doc_service_queue.put(data)
         if is_retry:
             self.retry_edrpou_codes_queue.get()
 
-    def process_and_move_200(self, response, tender_data, is_retry):
-        meta_id = tender_data.file_content['meta']['id']
+    def move_data_existing_edr(self, response, tender_data, is_retry):
         data_list = []
         try:
-            self.fill_data_list(response, tender_data, meta_id, data_list)
+            self.fill_data_list(response, tender_data, data_list)
         except (KeyError, IndexError) as e:
-            logger.info('Error {}. {}'.format(data_string(tender_data), e))
+            logger.info('Error {}. {}'.format(tender_data, e))
             self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get() if is_retry else tender_data)
         else:
             for data in data_list:
                 self.upload_to_doc_service_queue.put(data)
-                logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue.'.format(
-                    data_string(data), data.file_content['meta']['id']))
+                logger.info('Put tender {} doc_id {} to upload_to_doc_service_queue.'.format(data, data.doc_id()))
             if is_retry:
                 self.retry_edrpou_codes_queue.get()
             self.process_tracker.set_item(tender_data.tender_id, tender_data.item_id, len(response.json()['data']))
@@ -137,15 +129,13 @@ class EdrHandler(Greenlet):
             except LoopExit:
                 gevent.sleep()
                 continue
-            item_name_id = tender_data.item_name[:-1].upper() + "_ID"
-            logger.info('Get {} from retry_edrpou_codes_queue'.format(data_string(tender_data)),
+            logger.info('Get {} from retry_edrpou_codes_queue'.format(tender_data),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_GET_TENDER_FROM_QUEUE},
-                                              params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                                              tender_data.log_params()))
             self.until_too_many_requests_event.wait()
-            document_id = tender_data.file_content['meta']['id']
             try:
-                response = self.get_edr_data_request(validate_param(tender_data.code), tender_data.code, document_id)
-                self.add_unique_req_id(response, tender_data)
+                response = self.get_edr_data_request(tender_data.param(), tender_data.code, tender_data.doc_id())
+                tender_data.add_unique_req_id(response)
             except RetryException as re:
                 try:
                     self.handle_status_response(re.args[1], tender_data.tender_id)
@@ -153,31 +143,30 @@ class EdrHandler(Greenlet):
                 except JSONDecodeError:
                     res_json = re.args[1].text
                 if self.is_no_document_in_edr(re.args[1], res_json):
-                    self.process_and_move_404(res_json, tender_data, document_id, item_name_id, True)
+                    self.move_data_nonexistent_edr(res_json, tender_data, True)
                 else:
-                    logger.info('Put {} in back of retry_edrpou_codes_queue. Response {}'.format(data_string(tender_data), res_json),
-                                extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                    logger.info('Put {} in back of retry_edrpou_codes_queue. Response {}'.format(tender_data, res_json),
+                                extra=journal_context(params=tender_data.log_params()))
                     self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                     gevent.sleep()
             except Exception as e:
-                logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(data_string(tender_data), e.message),
-                            extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                logger.info('Put {} in back of retry_edrpou_codes_queue. Error: {}'.format(tender_data, e.message),
+                            extra=journal_context(params=tender_data.log_params()))
                 self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get())
                 gevent.sleep()
             else:
                 if response.status_code == 429:
                     seconds_to_wait = response.headers.get('Retry-After', self.delay)
                     logger.info('retry_get_edr_id: Too many requests to EDR API. Msg: {}, wait {} seconds.'.format(
-                        response.text, seconds_to_wait),
-                        extra=journal_context(params={"TENDER_ID": tender_data.tender_id, item_name_id: tender_data.item_id}))
+                        response.text, seconds_to_wait), extra=journal_context(params=tender_data.log_params()))
                     self.wait_until_too_many_requests(seconds_to_wait)
                 elif response.status_code == 200:
-                    self.process_and_move_200(response, tender_data, True)
+                    self.move_data_existing_edr(response, tender_data, True)
             gevent.sleep()
 
-    def fill_data_list(self, response, tender_data, meta_id, data_list):
+    def fill_data_list(self, response, tender_data, data_list):
         for i, obj in enumerate(response.json()['data']):
-            document_id = check_add_suffix(response.json()['data'], meta_id, i + 1)
+            document_id = check_add_suffix(response.json()['data'], tender_data.doc_id(), i + 1)
             file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]},
                             'data': obj}
             file_content['meta'].update(deepcopy(tender_data.file_content['meta']))

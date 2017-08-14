@@ -1,3 +1,4 @@
+# coding=utf-8
 major = 1
 minor = 2
 bugfix = 1
