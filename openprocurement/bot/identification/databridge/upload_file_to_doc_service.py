@@ -39,8 +39,6 @@ class UploadFileToDocService(Greenlet):
         self.sleep_change_value = sleep_change_value
         # retry queues for workers
         self.retry_upload_to_doc_service_queue = Queue(maxsize=500)
-        self.retry_upload_to_tender_queue = Queue(maxsize=500)
-
         # blockers
         self.services_not_available = services_not_available
 
@@ -154,10 +152,10 @@ class UploadFileToDocService(Greenlet):
     def check_and_revive_jobs(self):
         for name, job in self.immortal_jobs.items():
             if job.dead:
-                # logger.warning("{} worker dead try restart".format(name), extra=journal_context(
-                #     {"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
+                logger.warning("{} worker dead try restart".format(name), extra=journal_context(
+                    {"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
                 self.immortal_jobs[name] = gevent.spawn(getattr(self, name))
-                # logger.info("{} worker is up".format(name))
+                logger.info("{} worker is up".format(name))
 
     def shutdown(self):
         self.exit = True

@@ -1,6 +1,6 @@
 # coding=utf-8
 from munch import munchify
-from gevent.queue import Queue
+from gevent.queue import Queue, Empty
 from retrying import retry
 
 import logging.config
@@ -76,7 +76,7 @@ class UploadFileToTender(Greenlet):
         except Exception as e:
             self.handle_error(e, tender_data, is_retry)
         else:
-            self.succesfully_uploaded_to_tender(tender_data, is_retry)
+            self.successfully_uploaded_to_tender(tender_data, is_retry)
 
     def update_headers_and_upload_to_tender(self, tender_data, is_retry):
         if is_retry:
@@ -133,7 +133,7 @@ class UploadFileToTender(Greenlet):
             self.retry_upload_to_tender_queue.put(tender_data)
             self.upload_to_tender_queue.get()
 
-    def succesfully_uploaded_to_tender(self, tender_data, is_retry):
+    def successfully_uploaded_to_tender(self, tender_data, is_retry):
         logger.info('Successfully uploaded file to {} doc_id: {}'.format(tender_data, tender_data.doc_id()),
                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER}, tender_data.log_params()))
         # delete current tender after successful upload file (to avoid reloading file)

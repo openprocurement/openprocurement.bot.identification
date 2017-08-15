@@ -82,8 +82,7 @@ class EdrDataBridge(object):
         # init queues for workers
         self.filtered_tender_ids_queue = Queue(maxsize=buffers_size)  # queue of tender IDs with appropriate status
         self.edrpou_codes_queue = Queue(maxsize=buffers_size)  # queue with edrpou codes (Data objects stored in it)
-        self.upload_to_doc_service_queue = Queue(
-            maxsize=buffers_size)  # queue with detailed info from EDR (Data.file_content)
+        self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with info from EDR (Data.file_content)
         # upload_to_tender_queue - queue with  file's get_url
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
 
@@ -231,11 +230,11 @@ class EdrDataBridge(object):
                             self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs[
                                 'edr_handler'] else 0,
                             self.upload_to_doc_service_queue.qsize(),
-                            self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs[
-                                'upload_file'] else 0,
+                            self.jobs['upload_file_to_doc_service'].retry_upload_to_doc_service_queue.qsize() if self.jobs[
+                                'upload_file_to_doc_service'] else 0,
                             self.upload_to_tender_queue.qsize(),
-                            self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs[
-                                'upload_file'] else 0
+                            self.jobs['upload_file_to_tender'].retry_upload_to_tender_queue.qsize() if self.jobs[
+                                'upload_file_to_tender'] else 0
                         ))
                 counter += 1
                 for name, job in self.jobs.items():

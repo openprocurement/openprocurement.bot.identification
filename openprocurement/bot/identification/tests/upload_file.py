@@ -10,12 +10,11 @@ from gevent.queue import Queue
 from gevent.hub import LoopExit
 from time import sleep
 from mock import patch, MagicMock
-from restkit import ResourceError
 
 from openprocurement.bot.identification.client import DocServiceClient
 from openprocurement.bot.identification.databridge.upload_file_to_doc_service import UploadFileToDocService
 from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, item_key, ProcessTracker
-from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
 from openprocurement.bot.identification.databridge.constants import file_name
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
@@ -244,9 +243,27 @@ class TestUploadFileWorker(unittest.TestCase):
         self.worker.update_headers_and_upload.assert_called_once()
         self.worker.remove_bad_data.assert_called_with(self.data, e, True)
 
+    def test_run(self):
+        self.worker.delay = 1
+        upload_to_doc_service, retry_upload_to_doc_service = [MagicMock() for _ in range(2)]
+        self.worker.upload_to_doc_service = upload_to_doc_service
+        self.worker.retry_upload_to_doc_service = retry_upload_to_doc_service
+        with patch.object(self.worker, 'exit', AlmostAlwaysTrue(1)):
+            self.worker._run()
+        self.assertEqual(self.worker.upload_to_doc_service.call_count, 1)
+        self.assertEqual(self.worker.retry_upload_to_doc_service.call_count, 1)
+
+    @patch('gevent.killall')
+    def test_run_exception(self, killlall):
+        self.worker.delay = 1
+        self.worker._start_jobs = MagicMock(return_value={"a": 1})
+        self.worker.check_and_revive_jobs = MagicMock(side_effect=Exception("test error"))
+        self.worker._run()
+        killlall.assert_called_once_with([1], timeout=5)
+
     @patch('gevent.killall')
     @patch('gevent.sleep')
-    def test_run(self, gevent_sleep, killlall):
+    def test_run_exception(self, gevent_sleep, killlall):
         gevent_sleep.side_effect = custom_sleep
         self.worker._start_jobs = MagicMock(return_value={"a": 1})
         self.worker.check_and_revive_jobs = MagicMock(side_effect=Exception("test error"))

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from openprocurement.bot.identification.databridge.utils import ProcessTracker
 
 monkey.patch_all()
 
@@ -15,7 +14,7 @@ from restkit.errors import Unauthorized, RequestFailed, ResourceError
 
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.tests.utils import custom_sleep
-
+from openprocurement.bot.identification.databridge.utils import ProcessTracker
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 

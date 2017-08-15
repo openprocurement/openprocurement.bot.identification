@@ -715,9 +715,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
         self.assertIsNotNone(mrequest.request_history[1].headers['X-Client-Request-ID'])
 
-    @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_value_error_mock(self, mrequest, gevent_sleep):
+    def test_value_error_mock(self, gevent_sleep):
         """Accept 'Gateway Timeout Error'  while requesting /verify, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
         self.worker.retry_edr_ids_queue = MagicMock()

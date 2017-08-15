@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 
-import unittest
 import os
-
-from openprocurement.bot.identification.tests.utils import custom_sleep
-from requests import RequestException
+import unittest
 
 from mock import patch, MagicMock
-from restkit import RequestError, ResourceError
-
 from gevent.pywsgi import WSGIServer
+from requests import RequestException
 from bottle import Bottle, response, request
+from restkit import RequestError
 
-from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement_client.client import TendersClientSync, TendersClient
+from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
-from openprocurement.bot.identification.databridge.utils import check_412
+from openprocurement.bot.identification.tests.utils import custom_sleep, AlmostAlwaysTrue
 
 config = {
     'main':
@@ -39,18 +36,6 @@ config = {
             'api_token': "api_token"
         }
 }
-
-
-class AlmostAlwaysTrue(object):
-    def __init__(self, total_iterations=1):
-        self.total_iterations = total_iterations
-        self.current_iteration = 0
-
-    def __nonzero__(self):
-        if self.current_iteration < self.total_iterations:
-            self.current_iteration += 1
-            return bool(1)
-        return bool(0)
 
 
 class BaseServersTest(unittest.TestCase):

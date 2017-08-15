@@ -4,6 +4,8 @@ monkey.patch_all()
 
 import uuid
 import unittest
+import requests_mock
+
 from gevent.queue import Queue
 from gevent.hub import LoopExit
 from time import sleep
@@ -16,12 +18,13 @@ from simplejson import dumps
 
 from openprocurement.bot.identification.databridge.upload_file_to_tender import UploadFileToTender
 from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, item_key, ProcessTracker
-from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
 from openprocurement.bot.identification.databridge.constants import file_name
 from openprocurement.bot.identification.databridge.bridge import TendersClientSync
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 SERVER_RESPONSE_FLAG = 0
+SERVER_RETRY_COUNTER = 2
 SPORE_COOKIES = ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
                  "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
                  "96a11693fa8bd38623e4daee121f60b4301aef012c")
@@ -63,6 +66,14 @@ def generate_response():
     return response_get_tender()
 
 
+def generate_response_retry():
+    global SERVER_RETRY_COUNTER
+    if SERVER_RETRY_COUNTER > 0:
+        SERVER_RETRY_COUNTER -= 1
+        return response_412()
+    return response_get_tender()
+
+
 class TestUploadFileToTenderWorker(unittest.TestCase):
     def setUp(self):
         self.tender_id = uuid.uuid4().hex
@@ -72,6 +83,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         self.process_tracker = ProcessTracker(db=MagicMock())
         self.process_tracker.set_item(self.tender_id, self.award_id, 1)
         self.upload_to_tender_queue = Queue(10)
+        self.url = 'http://127.0.0.1:20604'
         self.sleep_change_value = APIRateController()
         self.data = Data(self.tender_id, self.award_id, '123', 'awards',
                          {'meta': {'id': self.document_id}, 'test_data': 'test_data'})
@@ -80,9 +92,11 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         self.client = MagicMock()
         self.worker = UploadFileToTender(self.client, self.upload_to_tender_queue,
                                          self.process_tracker, MagicMock(), self.sleep_change_value)
+        self.worker.retry_upload_to_tender_queue = Queue(10)
 
     def tearDown(self):
         del self.worker
+        del self.upload_to_tender_queue
 
     @staticmethod
     def get_tender():
@@ -236,7 +250,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         self.assertEqual(self.worker.sleep_change_value.time_between_requests, 13.5)
 
     @patch('gevent.sleep')
-    def test_412(self, gevent_sleep):
+    def test_process_412(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         api_server_bottle = Bottle()
         api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
@@ -251,8 +265,268 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         self.upload_to_tender_queue.put(self.data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), [item_key(self.tender_id, self.award_id)])
         self.assertEqual(self.upload_to_tender_queue.qsize(), 1)
-        self.worker.start()
         self.shutdown_when_done(self.worker)
         self.assertEqual(self.worker.client.headers['Cookie'], 'SERVER_ID={}'.format(COOKIES_412))
         self.assertEqual(self.upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
+        self.assertEqual(self.worker.retry_upload_to_tender_queue.qsize(), 0, 'Queue should be empty')
         self.assertItemsEqual(self.process_tracker.processing_items.keys(), [])
+        api_server.stop()
+
+    @patch('gevent.sleep')
+    def test_upload_to_tender_worker(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        self.worker.services_not_available = MagicMock(wait=MagicMock())
+        self.worker.try_peek_data_and_upload_to_tender = MagicMock()
+        with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
+            self.worker.upload_to_tender()
+
+        self.worker.services_not_available.wait.assert_called_once()
+        self.worker.try_peek_data_and_upload_to_tender.assert_called_once_with(False)
+
+
+    @patch('gevent.sleep')
+    def test_upload_to_tender_worker(self, gevent_sleep):
+        gevent_sleep.side_effect = custom_sleep
+        self.worker.services_not_available = MagicMock(wait=MagicMock())
+        self.worker.try_peek_data_and_upload_to_tender = MagicMock()
+        with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
+            self.worker.retry_upload_to_tender()
+
+        self.worker.services_not_available.wait.assert_called_once()
+        self.worker.try_peek_data_and_upload_to_tender.assert_called_once_with(True)
+
+
+    def test_peek_from_tender_queue(self):
+        self.worker.upload_to_tender_queue.put(self.data)
+        self.assertEqual(self.worker.peek_from_tender_queue(False), self.data)
+
+    def test_peek_from_tender_queue_retry(self):
+        self.worker.retry_upload_to_tender_queue.put(self.data)
+        self.assertEqual(self.worker.peek_from_tender_queue(True), self.data)
+
+    def test_peek_from_tender_queue_empty(self):
+        self.worker.upload_to_tender_queue = MagicMock(peek=MagicMock(side_effect=LoopExit))
+        with self.assertRaises(LoopExit):
+            self.worker.peek_from_tender_queue(False)
+
+    def test_peek_from_tender_queue_retry_empty(self):
+        self.worker.retry_upload_to_tender_queue = MagicMock(peek=MagicMock(side_effect=LoopExit))
+        with self.assertRaises(LoopExit):
+            self.worker.peek_from_tender_queue(True)
+
+    def test_try_peek_data_and_upload_to_tender(self):
+        self.worker.upload_to_tender_queue.put(self.data)
+        self.worker.try_upload_to_tender = MagicMock()
+        self.worker.try_peek_data_and_upload_to_tender(False)
+        self.worker.try_upload_to_tender.assert_called_once_with(self.data, False)
+
+    def test_try_peek_data_and_upload_to_tender_retry(self):
+        self.worker.retry_upload_to_tender_queue.put(self.data)
+        self.worker.try_upload_to_tender = MagicMock()
+        self.worker.try_peek_data_and_upload_to_tender(True)
+        self.worker.try_upload_to_tender.assert_called_once_with(self.data, True)
+
+    def test_try_upload_to_tender(self):
+        self.worker.update_headers_and_upload_to_tender = MagicMock()
+        self.worker.successfully_uploaded_to_tender = MagicMock()
+        self.worker.try_upload_to_tender(self.data, False)
+        self.worker.update_headers_and_upload_to_tender.assert_called_once_with(self.data, False)
+        self.worker.successfully_uploaded_to_tender.assert_called_once_with(self.data, False)
+
+    def test_try_upload_to_tender_retry(self):
+        self.worker.update_headers_and_upload_to_tender = MagicMock()
+        self.worker.successfully_uploaded_to_tender = MagicMock()
+        self.worker.try_upload_to_tender(self.data, True)
+        self.worker.update_headers_and_upload_to_tender.assert_called_once_with(self.data, True)
+        self.worker.successfully_uploaded_to_tender.assert_called_once_with(self.data, True)
+
+    def test_try_upload_to_tender_no_mock(self):
+        self.upload_to_tender_queue.put(self.data)
+        self.worker.try_upload_to_tender(self.data, False)
+        self.assertEqual(self.upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.process_tracker.processing_items, {})
+
+    def test_try_upload_to_tender_no_mock_retry(self):
+        self.worker.retry_upload_to_tender_queue.put(self.data)
+        self.worker.try_upload_to_tender(self.data, True)
+        self.assertEqual(self.upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.process_tracker.processing_items, {})
+
+    def test_try_upload_to_tender_resource_error(self):
+        re = ResourceError("test resource error")
+        self.worker.update_headers_and_upload_to_tender = MagicMock(side_effect=re)
+        self.worker.remove_data_or_increase_wait = MagicMock()
+        self.worker.try_upload_to_tender(self.data, False)
+        self.worker.remove_data_or_increase_wait.assert_called_once_with(re, self.data, False)
+
+    def test_try_upload_to_tender_exception(self):
+        e = Exception("exception")
+        self.worker.update_headers_and_upload_to_tender = MagicMock(side_effect=e)
+        self.worker.handle_error = MagicMock()
+        self.worker.try_upload_to_tender(self.data, False)
+        self.worker.handle_error.assert_called_once_with(e, self.data, False)
+
+    def test_update_headers_and_upload_to_tender(self):
+        self.worker.do_upload_to_tender = MagicMock()
+        self.worker.update_headers_and_upload_to_tender(self.data, False)
+        self.worker.do_upload_to_tender.assert_called_once_with(self.data)
+
+    def test_update_headers_and_upload_to_tender_retry(self):
+        self.worker.do_upload_to_tender_with_retry = MagicMock()
+        self.worker.update_headers_and_upload_to_tender(self.data, True)
+        self.worker.do_upload_to_tender_with_retry.assert_called_once_with(self.data)
+
+    def test_do_upload_to_tender(self):
+        api_server_bottle = Bottle()
+        api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
+        setup_routing(api_server_bottle, response_spore)
+        api_server.start()
+        self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        setup_routing(api_server_bottle, response_get_tender, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
+            self.tender_id, self.award_id), method='POST')
+        self.worker.do_upload_to_tender(self.data)
+        api_server.stop()
+
+    def test_do_upload_to_tender_failure(self):
+        api_server_bottle = Bottle()
+        api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
+        setup_routing(api_server_bottle, response_spore)
+        api_server.start()
+        self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        setup_routing(api_server_bottle, response_412, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
+            self.tender_id, self.award_id), method='POST')
+        with self.assertRaises(ResourceError):
+            self.worker.do_upload_to_tender(self.data)
+        api_server.stop()
+
+    def test_do_upload_to_tender_with_retry(self):
+        api_server_bottle = Bottle()
+        api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
+        setup_routing(api_server_bottle, response_spore)
+        api_server.start()
+        self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        setup_routing(api_server_bottle, response_get_tender, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
+            self.tender_id, self.award_id), method='POST')
+        self.worker.do_upload_to_tender_with_retry(self.data)
+        api_server.stop()
+
+    def test_do_upload_to_tender_with_retry_fail_then_success(self):
+        api_server_bottle = Bottle()
+        api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
+        setup_routing(api_server_bottle, response_spore)
+        api_server.start()
+        self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        setup_routing(api_server_bottle, generate_response_retry, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
+            self.tender_id, self.award_id), method='POST')
+        self.worker.do_upload_to_tender_with_retry(self.data)
+        api_server.stop()
+
+    def test_do_upload_to_tender_with_retry_fail(self):
+        api_server_bottle = Bottle()
+        api_server = WSGIServer(('127.0.0.1', 20604), api_server_bottle, log=None)
+        setup_routing(api_server_bottle, response_spore)
+        api_server.start()
+        self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        setup_routing(api_server_bottle, response_412, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
+            self.tender_id, self.award_id), method='POST')
+        with self.assertRaises(ResourceError):
+            self.worker.do_upload_to_tender_with_retry(self.data)
+        api_server.stop()
+
+    def test_remove_data_or_increase_wait(self):
+        re = ResourceError("error")
+        self.worker.removing_data = MagicMock()
+        self.worker.remove_data_or_increase_wait(re, self.data, False)
+        self.worker.removing_data.assert_called_once_with(re, self.data, False)
+
+    def test_remove_data_or_increase_wait_429(self):
+        re = ResourceError("error", http_code=429)
+        self.worker.decrease_request_frequency = MagicMock()
+        self.worker.remove_data_or_increase_wait(re, self.data, False)
+        self.worker.decrease_request_frequency.assert_called_once_with(re, self.data)
+
+    def test_remove_data_or_increase_wait_else(self):
+        re = ResourceError("error", http_code=404)
+        self.worker.handle_error = MagicMock()
+        self.worker.remove_data_or_increase_wait(re, self.data, False)
+        self.worker.handle_error.assert_called_once_with(re, self.data, False)
+
+    def test_removing_data(self):
+        re = ResourceError("error")
+        self.worker.sleep_change_value.time_between_requests = 1
+        self.worker.upload_to_tender_queue.put(self.data)
+        self.worker.removing_data(re, self.data, False)
+        self.assertEqual(self.worker.process_tracker.processing_items, {})
+        self.assertEqual(self.worker.upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
+
+    def test_removing_data_retry(self):
+        re = ResourceError("error")
+        self.worker.sleep_change_value.time_between_requests = 1
+        self.worker.retry_upload_to_tender_queue.put(self.data)
+        self.worker.removing_data(re, self.data, True)
+        self.assertEqual(self.worker.process_tracker.processing_items, {})
+        self.assertEqual(self.worker.upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.worker.retry_upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
+
+    def test_decrease_request_frequency(self):
+        re = ResourceError("error", 429)
+        self.worker.decrease_request_frequency(re, self.data)
+        self.assertEqual(self.worker.sleep_change_value.time_between_requests, 1)
+
+    def test_handle_error(self):
+        re = ResourceError("error", 404)
+        self.worker.upload_to_tender_queue.put(self.data)
+        self.worker.handle_error(re, self.data, False)
+        self.assertEqual(self.worker.upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.worker.retry_upload_to_tender_queue.get(), self.data)
+        self.assertEqual(self.worker.retry_upload_to_tender_queue.qsize(), 0)
+
+    def test_handle_error_retry(self):
+        re = ResourceError("error", 404)
+        self.worker.upload_to_tender_queue.put(self.data)
+        self.worker.handle_error(re, self.data, True)
+        self.assertEqual(self.worker.upload_to_tender_queue.qsize(), 1)
+        self.assertEqual(self.worker.retry_upload_to_tender_queue.qsize(), 0)
+
+    def test_successfully_uploaded_to_tender(self):
+        self.worker.upload_to_tender_queue.put(self.data)
+        self.assertEqual(self.worker.process_tracker.processing_items, {item_key(self.tender_id, self.award_id): 1})
+        self.worker.successfully_uploaded_to_tender(self.data, False)
+        self.assertEqual(self.worker.upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.worker.process_tracker.processing_items, {})
+
+    def test_successfully_uploaded_to_tender_retry(self):
+        self.worker.retry_upload_to_tender_queue.put(self.data)
+        self.assertEqual(self.worker.process_tracker.processing_items, {item_key(self.tender_id, self.award_id): 1})
+        self.worker.successfully_uploaded_to_tender(self.data, True)
+        self.assertEqual(self.worker.retry_upload_to_tender_queue.qsize(), 0)
+        self.assertEqual(self.worker.process_tracker.processing_items, {})
+
+    def test_run(self):
+        self.worker.delay = 1
+        upload_to_tender, retry_upload_to_tender = [MagicMock() for _ in range(2)]
+        self.worker.upload_to_tender = upload_to_tender
+        self.worker.retry_upload_to_tender = retry_upload_to_tender
+        with patch.object(self.worker, 'exit', AlmostAlwaysTrue(1)):
+            self.worker._run()
+        self.assertEqual(self.worker.upload_to_tender.call_count, 1)
+        self.assertEqual(self.worker.retry_upload_to_tender.call_count, 1)
+
+    @patch('gevent.killall')
+    @patch('gevent.sleep')
+    def test_run_exception(self, gevent_sleep, killlall):
+        gevent_sleep.side_effect = custom_sleep
+        self.worker._start_jobs = MagicMock(return_value={"a": 1})
+        self.worker.check_and_revive_jobs = MagicMock(side_effect=Exception("test error"))
+        self.worker._run()
+        killlall.assert_called_once_with([1], timeout=5)
+
+    @patch('gevent.killall')
+    def test_run_exception(self, killlall):
+        self.worker.delay = 1
+        self.worker._start_jobs = MagicMock(return_value={"a": 1})
+        self.worker.check_and_revive_jobs = MagicMock(side_effect=Exception("test error"))
+        self.worker._run()
+        killlall.assert_called_once_with([1], timeout=5)
