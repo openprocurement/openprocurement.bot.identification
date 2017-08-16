@@ -109,36 +109,6 @@ class FilterTenders(Greenlet):
                         'with documentType registerExtract.'.format(tender_id, self.item_id(item), item_name, item['id']),
                         extra=journal_context(params={"TENDER_ID": tender['id'], "BID_ID": self.item_id(item),
                                                       self.journal_item_name(item): item['id']}))
-    #
-    # def get_code(self, tender, item):
-    #     if item_name == "supplier":
-    #         return supplier['identifier']['id']
-    #     else:
-    #         appropriate_bid = [b for b in tender['bids'] if b['id'] == item['bidID']][0]
-    #         code = appropriate_bid['tenderers'][0]['identifier']['id']
-    #
-    #
-    # def temp_wrapper(self, response, tender, item):
-    #     # for supplier in item['suppliers']:
-    #         code = get_code(item)
-    #         code = supplier['identifier']['id']
-    #         if self.is_code_invalid(code):
-    #             self.remove_invalid_item(tender, item, "award", code)
-    #         elif self.process_tracker.check_processed_item(tender['id'], item['id']):
-    #             logger.info('Tender {} bid {} award {} was already processed.'.format(
-    #                 tender['id'], item['bid_id'], item['id']),
-    #                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
-    #                                       params={"TENDER_ID": tender['id'], "BID_ID": item['bid_id'],
-    #                                               "AWARD_ID": item['id']}))
-    #         elif self.should_process_award(supplier, tender, item):
-    #             self.temp_important_part_for_item(response, tender, item, "award", code)
-    #         else:
-    #             logger.info(
-    #                 'Tender {} bid {} award {} identifier schema isn\'t UA-EDR or tender is already in process.'.format(
-    #                     tender['id'], item['bid_id'], item['id']),
-    #                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_TENDER_NOT_PROCESS},
-    #                                       params={"TENDER_ID": tender['id'], "BID_ID": item['bid_id'],
-    #                                               "AWARD_ID": item['id']}))
 
     def temp_important_part_for_item(self, response, tender, item, item_name, code):
         self.process_tracker.set_item(tender['id'], item['id'])

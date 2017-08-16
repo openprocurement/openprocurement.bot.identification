@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from openprocurement.bot.identification.databridge.upload_file_to_tender import UploadFileToTender
-from retrying import retry
 
 monkey.patch_all()
 
@@ -14,14 +12,17 @@ import gevent
 from functools import partial
 from yaml import load
 from gevent.queue import Queue
+from retrying import retry
 from restkit import request, RequestError, ResourceError
 from requests import RequestException
 from constants import retry_mult
+
 from openprocurement_client.client import TendersClientSync as BaseTendersClientSync, TendersClient as BaseTendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
+from openprocurement.bot.identification.databridge.upload_file_to_tender import UploadFileToTender
 from openprocurement.bot.identification.databridge.upload_file_to_doc_service import UploadFileToDocService
 from openprocurement.bot.identification.databridge.utils import journal_context, check_412, ProcessTracker
 from caching import Db
@@ -83,12 +84,12 @@ class EdrDataBridge(object):
         self.filtered_tender_ids_queue = Queue(maxsize=buffers_size)  # queue of tender IDs with appropriate status
         self.edrpou_codes_queue = Queue(maxsize=buffers_size)  # queue with edrpou codes (Data objects stored in it)
         self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with info from EDR (Data.file_content)
-        # upload_to_tender_queue - queue with  file's get_url
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
 
         # blockers
         self.initialization_event = gevent.event.Event()
         self.services_not_available = gevent.event.Event()
+        self.services_not_available.set()
         self.db = Db(config)
         self.process_tracker = ProcessTracker(self.db, self.time_to_live)
 
