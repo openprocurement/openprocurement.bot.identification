@@ -2,14 +2,9 @@
 import uuid
 import unittest
 import datetime
+
 from gevent.hub import LoopExit
 from gevent.queue import Queue
-from openprocurement.bot.identification.databridge.constants import author
-from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data, ProcessTracker, item_key
-from openprocurement.bot.identification.tests.utils import custom_sleep, generate_request_id, ResponseMock
-from openprocurement.bot.identification.databridge.bridge import TendersClientSync
-from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
@@ -17,6 +12,13 @@ from restkit.errors import Unauthorized, ResourceError, RequestFailed
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, response
 from simplejson import dumps
+
+from openprocurement.bot.identification.databridge.constants import author
+from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
+from openprocurement.bot.identification.databridge.utils import Data, ProcessTracker, item_key
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_request_id, ResponseMock
+from openprocurement.bot.identification.databridge.bridge import TendersClientSync
+from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 SERVER_RESPONSE_FLAG = 0
 SPORE_COOKIES = ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"

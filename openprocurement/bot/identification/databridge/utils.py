@@ -7,7 +7,6 @@ from caching import db_key
 from logging import getLogger
 from datetime import datetime
 from restkit import ResourceError
-from collections import namedtuple
 
 from openprocurement.bot.identification.databridge.constants import file_name
 
@@ -69,17 +68,40 @@ class ProcessTracker(object):
 def item_key(tender_id, item_id):
     return '{}_{}'.format(tender_id, item_id)
 
-Data = namedtuple('Data', [
-    'tender_id',  # tender ID
-    'item_id',  # qualification or award ID
-    'code',  # EDRPOU, IPN or passport
-    'item_name',  # "qualifications" or "awards"
-    'file_content'  # details for file
-])
 
+class Data(object):
+    def __init__(self, tender_id, item_id, code, item_name, file_content):
+        self.tender_id = tender_id
+        self.item_id = item_id
+        self.code = code
+        self.item_name = item_name
+        self.file_content = file_content
 
-def data_string(data):
-    return "tender {} {} id: {}".format(data.tender_id, data.item_name[:-1], data.item_id)
+    def __eq__(self, other):
+        return (self.tender_id == other.tender_id and
+                self.item_id == other.item_id and
+                self.code == other.code and
+                self.item_name == other.item_name and
+                self.file_content == other.file_content)
+
+    def __str__(self):
+        return "tender {} {} id: {}".format(self.tender_id, self.item_name[:-1], self.item_id)
+
+    def doc_id(self):
+        return self.file_content['meta']['id']
+
+    def item_name_id(self):
+        return self.item_name[:-1].upper() + "_ID"
+
+    def param(self):
+        return 'id' if self.code.isdigit() and len(self.code) != id_passport_len else 'passport'
+
+    def add_unique_req_id(self, response):
+        if response.headers.get('X-Request-ID'):
+            self.file_content['meta']['sourceRequests'].append(response.headers['X-Request-ID'])
+
+    def log_params(self):
+        return {"TENDER_ID": self.tender_id, self.item_name_id(): self.item_id, "DOCUMENT_ID": self.doc_id()}
 
 
 def journal_context(record={}, params={}):
@@ -94,10 +116,6 @@ def generate_req_id():
 
 def generate_doc_id():
     return uuid4().hex
-
-
-def validate_param(code):
-    return 'id' if code.isdigit() and len(code) != id_passport_len else 'passport'
 
 
 def create_file(details):

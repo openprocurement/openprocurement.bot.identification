@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 
-import unittest
 import os
-
-from openprocurement.bot.identification.tests.utils import custom_sleep
-from requests import RequestException
+import unittest
 
 from mock import patch, MagicMock
-from restkit import RequestError, ResourceError
-
 from gevent.pywsgi import WSGIServer
+from requests import RequestException
 from bottle import Bottle, response, request
+from restkit import RequestError
 
-from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement_client.client import TendersClientSync, TendersClient
+from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
-from openprocurement.bot.identification.databridge.utils import check_412
+from openprocurement.bot.identification.tests.utils import custom_sleep, AlmostAlwaysTrue
 
 config = {
     'main':
@@ -39,18 +36,6 @@ config = {
             'api_token': "api_token"
         }
 }
-
-
-class AlmostAlwaysTrue(object):
-    def __init__(self, total_iterations=1):
-        self.total_iterations = total_iterations
-        self.current_iteration = 0
-
-    def __nonzero__(self):
-        if self.current_iteration < self.total_iterations:
-            self.current_iteration += 1
-            return bool(1)
-        return bool(0)
 
 
 class BaseServersTest(unittest.TestCase):
@@ -157,39 +142,46 @@ class TestBridgeWorker(BaseServersTest):
     def test_start_jobs(self):
         self.worker = EdrDataBridge(config)
 
-        scanner, filter_tender, edr_handler, upload_file = [MagicMock(return_value=i) for i in range(4)]
+        scanner, filter_tender, edr_handler, upload_file_to_doc_service, upload_file_to_tender = \
+            [MagicMock(return_value=i) for i in range(5)]
         self.worker.scanner = scanner
         self.worker.filter_tender = filter_tender
         self.worker.edr_handler = edr_handler
-        self.worker.upload_file = upload_file
+        self.worker.upload_file_to_doc_service = upload_file_to_doc_service
+        self.worker.upload_file_to_tender = upload_file_to_tender
 
         self.worker._start_jobs()
         # check that all jobs were started
         self.assertTrue(scanner.called)
         self.assertTrue(filter_tender.called)
         self.assertTrue(edr_handler.called)
-        self.assertTrue(upload_file.called)
+        self.assertTrue(upload_file_to_doc_service.called)
+        self.assertTrue(upload_file_to_tender.called)
 
         self.assertEqual(self.worker.jobs['scanner'], 0)
         self.assertEqual(self.worker.jobs['filter_tender'], 1)
         self.assertEqual(self.worker.jobs['edr_handler'], 2)
-        self.assertEqual(self.worker.jobs['upload_file'], 3)
+        self.assertEqual(self.worker.jobs['upload_file_to_doc_service'], 3)
+        self.assertEqual(self.worker.jobs['upload_file_to_tender'], 4)
 
     @patch('gevent.sleep')
     def test_run(self, sleep):
         self.worker = EdrDataBridge(config)
         # create mocks
-        scanner, filter_tender, edr_handler, upload_file = [MagicMock() for i in range(4)]
+        scanner, filter_tender, edr_handler, upload_file_to_doc_service, upload_file_to_tender = \
+            [MagicMock() for i in range(5)]
         self.worker.scanner = scanner
         self.worker.filter_tender = filter_tender
         self.worker.edr_handler = edr_handler
-        self.worker.upload_file = upload_file
+        self.worker.upload_file_to_doc_service = upload_file_to_doc_service
+        self.worker.upload_file_to_tender = upload_file_to_tender
         with patch('__builtin__.True', AlmostAlwaysTrue(100)):
             self.worker.run()
         self.assertEqual(self.worker.scanner.call_count, 1)
         self.assertEqual(self.worker.filter_tender.call_count, 1)
         self.assertEqual(self.worker.edr_handler.call_count, 1)
-        self.assertEqual(self.worker.upload_file.call_count, 1)
+        self.assertEqual(self.worker.upload_file_to_doc_service.call_count, 1)
+        self.assertEqual(self.worker.upload_file_to_tender.call_count, 1)
 
     def test_proxy_server(self):
         self.worker = EdrDataBridge(config)

@@ -17,7 +17,6 @@ class ProxyClient(object):
         """Send request to Proxy server to verify EDRPOU code"""
         url = '{url}?{param}={code}'.format(url=self.verify_url, param=param, code=code)
         response = self.session.get(url=url, auth=(self.user, self.password), timeout=self.timeout, headers=headers)
-
         return response
 
     def health(self, sandbox_mode):
@@ -38,8 +37,10 @@ class DocServiceClient(object):
         self.user = user
         self.password = password
         self.timeout = timeout
+        self.headers = {}
 
     def upload(self, filename, in_file, content_type, headers):
         files = {'file': (filename, in_file, content_type)}
+        self.headers.update(headers)
         response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files, headers=headers)
         return response

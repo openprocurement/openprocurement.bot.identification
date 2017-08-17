@@ -5,10 +5,11 @@ import subprocess
 from unittest import TestCase
 
 from mock import MagicMock
-from openprocurement.bot.identification.databridge.caching import Db, db_key
-from openprocurement.bot.identification.databridge.utils import ProcessTracker, item_key, check_412
 from redis import StrictRedis
 from restkit import ResourceError
+
+from openprocurement.bot.identification.databridge.caching import Db, db_key
+from openprocurement.bot.identification.databridge.utils import ProcessTracker, item_key, check_412
 
 config = {
     "main": {
