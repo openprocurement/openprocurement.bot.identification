@@ -1,10 +1,10 @@
+# coding=utf-8
 from gevent import monkey
 
 monkey.patch_all()
 
 import uuid
 import unittest
-import requests_mock
 
 from gevent.queue import Queue
 from gevent.hub import LoopExit
@@ -17,7 +17,9 @@ from bottle import Bottle, response
 from simplejson import dumps
 
 from openprocurement.bot.identification.databridge.upload_file_to_tender import UploadFileToTender
-from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, item_key, ProcessTracker
+from openprocurement.bot.identification.databridge.utils import generate_doc_id, item_key
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
+from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
 from openprocurement.bot.identification.databridge.constants import file_name
 from openprocurement.bot.identification.databridge.bridge import TendersClientSync
@@ -273,28 +275,24 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         api_server.stop()
 
     @patch('gevent.sleep')
-    def test_upload_to_tender_worker(self, gevent_sleep):
+    def test_upload_worker(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         self.worker.services_not_available = MagicMock(wait=MagicMock())
         self.worker.try_peek_data_and_upload_to_tender = MagicMock()
         with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
-            self.worker.upload_to_tender()
-
+            self.worker.upload_worker()
         self.worker.services_not_available.wait.assert_called_once()
         self.worker.try_peek_data_and_upload_to_tender.assert_called_once_with(False)
 
-
     @patch('gevent.sleep')
-    def test_upload_to_tender_worker(self, gevent_sleep):
+    def test_retry_upload_worker(self, gevent_sleep):
         gevent_sleep.side_effect = custom_sleep
         self.worker.services_not_available = MagicMock(wait=MagicMock())
         self.worker.try_peek_data_and_upload_to_tender = MagicMock()
         with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
-            self.worker.retry_upload_to_tender()
-
+            self.worker.retry_upload_worker()
         self.worker.services_not_available.wait.assert_called_once()
         self.worker.try_peek_data_and_upload_to_tender.assert_called_once_with(True)
-
 
     def test_peek_from_tender_queue(self):
         self.worker.upload_to_tender_queue.put(self.data)
@@ -506,13 +504,13 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
 
     def test_run(self):
         self.worker.delay = 1
-        upload_to_tender, retry_upload_to_tender = [MagicMock() for _ in range(2)]
-        self.worker.upload_to_tender = upload_to_tender
-        self.worker.retry_upload_to_tender = retry_upload_to_tender
+        upload_worker, retry_upload_worker = MagicMock(), MagicMock()
+        self.worker.upload_worker = upload_worker
+        self.worker.retry_upload_worker = retry_upload_worker
         with patch.object(self.worker, 'exit', AlmostAlwaysTrue(1)):
             self.worker._run()
-        self.assertEqual(self.worker.upload_to_tender.call_count, 1)
-        self.assertEqual(self.worker.retry_upload_to_tender.call_count, 1)
+        self.assertEqual(self.worker.upload_worker.call_count, 1)
+        self.assertEqual(self.worker.retry_upload_worker.call_count, 1)
 
     @patch('gevent.killall')
     @patch('gevent.sleep')

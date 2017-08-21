@@ -11,6 +11,7 @@ import gevent
 
 from functools import partial
 from yaml import load
+from gevent import event
 from gevent.queue import Queue
 from retrying import retry
 from restkit import request, RequestError, ResourceError
@@ -24,7 +25,8 @@ from openprocurement.bot.identification.databridge.filter_tender import FilterTe
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.upload_file_to_tender import UploadFileToTender
 from openprocurement.bot.identification.databridge.upload_file_to_doc_service import UploadFileToDocService
-from openprocurement.bot.identification.databridge.utils import journal_context, check_412, ProcessTracker
+from openprocurement.bot.identification.databridge.utils import journal_context, check_412
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from caching import Db
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
@@ -70,11 +72,11 @@ class EdrDataBridge(object):
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
         self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=self.api_version)
-        self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
-                                       user=self.config_get('proxy_user'),
-                                       password=self.config_get('proxy_password'),
-                                       port=self.config_get('proxy_port'),
-                                       version=self.config_get('proxy_version'))
+        self.proxy_client = ProxyClient(host=self.config_get('proxy_server'),
+                                        user=self.config_get('proxy_user'),
+                                        password=self.config_get('proxy_password'),
+                                        port=self.config_get('proxy_port'),
+                                        version=self.config_get('proxy_version'))
         self.doc_service_client = DocServiceClient(host=self.doc_service_host,
                                                    port=self.doc_service_port,
                                                    user=self.config_get('doc_service_user'),
@@ -87,8 +89,8 @@ class EdrDataBridge(object):
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
 
         # blockers
-        self.initialization_event = gevent.event.Event()
-        self.services_not_available = gevent.event.Event()
+        self.initialization_event = event.Event()
+        self.services_not_available = event.Event()
         self.services_not_available.set()
         self.db = Db(config)
         self.process_tracker = ProcessTracker(self.db, self.time_to_live)
@@ -112,7 +114,7 @@ class EdrDataBridge(object):
                                      delay=self.delay)
 
         self.edr_handler = partial(EdrHandler.spawn,
-                                   proxyClient=self.proxyClient,
+                                   proxy_client=self.proxy_client,
                                    edrpou_codes_queue=self.edrpou_codes_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    process_tracker=self.process_tracker,
@@ -154,7 +156,7 @@ class EdrDataBridge(object):
     def check_proxy(self):
         """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
-            self.proxyClient.health(self.sandbox_mode)
+            self.proxy_client.health(self.sandbox_mode)
         except RequestException as e:
             logger.info('Proxy server connection error, message {} {}'.format(e, self.sandbox_mode),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
@@ -231,24 +233,31 @@ class EdrDataBridge(object):
                             self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs[
                                 'edr_handler'] else 0,
                             self.upload_to_doc_service_queue.qsize(),
-                            self.jobs['upload_file_to_doc_service'].retry_upload_to_doc_service_queue.qsize() if self.jobs[
+                            self.jobs['upload_file_to_doc_service'].retry_upload_to_doc_service_queue.qsize() if
+                            self.jobs[
                                 'upload_file_to_doc_service'] else 0,
                             self.upload_to_tender_queue.qsize(),
                             self.jobs['upload_file_to_tender'].retry_upload_to_tender_queue.qsize() if self.jobs[
                                 'upload_file_to_tender'] else 0
                         ))
                 counter += 1
-                for name, job in self.jobs.items():
-                    logger.debug("{}.dead: {}".format(name, job.dead))
-                    if job.dead:
-                        logger.warning('Restarting {} worker'.format(name),
-                                       extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
-                        self.jobs[name] = gevent.spawn(getattr(self, name))
+                self.check_and_revive_jobs()
         except KeyboardInterrupt:
             logger.info('Exiting...')
             gevent.killall(self.jobs, timeout=5)
         except Exception as e:
             logger.error(e)
+
+    def check_and_revive_jobs(self):
+        for name, job in self.jobs.items():
+            logger.debug("{}.dead: {}".format(name, job.dead))
+            if job.dead:
+                self.revive_job(name)
+
+    def revive_job(self, name):
+        logger.warning('Restarting {} worker'.format(name),
+                       extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
+        self.jobs[name] = gevent.spawn(getattr(self, name))
 
 
 def main():

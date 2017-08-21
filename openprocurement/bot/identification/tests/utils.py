@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from gevent import sleep as gsleep
-from uuid import uuid4
 from json import dumps
+from uuid import uuid4
+
+from gevent import sleep as gsleep
 
 
 def custom_sleep(seconds=0):
@@ -10,11 +11,13 @@ def custom_sleep(seconds=0):
 
 def generate_answers(answers, default):
     """ Yield results, or default """
+
     def answer_generator():
         for i in answers:
             yield i
         while True:
             yield default
+
     return answer_generator()
 
 
@@ -23,7 +26,6 @@ def generate_request_id():
 
 
 class ResponseMock(object):
-
     def __init__(self, headers, data, status_int=200):
         self.data = data
         self.headers = headers

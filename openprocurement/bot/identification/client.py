@@ -25,7 +25,8 @@ class ProxyClient(object):
                                     headers={"sandbox-mode": sandbox_mode}, timeout=self.timeout)
         if response.status_code == 200:
             return response
-        raise requests.RequestException("{} {} {}".format(response.url, response.status_code, response.reason), response=response)
+        raise requests.RequestException("{} {} {}".format(response.url, response.status_code, response.reason),
+                                        response=response)
 
 
 class DocServiceClient(object):
@@ -42,5 +43,6 @@ class DocServiceClient(object):
     def upload(self, filename, in_file, content_type, headers):
         files = {'file': (filename, in_file, content_type)}
         self.headers.update(headers)
-        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files, headers=headers)
+        response = self.session.post(url=self.url, auth=(self.user, self.password), timeout=self.timeout, files=files,
+                                     headers=headers)
         return response

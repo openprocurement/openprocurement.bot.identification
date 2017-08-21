@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from gevent import monkey
+from gevent import monkey, event
 
 monkey.patch_all()
 
@@ -14,7 +14,7 @@ from restkit.errors import Unauthorized, RequestFailed, ResourceError
 
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.tests.utils import custom_sleep
-from openprocurement.bot.identification.databridge.utils import ProcessTracker
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 
@@ -25,7 +25,9 @@ class TestScannerWorker(unittest.TestCase):
         self.sleep_change_value = APIRateController()
         self.client = MagicMock()
         self.tender_queue = Queue(10)
-        self.worker = Scanner.spawn(self.client, self.tender_queue, MagicMock(), self.process_tracker,
+        self.sna = event.Event()
+        self.sna.set()
+        self.worker = Scanner.spawn(self.client, self.tender_queue, self.sna, self.process_tracker,
                                     self.sleep_change_value)
 
     def tearDown(self):
@@ -49,6 +51,7 @@ class TestScannerWorker(unittest.TestCase):
         self.assertGreater(datetime.datetime.now().isoformat(), self.worker.start_time.isoformat())
         self.assertEqual(self.worker.tenders_sync_client, self.client)
         self.assertEqual(self.worker.filtered_tender_ids_queue, self.tender_queue)
+        self.assertEqual(self.worker.services_not_available, self.sna)
         self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
         self.assertEqual(self.worker.delay, 15)
         self.assertEqual(self.worker.exit, False)
@@ -178,9 +181,8 @@ class TestScannerWorker(unittest.TestCase):
         self.worker.tenders_sync_client = MagicMock()
         self.worker.filtered_tender_ids_queue = MagicMock()
         sleep(1)
-        for job in self.worker.jobs:
+        for job in self.worker.immortal_jobs.values():
             job.kill(exception=Exception)
-        sleep(4)
         self.assertFalse(self.worker.ready())
 
     @patch('gevent.sleep')

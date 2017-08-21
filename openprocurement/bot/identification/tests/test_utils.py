@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 import os
-import time
 import subprocess
 from unittest import TestCase
 
+import time
+
 from mock import MagicMock
+from openprocurement.bot.identification.databridge.caching import Db, db_key
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
+from openprocurement.bot.identification.databridge.utils import item_key, check_412
 from redis import StrictRedis
 from restkit import ResourceError
-
-from openprocurement.bot.identification.databridge.caching import Db, db_key
-from openprocurement.bot.identification.databridge.utils import ProcessTracker, item_key, check_412
 
 config = {
     "main": {
@@ -106,7 +107,7 @@ class TestUtils(TestCase):
         self.assertFalse(self.process_tracker.check_processed_tenders(self.tender_id))
         self.redis.set(self.tender_id, "333")
         self.assertTrue(self.process_tracker.check_processed_tenders(self.tender_id))
-        
+
     def test_update_processing_items(self):
         self.process_tracker.processing_items = {item_key(self.tender_id, self.item_id): 2}
         self.assertEqual(self.process_tracker.processing_items, {item_key(self.tender_id, self.item_id): 2})

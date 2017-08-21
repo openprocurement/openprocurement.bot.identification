@@ -1,25 +1,26 @@
 # -*- coding: utf-8 -*-
-from requests import Response
-
 from gevent import monkey
 
 monkey.patch_all()
 
 import uuid
+import gevent
 import unittest
 import datetime
 import requests_mock
 import random
 
-from gevent.queue import Queue, Empty
+from gevent.queue import Queue
 from gevent.hub import LoopExit
 from mock import patch, MagicMock
 from munch import munchify
+from requests import Response
 
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, RetryException, ProcessTracker, \
-    item_key
+from openprocurement.bot.identification.databridge.utils import generate_doc_id, RetryException, item_key
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
+from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, generate_request_id, \
     ResponseMock
 from openprocurement.bot.identification.client import ProxyClient
@@ -52,8 +53,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.local_edr_ids = get_random_edr_ids(2)
         self.edr_ids = get_random_edr_ids(1)[0]
         self.process_tracker = ProcessTracker()
+        self.sna = gevent.event.Event()
+        self.sna.set()
         self.worker = EdrHandler.spawn(self.proxy_client, self.edrpou_codes_queue,
-                                       self.upload_to_doc_service_queue, self.process_tracker, MagicMock())
+                                       self.upload_to_doc_service_queue, self.process_tracker, self.sna)
         self.sleep_change_value = APIRateController()
 
     def meta(self):
@@ -101,12 +104,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
         return "{url}/{id}".format(url=self.proxy_client.verify_url, id=u_id)
 
     def test_init(self):
-        worker = EdrHandler.spawn(None, None, None, None, None)
-        self.assertGreater(datetime.datetime.now().isoformat(),
-                           worker.start_time.isoformat())
-        self.assertEqual(worker.proxyClient, None)
+        worker = EdrHandler.spawn(None, None, None, None, self.sna)
+        self.assertGreater(datetime.datetime.now().isoformat(), worker.start_time.isoformat())
+        self.assertEqual(worker.proxy_client, None)
         self.assertEqual(worker.edrpou_codes_queue, None)
         self.assertEqual(worker.upload_to_doc_service_queue, None)
+        self.assertEqual(worker.services_not_available, self.sna)
         self.assertEqual(worker.delay, 15)
         self.assertEqual(worker.exit, False)
         worker.shutdown()
@@ -232,7 +235,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.worker.upload_to_doc_service_queue = self.upload_to_doc_service_queue
         self.worker.process_tracker = MagicMock()
         for result in expected_result:
-            self.assertEquals(self.upload_to_doc_service_queue.get(), result)
+            d1 = self.upload_to_doc_service_queue.get()
+            self.assertEquals(d1, result)
         self.assertEqual(self.worker.retry_edrpou_codes_queue.qsize(), 0, 'Queue must be empty')
         self.assertEqual(self.upload_to_doc_service_queue.qsize(), 0, 'Queue must be empty')
 
@@ -287,9 +291,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, self.urls('verify?id={}'.format(self.edr_ids)))
         self.assertEqual(mrequest.request_history[5].url, self.urls('verify?id={}'.format(self.edr_ids)))
 
-    @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_retry_get_edr_data_mock_403(self, mrequest, gevent_sleep):
+    def test_retry_get_edr_data_mock_403(self, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         expected_result = []
@@ -321,9 +324,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for result in expected_result:
             self.assertEquals(self.upload_to_doc_service_queue.get(), result)
 
-    @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_retry_get_edr_data_mock_404(self, mrequest, gevent_sleep):
+    def test_retry_get_edr_data_mock_404(self, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         expected_result = []
@@ -354,9 +356,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         for result in expected_result:
             self.assertEquals(self.upload_to_doc_service_queue.get(), result)
 
-    @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_retry_get_edr_data_mock_exception(self, mrequest, gevent_sleep):
+    def test_retry_get_edr_data_mock_exception(self, gevent_sleep):
         """Accept 429 status code in first request with header 'Retry-After'"""
         gevent_sleep.side_effect = custom_sleep
         expected_result = []
@@ -579,7 +580,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             edrpou_codes_queue_list.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                                 {'meta': {'id': self.document_ids[i], 'author': author,
                                                           'sourceRequests': [
-                                                              'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))  # data
+                                                              'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}))
             expected_result.append(Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                         self.file_con(doc_id=self.document_ids[i], source_req=[self.edr_req_ids[i]])))
         edrpou_codes_queue.peek.side_effect = generate_answers(answers=edrpou_codes_queue_list, default=LoopExit())
@@ -735,9 +736,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
                                self.file_con(doc_id=self.document_ids[0],
                                              source_req=[self.edr_req_ids[0]])))
 
-    @requests_mock.Mocker()
     @patch('gevent.sleep')
-    def test_429_mock(self, mrequest, gevent_sleep):
+    def test_429_mock(self, gevent_sleep):
         """Accept 'Gateway Timeout Error'  while requesting /verify, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
         self.worker.retry_edr_ids_queue = MagicMock()

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+from gevent import monkey
+
+monkey.patch_all()
+
 import uuid
 import unittest
 import datetime
@@ -12,10 +16,13 @@ from restkit.errors import Unauthorized, ResourceError, RequestFailed
 from gevent.pywsgi import WSGIServer
 from bottle import Bottle, response
 from simplejson import dumps
+from gevent import event
 
 from openprocurement.bot.identification.databridge.constants import author
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
-from openprocurement.bot.identification.databridge.utils import Data, ProcessTracker, item_key
+from openprocurement.bot.identification.databridge.utils import item_key
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
+from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_request_id, ResponseMock
 from openprocurement.bot.identification.databridge.bridge import TendersClientSync
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
@@ -78,12 +85,21 @@ class TestFilterWorker(unittest.TestCase):
         self.filtered_tender_ids_queue.put(self.tender_id)
         self.sleep_change_value = APIRateController()
         self.client = MagicMock()
+        self.sna = event.Event()
+        self.sna.set()
         self.worker = FilterTenders.spawn(self.client, self.filtered_tender_ids_queue, self.edrpou_codes_queue,
-                                          self.process_tracker, MagicMock(), self.sleep_change_value)
+                                          self.process_tracker, self.sna, self.sleep_change_value)
         self.bid_ids = [uuid.uuid4().hex for _ in range(5)]
         self.qualification_ids = [uuid.uuid4().hex for _ in range(5)]
         self.award_ids = [uuid.uuid4().hex for _ in range(5)]
         self.request_ids = [generate_request_id() for _ in range(2)]
+        self.response = ResponseMock({'X-Request-ID': self.request_ids[0]},
+                                     munchify({'prev_page': {'offset': '123'},
+                                               'next_page': {'offset': '1234'},
+                                               'data': {'status': "active.pre-qualification",
+                                                        'id': self.tender_id,
+                                                        'procurementMethodType': 'aboveThresholdEU',
+                                                        'awards': [self.awards(0, 0, 'pending', CODES[0])]}}))
 
     def tearDown(self):
         self.worker.shutdown()
@@ -113,13 +129,13 @@ class TestFilterWorker(unittest.TestCase):
         self.assertEqual(obj.file_content['meta']['sourceRequests'], example.file_content['meta']['sourceRequests'])
 
     def test_init(self):
-        worker = FilterTenders.spawn(None, None, None, None, None, self.sleep_change_value)
-        self.assertGreater(datetime.datetime.now().isoformat(),
-                           worker.start_time.isoformat())
+        worker = FilterTenders.spawn(None, None, None, None, self.sna, self.sleep_change_value)
+        self.assertGreater(datetime.datetime.now().isoformat(), worker.start_time.isoformat())
         self.assertEqual(worker.tenders_sync_client, None)
         self.assertEqual(worker.filtered_tender_ids_queue, None)
         self.assertEqual(worker.edrpou_codes_queue, None)
         self.assertEqual(worker.process_tracker, None)
+        self.assertEqual(worker.services_not_available, self.sna)
         self.assertEqual(worker.sleep_change_value.time_between_requests, 0)
         self.assertEqual(worker.delay, 15)
         self.assertEqual(worker.exit, False)
@@ -178,7 +194,7 @@ class TestFilterWorker(unittest.TestCase):
                                                                                     'id': CODES[2]}}]}]}}))]
         for i in range(3):
             data = Data(self.tender_id, self.award_ids[i], CODES[i], 'awards',
-                          {'meta': {'sourceRequests': [self.request_ids[0]]}})
+                        {'meta': {'sourceRequests': [self.request_ids[0]]}})
             self.check_data_objects(self.edrpou_codes_queue.get(), data)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(),
                               [item_key(self.tender_id, self.award_ids[0]), item_key(self.tender_id, self.award_ids[1]),
@@ -188,15 +204,7 @@ class TestFilterWorker(unittest.TestCase):
     def test_get_tender_exception(self, gevent_sleep):
         """ We must not lose tender after restart filter worker """
         gevent_sleep.side_effect = custom_sleep
-        self.client.request.side_effect = [Exception(),
-                                           ResponseMock({'X-Request-ID': self.request_ids[0]},
-                                                        munchify({'prev_page': {'offset': '123'},
-                                                                  'next_page': {'offset': '1234'},
-                                                                  'data': {'status': "active.pre-qualification",
-                                                                           'id': self.tender_id,
-                                                                           'procurementMethodType': 'aboveThresholdEU',
-                                                                           'awards': [self.awards(0, 0, 'pending',
-                                                                                                  CODES[0])]}}))]
+        self.client.request.side_effect = [Exception(), self.response]
         data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                     {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.check_data_objects(self.edrpou_codes_queue.get(), data)
@@ -210,15 +218,7 @@ class TestFilterWorker(unittest.TestCase):
     def test_get_tender_429(self, gevent_sleep):
         """ We must not lose tender after restart filter worker """
         gevent_sleep.side_effect = custom_sleep
-        self.client.request.side_effect = [
-            ResourceError(http_code=429),
-            ResponseMock({'X-Request-ID': self.request_ids[0]},
-                         munchify({'prev_page': {'offset': '123'},
-                                   'next_page': {'offset': '1234'},
-                                   'data': {'status': "active.pre-qualification",
-                                            'id': self.tender_id,
-                                            'procurementMethodType': 'aboveThresholdEU',
-                                            'awards': [self.awards(0, 0, 'pending', CODES[0])]}}))]
+        self.client.request.side_effect = [ResourceError(http_code=429), self.response]
         data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                     {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.sleep_change_value.increment_step = 2
@@ -268,9 +268,9 @@ class TestFilterWorker(unittest.TestCase):
                                        'awards': [self.awards(i, i, 'pending', CODES[0])]}})) for i in range(2)]
         for i in range(2):
             data = Data(self.tender_id, self.award_ids[i], CODES[0], 'awards',
-                              {'meta': {'sourceRequests': [self.request_ids[i]]}})
-            self.check_data_objects(self.edrpou_codes_queue.get(),  data)
-        self.worker.job.kill(timeout=1)
+                        {'meta': {'sourceRequests': [self.request_ids[i]]}})
+            self.check_data_objects(self.edrpou_codes_queue.get(), data)
+        self.worker.immortal_jobs['prepare_data'].kill(timeout=1)
         self.assertItemsEqual(self.process_tracker.processing_items.keys(),
                               [item_key(self.tender_id, self.award_ids[i]) for i in range(2)])
 
@@ -279,16 +279,7 @@ class TestFilterWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         filtered_tender_ids_queue = MagicMock()
         filtered_tender_ids_queue.peek.side_effect = [LoopExit(), self.tender_id]
-        self.client.request.return_value = ResponseMock({'X-Request-ID': self.request_ids[0]},
-                                                        munchify(
-                                                            {'prev_page': {'offset': '123'},
-                                                             'next_page': {'offset': '1234'},
-                                                             'data': {
-                                                                 'status': "active.pre-qualification",
-                                                                 'id': self.tender_id,
-                                                                 'procurementMethodType': 'aboveThresholdEU',
-                                                                 'awards': [
-                                                                     self.awards(0, 0, 'pending', CODES[0])]}}))
+        self.client.request.return_value = self.response
         first_data = Data(self.tender_id, self.award_ids[0], CODES[0], 'awards',
                           {'meta': {'sourceRequests': [self.request_ids[0]]}})
         self.worker.filtered_tender_ids_queue = filtered_tender_ids_queue
