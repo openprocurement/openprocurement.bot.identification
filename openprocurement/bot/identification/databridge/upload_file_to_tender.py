@@ -1,29 +1,32 @@
 # coding=utf-8
-from munch import munchify
-from gevent.queue import Queue, Empty
-from retrying import retry
+from gevent import monkey
+
+monkey.patch_all()
 
 import logging.config
 import gevent
+
+from gevent import spawn
+from gevent.queue import Queue
+from retrying import retry
+from munch import munchify
 from datetime import datetime
-from gevent import Greenlet, spawn
 from gevent.hub import LoopExit
 from restkit import ResourceError
 
+from openprocurement.bot.identification.databridge.base_worker import BaseWorker
 from openprocurement.bot.identification.databridge.utils import journal_context
 from openprocurement.bot.identification.databridge.journal_msg_ids import DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER, \
-    DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING, DATABRIDGE_START_UPLOAD
+    DATABRIDGE_UNSUCCESS_UPLOAD_TO_TENDER, DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING
 from openprocurement.bot.identification.databridge.constants import retry_mult
-
 
 logger = logging.getLogger(__name__)
 
 
-class UploadFileToTender(Greenlet):
-
-    def __init__(self, client, upload_to_tender_queue, process_tracker, services_not_available, sleep_change_value, delay=15):
-        super(UploadFileToTender, self).__init__()
-        self.exit = False
+class UploadFileToTender(BaseWorker):
+    def __init__(self, client, upload_to_tender_queue, process_tracker, services_not_available, sleep_change_value,
+                 delay=15):
+        super(UploadFileToTender, self).__init__(services_not_available)
         self.start_time = datetime.now()
 
         self.delay = delay
@@ -37,21 +40,15 @@ class UploadFileToTender(Greenlet):
         self.retry_upload_to_tender_queue = Queue(maxsize=500)
 
         # blockers
-        self.services_not_available = services_not_available
         self.sleep_change_value = sleep_change_value
 
-    def upload_to_tender(self):
-        """Get data from upload_to_tender_queue; Upload get_Url and documentType;
-        If upload to tender were unsuccessful put Data object to retry_upload_to_tender_queue, otherwise delete given
-        award/qualification from processing_items."""
+    def upload_worker(self):
         while not self.exit:
             self.services_not_available.wait()
             self.try_peek_data_and_upload_to_tender(False)
             gevent.sleep(self.sleep_change_value.time_between_requests)
 
-    def retry_upload_to_tender(self):
-        """Get data from retry_upload_to_tender_queue; If upload was unsuccessful put Data obj back to
-        retry_upload_to_tender_queue"""
+    def retry_upload_worker(self):
         while not self.exit:
             self.services_not_available.wait()
             self.try_peek_data_and_upload_to_tender(True)
@@ -110,12 +107,7 @@ class UploadFileToTender(Greenlet):
             re.status_int, tender_data, tender_data.doc_id(), re.msg),
             extra=journal_context({"MESSAGE_ID": DATABRIDGE_ITEM_STATUS_CHANGED_WHILE_PROCESSING},
                                   tender_data.log_params()))
-        self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
-        self.sleep_change_value.decrement()
-        if is_retry:
-            self.retry_upload_to_tender_queue.get()
-        else:
-            self.upload_to_tender_queue.get()
+        self.remove_data(tender_data, is_retry)
 
     def decrease_request_frequency(self, re, tender_data):
         logger.info("Accept 429 while uploading to {} doc_id: {}. Message {}".format(
@@ -135,8 +127,11 @@ class UploadFileToTender(Greenlet):
 
     def successfully_uploaded_to_tender(self, tender_data, is_retry):
         logger.info('Successfully uploaded file to {} doc_id: {}'.format(tender_data, tender_data.doc_id()),
-                extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER}, tender_data.log_params()))
-        # delete current tender after successful upload file (to avoid reloading file)
+                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_TENDER},
+                                          tender_data.log_params()))
+        self.remove_data(tender_data, is_retry)
+
+    def remove_data(self, tender_data, is_retry):
         self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
         self.sleep_change_value.decrement()
         if is_retry:
@@ -145,30 +140,5 @@ class UploadFileToTender(Greenlet):
             self.upload_to_tender_queue.get()
 
     def _start_jobs(self):
-        return {'upload_to_tender': spawn(self.upload_to_tender),
-                'retry_upload_to_tender': spawn(self.retry_upload_to_tender)}
-
-    def _run(self):
-        logger.info('Start UploadFileToTender worker',
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_UPLOAD}, {}))
-        self.immortal_jobs = self._start_jobs()
-        try:
-            while not self.exit:
-                gevent.sleep(self.delay)
-                self.check_and_revive_jobs()
-        except Exception as e:
-            logger.error(e)
-            gevent.killall(self.immortal_jobs.values(), timeout=5)
-
-    def check_and_revive_jobs(self):
-        for name, job in self.immortal_jobs.items():
-            if job.dead:
-                logger.warning("{} worker dead try restart".format(name), extra=journal_context(
-                    {"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
-                self.immortal_jobs[name] = gevent.spawn(getattr(self, name))
-                logger.info("{} worker is up".format(name))
-
-    def shutdown(self):
-        self.exit = True
-        logger.info('Worker UploadFileToTender complete his job.')
-
+        return {'upload_worker': spawn(self.upload_worker),
+                'retry_upload_worker': spawn(self.retry_upload_worker)}

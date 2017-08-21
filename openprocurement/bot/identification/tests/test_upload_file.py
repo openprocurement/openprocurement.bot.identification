@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from gevent import monkey
+from gevent import monkey, event
+
 monkey.patch_all()
 
 import uuid
@@ -13,7 +14,9 @@ from mock import patch, MagicMock
 
 from openprocurement.bot.identification.client import DocServiceClient
 from openprocurement.bot.identification.databridge.upload_file_to_doc_service import UploadFileToDocService
-from openprocurement.bot.identification.databridge.utils import Data, generate_doc_id, item_key, ProcessTracker
+from openprocurement.bot.identification.databridge.utils import generate_doc_id, item_key
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
+from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
 from openprocurement.bot.identification.databridge.constants import file_name
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
@@ -30,13 +33,16 @@ class TestUploadFileWorker(unittest.TestCase):
         self.upload_to_doc_service_queue = Queue(10)
         self.upload_to_tender_queue = Queue(10)
         self.sleep_change_value = APIRateController()
+        self.sna = event.Event()
+        self.sna.set()
         self.data = Data(self.tender_id, self.award_id, '123', 'awards',
                          {'meta': {'id': self.document_id}, 'test_data': 'test_data'})
         self.qualification_data = Data(self.tender_id, self.qualification_id, '123', 'qualifications',
                                        {'meta': {'id': self.document_id}, 'test_data': 'test_data'})
         self.doc_service_client = DocServiceClient(host='127.0.0.1', port='80', user='', password='')
         self.worker = UploadFileToDocService(self.upload_to_doc_service_queue, self.upload_to_tender_queue,
-                                             self.process_tracker, self.doc_service_client, MagicMock(), self.sleep_change_value)
+                                             self.process_tracker, self.doc_service_client, self.sna,
+                                             self.sleep_change_value)
         self.url = '{url}'.format(url=self.doc_service_client.url)
 
     @staticmethod
@@ -56,10 +62,6 @@ class TestUploadFileWorker(unittest.TestCase):
     def tearDown(self):
         del self.worker
 
-    def old_is_working(self, worker):
-        return (self.upload_to_doc_service_queue.qsize() or self.upload_to_tender_queue.qsize() or
-                worker.retry_upload_to_doc_service_queue.qsize() or worker.retry_upload_to_tender_queue.qsize())
-
     def is_working(self, worker):
         return self.upload_to_doc_service_queue.qsize() or worker.retry_upload_to_doc_service_queue.qsize()
 
@@ -70,13 +72,14 @@ class TestUploadFileWorker(unittest.TestCase):
         worker.shutdown()
 
     def test_init(self):
-        worker = UploadFileToDocService.spawn(None, None, None, None, None, None)
+        worker = UploadFileToDocService.spawn(None, None, None, None, self.sna, None)
         self.assertGreater(datetime.datetime.now().isoformat(),
                            worker.start_time.isoformat())
         self.assertEqual(worker.upload_to_doc_service_queue, None)
         self.assertEqual(worker.upload_to_tender_queue, None)
         self.assertEqual(worker.process_tracker, None)
         self.assertEqual(worker.doc_service_client, None)
+        self.assertEqual(worker.services_not_available, self.sna)
         self.assertEqual(worker.sleep_change_value, None)
         self.assertEqual(worker.delay, 15)
         self.assertEqual(worker.exit, False)
@@ -203,7 +206,6 @@ class TestUploadFileWorker(unittest.TestCase):
         self.assertEqual(mrequest.request_history[0].url, u'127.0.0.1:80/upload')
         self.assertIsNotNone(mrequest.request_history[0].headers['X-Client-Request-ID'])
 
-
     def test_remove_bad_data(self):
         self.worker.upload_to_doc_service_queue = MagicMock(get=MagicMock())
         self.worker.process_tracker = MagicMock(update_items_and_tender=MagicMock())
@@ -245,13 +247,13 @@ class TestUploadFileWorker(unittest.TestCase):
 
     def test_run(self):
         self.worker.delay = 1
-        upload_to_doc_service, retry_upload_to_doc_service = [MagicMock() for _ in range(2)]
-        self.worker.upload_to_doc_service = upload_to_doc_service
-        self.worker.retry_upload_to_doc_service = retry_upload_to_doc_service
+        upload_worker, retry_upload_worker = MagicMock(), MagicMock()
+        self.worker.upload_worker = upload_worker
+        self.worker.retry_upload_worker = retry_upload_worker
         with patch.object(self.worker, 'exit', AlmostAlwaysTrue(1)):
             self.worker._run()
-        self.assertEqual(self.worker.upload_to_doc_service.call_count, 1)
-        self.assertEqual(self.worker.retry_upload_to_doc_service.call_count, 1)
+        self.assertEqual(self.worker.upload_worker.call_count, 1)
+        self.assertEqual(self.worker.retry_upload_worker.call_count, 1)
 
     @patch('gevent.killall')
     def test_run_exception(self, killlall):
@@ -271,6 +273,3 @@ class TestUploadFileWorker(unittest.TestCase):
         self.worker._run()
 
         killlall.assert_called_once_with([1], timeout=5)
-
-
-

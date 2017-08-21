@@ -1,112 +1,32 @@
 # -*- coding: utf-8 -*-
-
 import os
-import unittest
 
+from gevent import killall
 from mock import patch, MagicMock
-from gevent.pywsgi import WSGIServer
-from requests import RequestException
-from bottle import Bottle, response, request
-from restkit import RequestError
-
-from openprocurement_client.client import TendersClientSync, TendersClient
-from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
+from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
+from openprocurement.bot.identification.tests.base import BaseServersTest, config
 from openprocurement.bot.identification.tests.utils import custom_sleep, AlmostAlwaysTrue
-
-config = {
-    'main':
-        {
-            'tenders_api_server': 'http://127.0.0.1:20604',
-            'tenders_api_version': '0',
-            'public_tenders_api_server': 'http://127.0.0.1:20605',
-            'doc_service_server': 'http://127.0.0.1',
-            'doc_service_port': 20606,
-            'doc_service_user': 'broker',
-            'doc_service_password': 'broker_pass',
-            'proxy_server': 'http://127.0.0.1',
-            'proxy_port': 20607,
-            'proxy_user': 'robot',
-            'proxy_password': 'robot',
-            'proxy_version': 1.0,
-            'buffers_size': 450,
-            'full_stack_sync_delay': 15,
-            'empty_stack_sync_delay': 101,
-            'on_error_sleep_delay': 5,
-            'api_token': "api_token"
-        }
-}
-
-
-class BaseServersTest(unittest.TestCase):
-    """Api server to test openprocurement.integrations.edr.databridge.bridge """
-
-    relative_to = os.path.dirname(__file__)  # crafty line
-
-    @classmethod
-    def setUpClass(cls):
-        cls.api_server_bottle = Bottle()
-        cls.proxy_server_bottle = Bottle()
-        cls.doc_server_bottle = Bottle()
-        cls.api_server = WSGIServer(('127.0.0.1', 20604), cls.api_server_bottle, log=None)
-        setup_routing(cls.api_server_bottle, response_spore)
-        cls.public_api_server = WSGIServer(('127.0.0.1', 20605), cls.api_server_bottle, log=None)
-        cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
-        setup_routing(cls.doc_server_bottle, doc_response, path='/')
-        cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
-        setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
-
-        # start servers
-        cls.api_server.start()
-        cls.public_api_server.start()
-        cls.doc_server.start()
-        cls.proxy_server.start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.api_server.close()
-        cls.public_api_server.close()
-        cls.doc_server.close()
-        cls.proxy_server.close()
-
-    def tearDown(self):
-        del self.worker
-
-
-def setup_routing(app, func, path='/api/0/spore', method='GET'):
-    app.route(path, method, func)
-
-
-def response_spore():
-    response.set_cookie("SERVER_ID", ("a7afc9b1fc79e640f2487ba48243ca071c07a823d27"
-                                      "8cf9b7adf0fae467a524747e3c6c6973262130fac2b"
-                                      "96a11693fa8bd38623e4daee121f60b4301aef012c"))
-    return response
-
-
-def doc_response():
-    return response
-
-
-def proxy_response():
-    if request.headers.get("sandbox-mode") != "True":  # Imitation of health comparison
-        response.status = 400
-    return response
+from openprocurement_client.client import TendersClientSync, TendersClient
+from requests import RequestException
+from restkit import RequestError
 
 
 class TestBridgeWorker(BaseServersTest):
     def test_init(self):
         self.worker = EdrDataBridge(config)
-        self.assertEqual(self.worker.delay, 15)
+        self.assertEqual(self.worker.delay, config['main']['delay'])
         self.assertEqual(self.worker.sleep_change_value.time_between_requests, 0)
-
-        # check clients
         self.assertTrue(isinstance(self.worker.tenders_sync_client, TendersClientSync))
         self.assertTrue(isinstance(self.worker.client, TendersClient))
-        self.assertTrue(isinstance(self.worker.proxyClient, ProxyClient))
+        self.assertTrue(isinstance(self.worker.proxy_client, ProxyClient))
         self.assertTrue(isinstance(self.worker.doc_service_client, DocServiceClient))
         self.assertFalse(self.worker.initialization_event.is_set())
         self.assertEqual(self.worker.process_tracker.processing_items, {})
+        self.assertEqual(self.worker.db._backend, "redis")
+        self.assertEqual(self.worker.db._db_name, 0)
+        self.assertEqual(self.worker.db._port, "16379")
+        self.assertEqual(self.worker.db._host, "127.0.0.1")
 
     @patch('openprocurement.bot.identification.databridge.bridge.ProxyClient')
     @patch('openprocurement.bot.identification.databridge.bridge.DocServiceClient')
@@ -165,7 +85,7 @@ class TestBridgeWorker(BaseServersTest):
         self.assertEqual(self.worker.jobs['upload_file_to_tender'], 4)
 
     @patch('gevent.sleep')
-    def test_run(self, sleep):
+    def test_bridge_run(self, sleep):
         self.worker = EdrDataBridge(config)
         # create mocks
         scanner, filter_tender, edr_handler, upload_file_to_doc_service, upload_file_to_tender = \
@@ -175,7 +95,7 @@ class TestBridgeWorker(BaseServersTest):
         self.worker.edr_handler = edr_handler
         self.worker.upload_file_to_doc_service = upload_file_to_doc_service
         self.worker.upload_file_to_tender = upload_file_to_tender
-        with patch('__builtin__.True', AlmostAlwaysTrue(100)):
+        with patch('__builtin__.True', AlmostAlwaysTrue()):
             self.worker.run()
         self.assertEqual(self.worker.scanner.call_count, 1)
         self.assertEqual(self.worker.filter_tender.call_count, 1)
@@ -194,10 +114,10 @@ class TestBridgeWorker(BaseServersTest):
 
     def test_proxy_server_mock(self):
         self.worker = EdrDataBridge(config)
-        self.worker.proxyClient = MagicMock(health=MagicMock(side_effect=RequestError()))
+        self.worker.proxy_client = MagicMock(health=MagicMock(side_effect=RequestError()))
         with self.assertRaises(RequestError):
             self.worker.check_proxy()
-        self.worker.proxyClient = MagicMock(return_value=True)
+        self.worker.proxy_client = MagicMock(return_value=True)
         self.assertTrue(self.worker.check_proxy())
 
     def test_proxy_server_success(self):
@@ -277,3 +197,29 @@ class TestBridgeWorker(BaseServersTest):
         self.worker.check_services = MagicMock(return_value=True)
         self.worker.run()
         self.assertTrue(self.worker.edrpou_codes_queue.qsize.called)
+
+    @patch("gevent.sleep")
+    def test_launch(self, gevent_sleep):
+        self.worker = EdrDataBridge(config)
+        with patch('__builtin__.True', AlmostAlwaysTrue()):
+            self.worker.launch()
+        gevent_sleep.assert_called_once()
+
+    @patch("gevent.sleep")
+    def test_launch_unavailable(self, gevent_sleep):
+        self.worker = EdrDataBridge(config)
+        self.worker.all_available = MagicMock(return_value=False)
+        with patch('__builtin__.True', AlmostAlwaysTrue()):
+            self.worker.launch()
+        gevent_sleep.assert_called_once()
+
+    def test_revive_job(self):
+        self.worker = EdrDataBridge(config)
+        self.worker._start_jobs()
+        self.assertEqual(self.worker.jobs['scanner'].dead, False)
+        killall(self.worker.jobs.values(), timeout=1)
+        self.assertEqual(self.worker.jobs['scanner'].dead, True)
+        self.worker.revive_job('scanner')
+        self.assertEqual(self.worker.jobs['scanner'].dead, False)
+        killall(self.worker.jobs.values())
+        # killall(self.worker.jobs.values(), timeout=1)

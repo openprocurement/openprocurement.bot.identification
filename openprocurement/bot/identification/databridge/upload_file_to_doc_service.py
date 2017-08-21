@@ -1,61 +1,56 @@
 # -*- coding: utf-8 -*-
-from munch import munchify
-from gevent.queue import Queue
-from retrying import retry
+from gevent import monkey
+
+monkey.patch_all()
 
 import logging.config
 import gevent
-from datetime import datetime
-from gevent import Greenlet, spawn
-from gevent.hub import LoopExit
 
+from retrying import retry
+from gevent.queue import Queue
+from datetime import datetime
+from gevent.hub import LoopExit
+from gevent import spawn
+
+from openprocurement.bot.identification.databridge.base_worker import BaseWorker
 from openprocurement.bot.identification.databridge.utils import journal_context, create_file
 from openprocurement.bot.identification.databridge.journal_msg_ids import DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE, \
-    DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE, DATABRIDGE_START_UPLOAD
+    DATABRIDGE_UNSUCCESS_UPLOAD_TO_DOC_SERVICE
 from openprocurement.bot.identification.databridge.constants import file_name, retry_mult
 
 logger = logging.getLogger(__name__)
 
 
-class UploadFileToDocService(Greenlet):
+class UploadFileToDocService(BaseWorker):
     """ Upload file with details """
 
     def __init__(self, upload_to_doc_service_queue, upload_to_tender_queue, process_tracker, doc_service_client,
                  services_not_available, sleep_change_value, delay=15):
-        super(UploadFileToDocService, self).__init__()
-        self.exit = False
+        super(UploadFileToDocService, self).__init__(services_not_available)
         self.start_time = datetime.now()
 
         self.delay = delay
         self.process_tracker = process_tracker
-
         # init client
         self.doc_service_client = doc_service_client
 
         # init queues for workers
         self.upload_to_doc_service_queue = upload_to_doc_service_queue
         self.upload_to_tender_queue = upload_to_tender_queue
-
         self.sleep_change_value = sleep_change_value
         # retry queues for workers
         self.retry_upload_to_doc_service_queue = Queue(maxsize=500)
-        # blockers
-        self.services_not_available = services_not_available
 
-    def upload_to_doc_service(self):
-        """Get data from upload_to_doc_service_queue; Create file of the Data.file_content data; If upload successful put Data
-        object to upload_file_to_tender, otherwise put Data to retry_upload_file_queue."""
+    def upload_worker(self):
         while not self.exit:
             self.services_not_available.wait()
-            self.try_peek_and_upload(is_retry=False)
+            self.try_peek_and_upload(False)
             gevent.sleep(0)
 
-    def retry_upload_to_doc_service(self):
-        """Get data from retry_upload_to_doc_service_queue; If upload were successful put Data obj to
-        upload_to_tender_queue, otherwise put Data obj back to retry_upload_file_queue"""
+    def retry_upload_worker(self):
         while not self.exit:
             self.services_not_available.wait()
-            self.try_peek_and_upload(is_retry=True)
+            self.try_peek_and_upload(True)
             gevent.sleep(0)
 
     def try_peek_and_upload(self, is_retry):
@@ -116,7 +111,8 @@ class UploadFileToDocService(Greenlet):
         else:
             self.retry_upload_to_doc_service_queue.get()
         logger.info('Successfully uploaded file to doc service {} doc_id: {}'.format(tender_data, tender_data.doc_id()),
-            extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE}, tender_data.log_params()))
+                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_SUCCESS_UPLOAD_TO_DOC_SERVICE},
+                                          tender_data.log_params()))
 
     def move_data_to_retry_or_leave(self, response, tender_data, is_retry):
         logger.info('Not successful response from document service while uploading {} doc_id: {}. Response {}'.
@@ -134,29 +130,5 @@ class UploadFileToDocService(Greenlet):
                                               headers={'X-Client-Request-ID': tender_data.doc_id()})
 
     def _start_jobs(self):
-        return {'upload_to_doc_service': spawn(self.upload_to_doc_service),
-                'retry_upload_to_doc_service': spawn(self.retry_upload_to_doc_service)}
-
-    def _run(self):
-        logger.info('Start UploadFileToDocService worker',
-                    extra=journal_context({"MESSAGE_ID": DATABRIDGE_START_UPLOAD}, {}))
-        self.immortal_jobs = self._start_jobs()
-        try:
-            while not self.exit:
-                gevent.sleep(self.delay)
-                self.check_and_revive_jobs()
-        except Exception as e:
-            logger.error(e)
-            gevent.killall(self.immortal_jobs.values(), timeout=5)
-
-    def check_and_revive_jobs(self):
-        for name, job in self.immortal_jobs.items():
-            if job.dead:
-                logger.warning("{} worker dead try restart".format(name), extra=journal_context(
-                    {"MESSAGE_ID": 'DATABRIDGE_RESTART_{}'.format(name.lower())}, {}))
-                self.immortal_jobs[name] = gevent.spawn(getattr(self, name))
-                logger.info("{} worker is up".format(name))
-
-    def shutdown(self):
-        self.exit = True
-        logger.info('Worker UploadFileToDocService complete his job.')
+        return {'upload_worker': spawn(self.upload_worker),
+                'retry_upload_worker': spawn(self.retry_upload_worker)}
