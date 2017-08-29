@@ -13,6 +13,8 @@ from restkit import RequestError
 
 
 class TestBridgeWorker(BaseServersTest):
+    __test__ = True
+
     def test_init(self):
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, config['main']['delay'])
@@ -212,14 +214,3 @@ class TestBridgeWorker(BaseServersTest):
         with patch('__builtin__.True', AlmostAlwaysTrue()):
             self.worker.launch()
         gevent_sleep.assert_called_once()
-
-    def test_revive_job(self):
-        self.worker = EdrDataBridge(config)
-        self.worker._start_jobs()
-        self.assertEqual(self.worker.jobs['scanner'].dead, False)
-        killall(self.worker.jobs.values(), timeout=1)
-        self.assertEqual(self.worker.jobs['scanner'].dead, True)
-        self.worker.revive_job('scanner')
-        self.assertEqual(self.worker.jobs['scanner'].dead, False)
-        killall(self.worker.jobs.values())
-        # killall(self.worker.jobs.values(), timeout=1)

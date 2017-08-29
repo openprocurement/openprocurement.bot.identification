@@ -19,6 +19,8 @@ from openprocurement.bot.identification.databridge.sleep_change_value import API
 
 
 class TestScannerWorker(unittest.TestCase):
+    __test__ = True
+
     def setUp(self):
         self.process_tracker = ProcessTracker(MagicMock(has=MagicMock(return_value=False)))
         self.tenders_id = [uuid.uuid4().hex for _ in range(4)]

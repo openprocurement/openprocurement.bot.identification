@@ -101,6 +101,7 @@ class EdrHandler(BaseWorker):
         data = copy(tender_data)
         data.file_content = file_content
         self.process_tracker.set_item(tender_data.tender_id, tender_data.item_id, 1)
+        self.process_tracker.add_unprocessed_item(tender_data)
         self.upload_to_doc_service_queue.put(data)
         if is_retry:
             self.retry_edrpou_codes_queue.get()
@@ -108,7 +109,7 @@ class EdrHandler(BaseWorker):
     def move_data_existing_edr(self, response, tender_data, is_retry):
         data_list = []
         try:
-            fill_data_list(response, tender_data, data_list)
+            fill_data_list(response, tender_data, data_list, self.process_tracker)
         except (KeyError, IndexError) as e:
             logger.info('Error {}. {}'.format(tender_data, e))
             self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get() if is_retry else tender_data)

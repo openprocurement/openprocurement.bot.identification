@@ -18,11 +18,13 @@ from openprocurement.bot.identification.databridge.utils import generate_doc_id,
 from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
-from openprocurement.bot.identification.databridge.constants import file_name
+from openprocurement.bot.identification.databridge.constants import file_name, DOC_TYPE
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 
 class TestUploadFileWorker(unittest.TestCase):
+    __test__ = True
+
     def setUp(self):
         self.tender_id = uuid.uuid4().hex
         self.award_id = uuid.uuid4().hex
@@ -56,7 +58,7 @@ class TestUploadFileWorker(unittest.TestCase):
     def get_tender():
         return {'data': {'id': uuid.uuid4().hex,
                          'documentOf': 'tender',
-                         'documentType': 'registerExtract',
+                         'documentType': DOC_TYPE,
                          'url': 'url'}}
 
     def tearDown(self):
@@ -223,7 +225,8 @@ class TestUploadFileWorker(unittest.TestCase):
             self.worker.remove_bad_data(self.data, Exception("test message"), True)
 
         self.worker.retry_upload_to_doc_service_queue.get.assert_called_once()
-        self.worker.process_tracker.update_items_and_tender.assert_called_with(self.data.tender_id, self.data.item_id)
+        self.worker.process_tracker.update_items_and_tender.assert_called_with(self.data.tender_id, self.data.item_id,
+                                                                               self.document_id)
 
     def test_try_upload_to_doc_service(self):
         e = Exception("test error")

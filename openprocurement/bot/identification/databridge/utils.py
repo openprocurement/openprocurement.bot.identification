@@ -5,7 +5,8 @@ from logging import getLogger
 from uuid import uuid4
 
 import yaml
-from openprocurement.bot.identification.databridge.constants import file_name, version, \
+from munch import munchify
+from openprocurement.bot.identification.databridge.constants import file_name, version, DOC_TYPE, \
     qualification_procurementMethodType, pre_qualification_procurementMethodType
 from restkit import ResourceError
 from simplejson import JSONDecodeError
@@ -86,7 +87,7 @@ def is_payment_required(response):
                  [{'message': 'Payment required.', 'code': 5}]))
 
 
-def fill_data_list(response, tender_data, data_list):
+def fill_data_list(response, tender_data, data_list, process_tracker):
     for i, obj in enumerate(response.json()['data']):
         document_id = check_add_suffix(response.json()['data'], tender_data.doc_id(), i + 1)
         file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]}, 'data': obj}
@@ -95,12 +96,8 @@ def fill_data_list(response, tender_data, data_list):
         file_content['meta']['id'] = document_id
         data = copy(tender_data)
         data.file_content = file_content
+        process_tracker.add_unprocessed_item(tender_data)
         data_list.append(data)
-
-
-def should_process_item(item):
-    return (item['status'] == 'pending' and not [document for document in item.get('documents', [])
-                                                 if document.get('documentType') == 'registerExtract'])
 
 
 def is_code_invalid(code):

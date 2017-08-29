@@ -21,7 +21,7 @@ from openprocurement.bot.identification.databridge.utils import generate_doc_id,
 from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
-from openprocurement.bot.identification.databridge.constants import file_name
+from openprocurement.bot.identification.databridge.constants import file_name, DOC_TYPE
 from openprocurement.bot.identification.databridge.bridge import TendersClientSync
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
@@ -56,7 +56,7 @@ def response_get_tender():
     response.headers['X-Request-ID'] = '125'
     return dumps({'data': {'id': uuid.uuid4().hex,
                            'documentOf': 'tender',
-                           'documentType': 'registerExtract',
+                           'documentType': DOC_TYPE,
                            'url': 'url'}})
 
 
@@ -77,6 +77,8 @@ def generate_response_retry():
 
 
 class TestUploadFileToTenderWorker(unittest.TestCase):
+    __test__ = True
+
     def setUp(self):
         self.tender_id = uuid.uuid4().hex
         self.award_id = uuid.uuid4().hex
@@ -104,7 +106,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
     def get_tender():
         return {'data': {'id': uuid.uuid4().hex,
                          'documentOf': 'tender',
-                         'documentType': 'registerExtract',
+                         'documentType': DOC_TYPE,
                          'url': 'url'}}
 
     def is_working(self, worker):

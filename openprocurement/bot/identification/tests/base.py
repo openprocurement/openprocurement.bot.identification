@@ -7,6 +7,7 @@ from time import sleep
 
 from bottle import Bottle, response, request
 from gevent.pywsgi import WSGIServer
+from nose import tools
 from redis import StrictRedis
 
 config = {
@@ -38,10 +39,9 @@ config = {
         }
 }
 
-
+@tools.nottest
 class BaseServersTest(unittest.TestCase):
     """Api server to test openprocurement.integrations.edr.databridge.bridge """
-
     relative_to = os.path.dirname(__file__)  # crafty line
 
     @classmethod
@@ -56,7 +56,7 @@ class BaseServersTest(unittest.TestCase):
         setup_routing(cls.doc_server_bottle, doc_response, path='/')
         cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
         setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
-        cls.redis_process = subprocess.Popen(['redis-server', '--port', str(config['main']['cache_port'])])
+        cls.redis_process = subprocess.Popen(['redis-server', '--port', str(config['main']['cache_port']), '--logfile /dev/null'])
         sleep(0.1)
         cls.redis = StrictRedis(port=str(config['main']['cache_port']))
 
@@ -74,9 +74,13 @@ class BaseServersTest(unittest.TestCase):
         cls.proxy_server.close()
         cls.redis_process.terminate()
         cls.redis_process.wait()
+        del cls.api_server_bottle
+        del cls.proxy_server_bottle
+        del cls.doc_server_bottle
 
     def tearDown(self):
         del self.worker
+        self.redis.flushall()
 
 
 def setup_routing(app, func, path='/api/{}/spore'.format(config['main']['tenders_api_version']), method='GET'):

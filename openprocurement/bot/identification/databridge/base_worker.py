@@ -19,9 +19,10 @@ class BaseWorker(Greenlet):
         super(BaseWorker, self).__init__()
         self.services_not_available = services_not_available
         self.exit = False
+        self.delay = 15
 
     def _start_jobs(self):
-        raise NotImplemented
+        raise NotImplementedError()
 
     def _run(self):
         self.services_not_available.wait()

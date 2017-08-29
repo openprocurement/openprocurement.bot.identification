@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from munch import munchify
 
 monkey.patch_all()
 
@@ -94,6 +95,9 @@ class EdrDataBridge(object):
         self.services_not_available.set()
         self.db = Db(config)
         self.process_tracker = ProcessTracker(self.db, self.time_to_live)
+        unprocessed_items = self.process_tracker.get_unprocessed_items()
+        for item in unprocessed_items:
+            self.upload_to_doc_service_queue.put(munchify(item))
 
         # Workers
         self.scanner = partial(Scanner.spawn,
