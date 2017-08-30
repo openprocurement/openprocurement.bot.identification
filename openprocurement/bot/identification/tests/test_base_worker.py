@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+
 monkey.patch_all()
-from gevent import kill, event, spawn
+from gevent import event, spawn
 from mock import patch, MagicMock
 
 from openprocurement.bot.identification.databridge.base_worker import BaseWorker
 from openprocurement.bot.identification.tests.base import BaseServersTest
-from openprocurement.bot.identification.tests.utils import custom_sleep, AlmostAlwaysTrue
+from openprocurement.bot.identification.tests.utils import custom_sleep, AlmostAlwaysFalse
 
 
 class TestBaseWorker(BaseServersTest):
@@ -37,7 +38,7 @@ class TestBaseWorker(BaseServersTest):
         self.worker = BaseWorker(MagicMock())
         self.worker._start_jobs = MagicMock(return_value={"test": self.func})
         self.worker.check_and_revive_jobs = MagicMock()
-        with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
+        with patch.object(self.worker, 'exit', AlmostAlwaysFalse()):
             self.worker._run()
         self.worker.check_and_revive_jobs.assert_called_once()
 
@@ -47,7 +48,7 @@ class TestBaseWorker(BaseServersTest):
         self.worker = BaseWorker(MagicMock())
         self.worker._start_jobs = MagicMock(return_value={"test": spawn(self.func)})
         self.worker.check_and_revive_jobs = MagicMock(side_effect=Exception)
-        with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
+        with patch.object(self.worker, 'exit', AlmostAlwaysFalse()):
             self.worker._run()
         self.worker.check_and_revive_jobs.assert_called_once()
 

@@ -20,9 +20,9 @@ from openprocurement.bot.identification.databridge.upload_file_to_tender import 
 from openprocurement.bot.identification.databridge.utils import generate_doc_id, item_key
 from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from openprocurement.bot.identification.databridge.data import Data
-from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysFalse
 from openprocurement.bot.identification.databridge.constants import file_name, DOC_TYPE
-from openprocurement.bot.identification.databridge.bridge import TendersClientSync
+from openprocurement.bot.identification.databridge.bridge import TendersClientSync, TendersClient
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
 SERVER_RESPONSE_FLAG = 0
@@ -262,7 +262,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         setup_routing(api_server_bottle, response_412, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
             self.tender_id, self.award_id), method='POST')
         api_server.start()
-        self.worker.client = TendersClientSync('', host_url='http://127.0.0.1:20604', api_version='2.3')
+        self.worker.client = TendersClient('', host_url='http://127.0.0.1:20604', api_version='2.3')
         setup_routing(api_server_bottle, generate_response, path='/api/2.3/tenders/{}/awards/{}/documents'.format(
             self.tender_id, self.award_id), method='POST')
         self.assertEqual(self.worker.client.headers['Cookie'], 'SERVER_ID={}'.format(SPORE_COOKIES))
@@ -281,7 +281,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.worker.services_not_available = MagicMock(wait=MagicMock())
         self.worker.try_peek_data_and_upload_to_tender = MagicMock()
-        with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
+        with patch.object(self.worker, 'exit', AlmostAlwaysFalse()):
             self.worker.upload_worker()
         self.worker.services_not_available.wait.assert_called_once()
         self.worker.try_peek_data_and_upload_to_tender.assert_called_once_with(False)
@@ -291,7 +291,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         gevent_sleep.side_effect = custom_sleep
         self.worker.services_not_available = MagicMock(wait=MagicMock())
         self.worker.try_peek_data_and_upload_to_tender = MagicMock()
-        with patch.object(self.worker, 'exit', AlmostAlwaysTrue()):
+        with patch.object(self.worker, 'exit', AlmostAlwaysFalse()):
             self.worker.retry_upload_worker()
         self.worker.services_not_available.wait.assert_called_once()
         self.worker.try_peek_data_and_upload_to_tender.assert_called_once_with(True)
@@ -509,7 +509,7 @@ class TestUploadFileToTenderWorker(unittest.TestCase):
         upload_worker, retry_upload_worker = MagicMock(), MagicMock()
         self.worker.upload_worker = upload_worker
         self.worker.retry_upload_worker = retry_upload_worker
-        with patch.object(self.worker, 'exit', AlmostAlwaysTrue(1)):
+        with patch.object(self.worker, 'exit', AlmostAlwaysFalse()):
             self.worker._run()
         self.assertEqual(self.worker.upload_worker.call_count, 1)
         self.assertEqual(self.worker.retry_upload_worker.call_count, 1)

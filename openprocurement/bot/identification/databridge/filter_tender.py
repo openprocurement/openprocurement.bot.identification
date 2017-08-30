@@ -50,26 +50,27 @@ class FilterTenders(BaseWorker):
             try:
                 tender_id = self.filtered_tender_ids_queue.peek()
             except LoopExit:
-                gevent.sleep(0)
-                continue
-            try:
-                response = self.tenders_sync_client.request("GET",
-                                                            path='{}/{}'.format(self.tenders_sync_client.prefix_path,
-                                                                                tender_id),
-                                                            headers={'X-Client-Request-ID': generate_req_id()})
-            except Exception as e:
-                if getattr(e, "status_int", False) == 429:
-                    self.sleep_change_value.increment()
-                    logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(
-                        tender_id, self.sleep_change_value.time_between_requests))
-                else:
-                    logger.warning('Fail to get tender info {}'.format(tender_id),
-                                   extra=journal_context(params={"TENDER_ID": tender_id}))
-                    logger.exception("Message: {}".format(e.message))
-                    gevent.sleep()
+                gevent.sleep()
             else:
-                self.process_items_and_move(response, tender_id)
+                self.temp_process(tender_id)
             gevent.sleep(self.sleep_change_value.time_between_requests)
+
+    def temp_process(self, tender_id):
+        try:
+            response = self.tenders_sync_client.request("GET", path='{}/{}'.format(self.tenders_sync_client.prefix_path,
+                                                                                   tender_id),
+                                                        headers={'X-Client-Request-ID': generate_req_id()})
+        except Exception as e:
+            if getattr(e, "status_int", False) == 429:
+                self.sleep_change_value.increment()
+                logger.info("Waiting tender {} for sleep_change_value: {} seconds".format(
+                    tender_id, self.sleep_change_value.time_between_requests))
+            else:
+                logger.warning('Fail to get tender info {}'.format(tender_id),
+                               extra=journal_context(params={"TENDER_ID": tender_id}))
+                logger.exception("Message: {}".format(e.message))
+        else:
+            self.process_items_and_move(response, tender_id)
 
     def process_items_and_move(self, response, tender_id):
         self.sleep_change_value.decrement()

@@ -17,7 +17,7 @@ from openprocurement.bot.identification.databridge.upload_file_to_doc_service im
 from openprocurement.bot.identification.databridge.utils import generate_doc_id, item_key
 from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from openprocurement.bot.identification.databridge.data import Data
-from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysTrue
+from openprocurement.bot.identification.tests.utils import custom_sleep, generate_answers, AlmostAlwaysFalse
 from openprocurement.bot.identification.databridge.constants import file_name, DOC_TYPE
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 
@@ -253,7 +253,7 @@ class TestUploadFileWorker(unittest.TestCase):
         upload_worker, retry_upload_worker = MagicMock(), MagicMock()
         self.worker.upload_worker = upload_worker
         self.worker.retry_upload_worker = retry_upload_worker
-        with patch.object(self.worker, 'exit', AlmostAlwaysTrue(1)):
+        with patch.object(self.worker, 'exit', AlmostAlwaysFalse()):
             self.worker._run()
         self.assertEqual(self.worker.upload_worker.call_count, 1)
         self.assertEqual(self.worker.retry_upload_worker.call_count, 1)

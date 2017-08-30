@@ -1,7 +1,8 @@
 # coding=utf-8
+import pickle
+
 from datetime import datetime
 
-from munch import munchify
 from openprocurement.bot.identification.databridge.caching import db_key
 from openprocurement.bot.identification.databridge.utils import item_key
 
@@ -43,10 +44,10 @@ class ProcessTracker(object):
         return self._db.has(db_key(tender_id)) or False
 
     def get_unprocessed_items(self):
-        return self._db.get("unprocessed_") or []
+        return self._db.get_items("unprocessed_*") or []
 
     def add_unprocessed_item(self, data):
-        self._db.put(data.doc_id(), munchify(data), self.ttl)
+        self._db.put(data.doc_id(), pickle.dumps(data), self.ttl)
 
     def _remove_unprocessed_item(self, document_id):
         self._db.remove(document_id)

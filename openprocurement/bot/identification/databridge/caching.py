@@ -38,6 +38,10 @@ class Db(object):
         LOGGER.info("Getting item {} from the cache".format(key))
         return self.db.get(key)
 
+    def get_items(self, requested_key):
+        keys = self.db.keys(requested_key)
+        return [self.get(key) for key in keys]
+
     def put(self, key, value, ex=86400):
         LOGGER.info("Saving key {} to cache".format(key))
         self.set_value(key, value, ex)

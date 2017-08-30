@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from munch import munchify
 
 monkey.patch_all()
 
@@ -12,6 +11,7 @@ import gevent
 
 from functools import partial
 from yaml import load
+from pickle import loads
 from gevent import event
 from gevent.queue import Queue
 from retrying import retry
@@ -97,7 +97,7 @@ class EdrDataBridge(object):
         self.process_tracker = ProcessTracker(self.db, self.time_to_live)
         unprocessed_items = self.process_tracker.get_unprocessed_items()
         for item in unprocessed_items:
-            self.upload_to_doc_service_queue.put(munchify(item))
+            self.upload_to_doc_service_queue.put(loads(item))
 
         # Workers
         self.scanner = partial(Scanner.spawn,
@@ -254,7 +254,6 @@ class EdrDataBridge(object):
 
     def check_and_revive_jobs(self):
         for name, job in self.jobs.items():
-            logger.debug("{}.dead: {}".format(name, job.dead))
             if job.dead:
                 self.revive_job(name)
 

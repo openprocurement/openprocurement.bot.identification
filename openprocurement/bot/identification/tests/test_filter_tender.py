@@ -5,9 +5,7 @@ from openprocurement.bot.identification.databridge.caching import Db
 monkey.patch_all()
 
 import uuid
-import unittest
 import datetime
-import subprocess
 
 from gevent.hub import LoopExit
 from gevent.queue import Queue
@@ -15,8 +13,7 @@ from mock import patch, MagicMock
 from time import sleep
 from munch import munchify
 from restkit.errors import Unauthorized, ResourceError, RequestFailed
-from gevent.pywsgi import WSGIServer
-from bottle import Bottle, response
+from bottle import response
 from simplejson import dumps
 from gevent import event
 

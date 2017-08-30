@@ -68,6 +68,7 @@ class TestEdrHandlerWorker(BaseServersTest):
             'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}
 
     def tearDown(self):
+        self.redis.flushall()
         self.worker.shutdown()
         self.assertEqual(self.edrpou_codes_queue.qsize(), 0)
         self.assertEqual(self.edr_ids_queue.qsize(), 0)
@@ -751,3 +752,12 @@ class TestEdrHandlerWorker(BaseServersTest):
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                self.file_con(doc_id=self.document_ids[0],
                                              source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+
+    def test_wait_until_too_many_requests_mock(self):
+        self.worker.until_too_many_requests_event = MagicMock(ready=MagicMock(return_value=True), set=MagicMock(),
+                                                              wait=MagicMock(), clear=MagicMock())
+        self.worker.wait_until_too_many_requests(1)
+        self.worker.until_too_many_requests_event.ready.assert_called_once()
+        self.worker.until_too_many_requests_event.clear.assert_called_once()
+        self.worker.until_too_many_requests_event.wait.assert_called_with(float(1))
+        self.worker.until_too_many_requests_event.set.assert_called_once()

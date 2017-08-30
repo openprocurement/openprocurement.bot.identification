@@ -90,7 +90,8 @@ class UploadFileToDocService(BaseWorker):
                                                tender_data.log_params()))
         if is_retry:
             self.retry_upload_to_doc_service_queue.get()
-            self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id, tender_data.doc_id())
+            self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id,
+                                                         tender_data.doc_id())
             raise e
         else:
             self.retry_upload_to_doc_service_queue.put(tender_data)

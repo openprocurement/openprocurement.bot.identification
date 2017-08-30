@@ -39,7 +39,6 @@ class BaseWorker(Greenlet):
 
     def check_and_revive_jobs(self):
         for name, job in self.immortal_jobs.items():
-            logger.info(" Is {} dead? {}".format(name, job.dead))
             if job.dead:
                 self.revive_job(name)
 

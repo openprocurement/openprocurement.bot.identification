@@ -39,6 +39,7 @@ config = {
         }
 }
 
+
 @tools.nottest
 class BaseServersTest(unittest.TestCase):
     """Api server to test openprocurement.integrations.edr.databridge.bridge """
@@ -56,7 +57,8 @@ class BaseServersTest(unittest.TestCase):
         setup_routing(cls.doc_server_bottle, doc_response, path='/')
         cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
         setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
-        cls.redis_process = subprocess.Popen(['redis-server', '--port', str(config['main']['cache_port']), '--logfile /dev/null'])
+        cls.redis_process = subprocess.Popen(
+            ['redis-server', '--port', str(config['main']['cache_port']), '--logfile /dev/null'])
         sleep(0.1)
         cls.redis = StrictRedis(port=str(config['main']['cache_port']))
 

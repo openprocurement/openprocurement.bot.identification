@@ -5,8 +5,7 @@ from logging import getLogger
 from uuid import uuid4
 
 import yaml
-from munch import munchify
-from openprocurement.bot.identification.databridge.constants import file_name, version, DOC_TYPE, \
+from openprocurement.bot.identification.databridge.constants import file_name, version, \
     qualification_procurementMethodType, pre_qualification_procurementMethodType
 from restkit import ResourceError
 from simplejson import JSONDecodeError
