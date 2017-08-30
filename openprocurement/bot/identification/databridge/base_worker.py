@@ -19,9 +19,10 @@ class BaseWorker(Greenlet):
         super(BaseWorker, self).__init__()
         self.services_not_available = services_not_available
         self.exit = False
+        self.delay = 15
 
     def _start_jobs(self):
-        raise NotImplemented
+        raise NotImplementedError()
 
     def _run(self):
         self.services_not_available.wait()
@@ -38,7 +39,6 @@ class BaseWorker(Greenlet):
 
     def check_and_revive_jobs(self):
         for name, job in self.immortal_jobs.items():
-            logger.info(" Is {} dead? {}".format(name, job.dead))
             if job.dead:
                 self.revive_job(name)
 

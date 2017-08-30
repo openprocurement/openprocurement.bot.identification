@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
+from openprocurement.bot.identification.databridge.caching import Db
 
 monkey.patch_all()
 
 import uuid
 import gevent
-import unittest
 import datetime
 import requests_mock
 import random
@@ -16,6 +16,7 @@ from mock import patch, MagicMock
 from munch import munchify
 from requests import Response
 
+from openprocurement.bot.identification.tests.base import BaseServersTest, config
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.utils import generate_doc_id, RetryException, item_key
@@ -32,7 +33,9 @@ def get_random_edr_ids(count=1):
     return [str(random.randrange(10000000, 99999999)) for _ in range(count)]
 
 
-class TestEdrHandlerWorker(unittest.TestCase):
+class TestEdrHandlerWorker(BaseServersTest):
+    __test__ = True
+
     def setUp(self):
         self.source_date = ["2017-04-25T11:56:36+00:00"]
         self.gen_req_id = [generate_request_id() for _ in xrange(10)]
@@ -52,7 +55,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         self.url = "{url}".format(url=self.proxy_client.verify_url)
         self.local_edr_ids = get_random_edr_ids(2)
         self.edr_ids = get_random_edr_ids(1)[0]
-        self.process_tracker = ProcessTracker()
+        self.db = Db(config)
+        self.process_tracker = ProcessTracker(self.db)
         self.sna = gevent.event.Event()
         self.sna.set()
         self.worker = EdrHandler.spawn(self.proxy_client, self.edrpou_codes_queue,
@@ -64,6 +68,7 @@ class TestEdrHandlerWorker(unittest.TestCase):
             'req-db3ed1c6-9843-415f-92c9-7d4b08d39220']}}
 
     def tearDown(self):
+        self.redis.flushall()
         self.worker.shutdown()
         self.assertEqual(self.edrpou_codes_queue.qsize(), 0)
         self.assertEqual(self.edr_ids_queue.qsize(), 0)
@@ -73,10 +78,10 @@ class TestEdrHandlerWorker(unittest.TestCase):
     def stat_c(st_code, ret_aft, err_desc, x_req_id):
         if ret_aft == 0:
             return {'json': {'errors': [{'description': err_desc}]}, 'status_code': st_code,
-                    'headers': {'X-Request-ID': x_req_id}}
+                    'headers': {'X-Request-ID': x_req_id, 'content-type': 'application/json'}}
         else:
             return {'json': {'errors': [{'description': err_desc}]}, 'status_code': st_code,
-                    'headers': {'Retry-After': ret_aft, 'X-Request-ID': x_req_id}}
+                    'headers': {'Retry-After': ret_aft, 'X-Request-ID': x_req_id, 'content-type': 'application/json'}}
 
     @staticmethod
     def stat_200(data_info, det_source_date, x_req_id):
@@ -158,10 +163,8 @@ class TestEdrHandlerWorker(unittest.TestCase):
         """First request returns Edr API returns to proxy 402 status code with messages."""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.uri, [self.stat_c(403, 0, [{'message': 'Payment required.', 'code': 5}], self.edr_req_ids[0]),
-                                # pay for me
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[0]),
                                 self.stat_c(403, 0, [{'message': 'Payment required.', 'code': 5}], self.edr_req_ids[1]),
-                                # pay for me
                                 self.stat_200([{}], self.source_date, self.edr_req_ids[1])])
         expected_result = []
         for i in xrange(2):
@@ -698,7 +701,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
     @requests_mock.Mocker()
     @patch('gevent.sleep')
     def test_value_error(self, mrequest, gevent_sleep):
-        """Accept 'Gateway Timeout Error'  while requesting /verify, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
         mrequest.get(self.url, [self.stat_c(403, 0, [{u'message': u'Gateway Timeout Error'}], self.edr_req_ids[0])] +
                      [{"text": "resp", 'status_code': 403,
@@ -718,7 +720,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @patch('gevent.sleep')
     def test_value_error_mock(self, gevent_sleep):
-        """Accept 'Gateway Timeout Error'  while requesting /verify, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
         self.worker.retry_edr_ids_queue = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
@@ -738,7 +739,6 @@ class TestEdrHandlerWorker(unittest.TestCase):
 
     @patch('gevent.sleep')
     def test_429_mock(self, gevent_sleep):
-        """Accept 'Gateway Timeout Error'  while requesting /verify, then accept 200 status code."""
         gevent_sleep.side_effect = custom_sleep
         self.worker.retry_edr_ids_queue = MagicMock()
         self.worker.retry_edrpou_codes_queue.put(
@@ -752,3 +752,12 @@ class TestEdrHandlerWorker(unittest.TestCase):
                           Data(self.tender_id, self.award_id, self.edr_ids, 'awards',
                                self.file_con(doc_id=self.document_ids[0],
                                              source_req=[self.edr_req_ids[0], self.edr_req_ids[1]])))
+
+    def test_wait_until_too_many_requests_mock(self):
+        self.worker.until_too_many_requests_event = MagicMock(ready=MagicMock(return_value=True), set=MagicMock(),
+                                                              wait=MagicMock(), clear=MagicMock())
+        self.worker.wait_until_too_many_requests(1)
+        self.worker.until_too_many_requests_event.ready.assert_called_once()
+        self.worker.until_too_many_requests_event.clear.assert_called_once()
+        self.worker.until_too_many_requests_event.wait.assert_called_with(float(1))
+        self.worker.until_too_many_requests_event.set.assert_called_once()

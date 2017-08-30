@@ -132,7 +132,7 @@ class UploadFileToTender(BaseWorker):
         self.remove_data(tender_data, is_retry)
 
     def remove_data(self, tender_data, is_retry):
-        self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id)
+        self.process_tracker.update_items_and_tender(tender_data.tender_id, tender_data.item_id, tender_data.doc_id())
         self.sleep_change_value.decrement()
         if is_retry:
             self.retry_upload_to_tender_queue.get()

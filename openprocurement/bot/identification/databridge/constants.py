@@ -11,3 +11,4 @@ identification_scheme = u'UA-EDR'
 pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
 qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU',
                                        'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
+DOC_TYPE = 'registerExtract'

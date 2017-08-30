@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import os
+from pickle import dumps
 
-from gevent import killall
 from mock import patch, MagicMock
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 from openprocurement.bot.identification.databridge.bridge import EdrDataBridge
+from openprocurement.bot.identification.databridge.data import Data
 from openprocurement.bot.identification.tests.base import BaseServersTest, config
 from openprocurement.bot.identification.tests.utils import custom_sleep, AlmostAlwaysTrue
 from openprocurement_client.client import TendersClientSync, TendersClient
@@ -13,6 +14,8 @@ from restkit import RequestError
 
 
 class TestBridgeWorker(BaseServersTest):
+    __test__ = True
+
     def test_init(self):
         self.worker = EdrDataBridge(config)
         self.assertEqual(self.worker.delay, config['main']['delay'])
@@ -89,7 +92,7 @@ class TestBridgeWorker(BaseServersTest):
         self.worker = EdrDataBridge(config)
         # create mocks
         scanner, filter_tender, edr_handler, upload_file_to_doc_service, upload_file_to_tender = \
-            [MagicMock() for i in range(5)]
+            [MagicMock() for _ in range(5)]
         self.worker.scanner = scanner
         self.worker.filter_tender = filter_tender
         self.worker.edr_handler = edr_handler
@@ -201,9 +204,10 @@ class TestBridgeWorker(BaseServersTest):
     @patch("gevent.sleep")
     def test_launch(self, gevent_sleep):
         self.worker = EdrDataBridge(config)
-        with patch('__builtin__.True', AlmostAlwaysTrue()):
-            self.worker.launch()
-        gevent_sleep.assert_called_once()
+        self.worker.run = MagicMock()
+        self.worker.all_available = MagicMock(return_value=True)
+        self.worker.launch()
+        self.worker.run.assert_called_once()
 
     @patch("gevent.sleep")
     def test_launch_unavailable(self, gevent_sleep):
@@ -213,13 +217,22 @@ class TestBridgeWorker(BaseServersTest):
             self.worker.launch()
         gevent_sleep.assert_called_once()
 
+    def test_unprocessed_items(self):
+        data = Data('1', '2', '123', 'awards', {'meta': {'id': '333'}, 'test_data': 'test_data'})
+        self.redis.set("unprocessed_{}".format(data.doc_id()), dumps(data))
+        self.worker = EdrDataBridge(config)
+        self.assertEqual(self.worker.upload_to_doc_service_queue.get(), data)
+
+    def test_check_and_revive_jobs(self):
+        self.worker = EdrDataBridge(config)
+        self.worker.jobs = {"test": MagicMock(dead=MagicMock(return_value=True))}
+        self.worker.revive_job = MagicMock()
+        self.worker.check_and_revive_jobs()
+        self.worker.revive_job.assert_called_once_with("test")
+
     def test_revive_job(self):
         self.worker = EdrDataBridge(config)
-        self.worker._start_jobs()
-        self.assertEqual(self.worker.jobs['scanner'].dead, False)
-        killall(self.worker.jobs.values(), timeout=1)
-        self.assertEqual(self.worker.jobs['scanner'].dead, True)
-        self.worker.revive_job('scanner')
-        self.assertEqual(self.worker.jobs['scanner'].dead, False)
-        killall(self.worker.jobs.values())
-        # killall(self.worker.jobs.values(), timeout=1)
+        self.worker.test = MagicMock()
+        self.worker.jobs = {"test": MagicMock(dead=MagicMock(return_value=True))}
+        self.worker.revive_job("test")
+        self.assertEqual(self.worker.jobs['test'].dead, False)

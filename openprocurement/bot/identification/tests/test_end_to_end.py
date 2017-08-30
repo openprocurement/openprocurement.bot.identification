@@ -1,19 +1,24 @@
 # coding=utf-8
 
 from gevent import monkey
+from gevent.pywsgi import WSGIServer
+from redis import StrictRedis
 
 monkey.patch_all()
 
 import uuid
+import unittest
+import subprocess
 
 from simplejson import dumps
 from time import sleep
 from gevent.queue import Queue
 from mock import patch
-from bottle import response, request
+from bottle import response, request, Bottle
 
-from openprocurement.bot.identification.tests.base import BaseServersTest, config
+from openprocurement.bot.identification.tests.base import config
 from openprocurement.bot.identification.databridge.constants import author, version, file_name
+from openprocurement.bot.identification.databridge.caching import Db
 from openprocurement.bot.identification.databridge.sleep_change_value import APIRateController
 from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from openprocurement.bot.identification.databridge.data import Data
@@ -99,17 +104,8 @@ def get_tender_response():
                   'data': {'status': "active.pre-qualification",
                            'id': '123',
                            'procurementMethodType': 'aboveThresholdEU',
-                           'bids': [bids(0, CODES[0]),
-                                    bids(1, CODES[1]),
-                                    bids(2, CODES[2]),
-                                    bids(3, CODES[2]),
-                                    {'id': bid_ids[4],
-                                     'tenderers': [{'identifier': {
-                                         'scheme': 'UA-ED',
-                                         'id': CODES[2]}}]}],
-                           'qualifications': [
-                               qualifications('pending', 2, 2),
-                           ]}})
+                           'bids': [bids(2, CODES[2])],
+                           'qualifications': [qualifications('pending', 2, 2)]}})
 
 
 def get_proxy_response():
@@ -130,19 +126,55 @@ def get_doc_service_response():
             'title': file_name}
 
 
-class EndToEndTest(BaseServersTest):
+class EndToEndTest(unittest.TestCase):
+    __test__ = True
+
+    @classmethod
+    def setUpClass(cls):
+        cls.api_server_bottle = Bottle()
+        cls.proxy_server_bottle = Bottle()
+        cls.doc_server_bottle = Bottle()
+        cls.api_server = WSGIServer(('127.0.0.1', 20604), cls.api_server_bottle, log=None)
+        setup_routing(cls.api_server_bottle, response_spore)
+        cls.public_api_server = WSGIServer(('127.0.0.1', 20605), cls.api_server_bottle, log=None)
+        cls.doc_server = WSGIServer(('127.0.0.1', 20606), cls.doc_server_bottle, log=None)
+        setup_routing(cls.doc_server_bottle, doc_response, path='/')
+        cls.proxy_server = WSGIServer(('127.0.0.1', 20607), cls.proxy_server_bottle, log=None)
+        setup_routing(cls.proxy_server_bottle, proxy_response, path='/api/1.0/health')
+        cls.redis_process = subprocess.Popen(
+            ['redis-server', '--port', str(config['main']['cache_port']), '--logfile /dev/null'])
+        sleep(0.1)
+        cls.redis = StrictRedis(port=str(config['main']['cache_port']))
+
+        # start servers
+        cls.api_server.start()
+        cls.public_api_server.start()
+        cls.doc_server.start()
+        cls.proxy_server.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.api_server.close()
+        cls.public_api_server.close()
+        cls.doc_server.close()
+        cls.proxy_server.close()
+        cls.redis_process.terminate()
+        cls.redis_process.wait()
+        del cls.api_server_bottle
+        del cls.proxy_server_bottle
+        del cls.doc_server_bottle
+
+    def tearDown(self):
+        del self.worker
+        self.redis.flushall()
+
     def setUp(self):
-        super(EndToEndTest, self).setUp()
         self.filtered_tender_ids_queue = Queue(10)
         self.edrpou_codes_queue = Queue(10)
-        self.process_tracker = ProcessTracker()
+        self.process_tracker = ProcessTracker(Db(config))
         self.tender_id = uuid.uuid4().hex
         self.sleep_change_value = APIRateController()
         self.worker = EdrDataBridge(config)
-
-    def tearDown(self):
-        super(EndToEndTest, self).tearDown()
-        self.redis.flushall()
 
     def check_data_objects(self, obj, example):
         self.assertEqual(obj.tender_id, example.tender_id)
@@ -160,7 +192,7 @@ class EndToEndTest(BaseServersTest):
             sleep(0.1)
 
     def is_working_filter(self, worker):
-        return worker.filtered_tender_ids_queue.qsize() or not worker.edrpou_codes_queue.qsize()
+        return worker.filtered_tender_ids_queue.qsize() or worker.edrpou_codes_queue.qsize() == 0
 
     def is_working_all(self, worker):
         return (worker.filtered_tender_ids_queue.qsize() or worker.edrpou_codes_queue.qsize()
@@ -176,7 +208,6 @@ class EndToEndTest(BaseServersTest):
         self.worker.filter_tender()
         data = Data('123', qualification_ids[2], CODES[2], "qualifications",
                     {'meta': {'sourceRequests': [request_ids[0]]}})
-        # sleep(1)
         self.sleep_until_done(self.worker, self.is_working_filter)
         self.assertEqual(self.worker.edrpou_codes_queue.qsize(), 1)
         self.check_data_objects(self.worker.edrpou_codes_queue.get(), data)

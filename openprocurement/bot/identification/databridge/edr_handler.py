@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-from copy import deepcopy, copy
 
-from gevent import monkey
-from openprocurement.bot.identification.databridge.base_worker import BaseWorker
+from gevent import monkey, event, spawn
 
 monkey.patch_all()
 
@@ -13,14 +11,14 @@ from datetime import datetime
 from gevent.hub import LoopExit
 from gevent.queue import Queue
 from retrying import retry
-from gevent import spawn
+from copy import deepcopy, copy
 
+from openprocurement.bot.identification.databridge.base_worker import BaseWorker
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_GET_TENDER_FROM_QUEUE, DATABRIDGE_EMPTY_RESPONSE
 )
 from openprocurement.bot.identification.databridge.utils import (
-    journal_context, RetryException, get_res_json, is_no_document_in_edr, fill_data_list,
-    is_payment_required
+    journal_context, RetryException, get_res_json, is_no_document_in_edr, fill_data_list, is_payment_required
 )
 from openprocurement.bot.identification.databridge.constants import version, retry_mult
 
@@ -49,7 +47,7 @@ class EdrHandler(BaseWorker):
         self.retry_edr_ids_queue = Queue(maxsize=500)
 
         # blockers
-        self.until_too_many_requests_event = gevent.event.Event()
+        self.until_too_many_requests_event = event.Event()
 
         self.until_too_many_requests_event.set()
 
@@ -101,6 +99,7 @@ class EdrHandler(BaseWorker):
         data = copy(tender_data)
         data.file_content = file_content
         self.process_tracker.set_item(tender_data.tender_id, tender_data.item_id, 1)
+        self.process_tracker.add_unprocessed_item(tender_data)
         self.upload_to_doc_service_queue.put(data)
         if is_retry:
             self.retry_edrpou_codes_queue.get()
@@ -108,7 +107,7 @@ class EdrHandler(BaseWorker):
     def move_data_existing_edr(self, response, tender_data, is_retry):
         data_list = []
         try:
-            fill_data_list(response, tender_data, data_list)
+            fill_data_list(response, tender_data, data_list, self.process_tracker)
         except (KeyError, IndexError) as e:
             logger.info('Error {}. {}'.format(tender_data, e))
             self.retry_edrpou_codes_queue.put(self.retry_edrpou_codes_queue.get() if is_retry else tender_data)
