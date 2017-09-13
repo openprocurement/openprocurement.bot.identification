@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from gevent import monkey
-from retrying import retry
 
 monkey.patch_all()
 
@@ -12,17 +11,23 @@ import gevent
 
 from functools import partial
 from yaml import load
+from pickle import loads
+from gevent import event
 from gevent.queue import Queue
+from retrying import retry
 from restkit import request, RequestError, ResourceError
 from requests import RequestException
 from constants import retry_mult
+
 from openprocurement_client.client import TendersClientSync as BaseTendersClientSync, TendersClient as BaseTendersClient
 from openprocurement.bot.identification.client import DocServiceClient, ProxyClient
 from openprocurement.bot.identification.databridge.scanner import Scanner
 from openprocurement.bot.identification.databridge.filter_tender import FilterTenders
 from openprocurement.bot.identification.databridge.edr_handler import EdrHandler
-from openprocurement.bot.identification.databridge.upload_file import UploadFile
-from openprocurement.bot.identification.databridge.utils import journal_context, check_412, ProcessTracker
+from openprocurement.bot.identification.databridge.upload_file_to_tender import UploadFileToTender
+from openprocurement.bot.identification.databridge.upload_file_to_doc_service import UploadFileToDocService
+from openprocurement.bot.identification.databridge.utils import journal_context, check_412
+from openprocurement.bot.identification.databridge.process_tracker import ProcessTracker
 from caching import Db
 from openprocurement.bot.identification.databridge.journal_msg_ids import (
     DATABRIDGE_RESTART_WORKER, DATABRIDGE_START, DATABRIDGE_DOC_SERVICE_CONN_ERROR,
@@ -34,14 +39,12 @@ logger = logging.getLogger(__name__)
 
 
 class TendersClientSync(BaseTendersClientSync):
-
     @check_412
     def request(self, *args, **kwargs):
         return super(TendersClientSync, self).request(*args, **kwargs)
 
 
 class TendersClient(BaseTendersClient):
-
     @check_412
     def _create_tender_resource_item(self, *args, **kwargs):
         return super(TendersClient, self)._create_tender_resource_item(*args, **kwargs)
@@ -70,11 +73,11 @@ class EdrDataBridge(object):
         # init clients
         self.tenders_sync_client = TendersClientSync('', host_url=ro_api_server, api_version=self.api_version)
         self.client = TendersClient(self.config_get('api_token'), host_url=api_server, api_version=self.api_version)
-        self.proxyClient = ProxyClient(host=self.config_get('proxy_server'),
-                                       user=self.config_get('proxy_user'),
-                                       password=self.config_get('proxy_password'),
-                                       port=self.config_get('proxy_port'),
-                                       version=self.config_get('proxy_version'))
+        self.proxy_client = ProxyClient(host=self.config_get('proxy_server'),
+                                        user=self.config_get('proxy_user'),
+                                        password=self.config_get('proxy_password'),
+                                        port=self.config_get('proxy_port'),
+                                        version=self.config_get('proxy_version'))
         self.doc_service_client = DocServiceClient(host=self.doc_service_host,
                                                    port=self.doc_service_port,
                                                    user=self.config_get('doc_service_user'),
@@ -83,15 +86,18 @@ class EdrDataBridge(object):
         # init queues for workers
         self.filtered_tender_ids_queue = Queue(maxsize=buffers_size)  # queue of tender IDs with appropriate status
         self.edrpou_codes_queue = Queue(maxsize=buffers_size)  # queue with edrpou codes (Data objects stored in it)
-        self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with detailed info from EDR (Data.file_content)
-        # upload_to_tender_queue - queue with  file's get_url
+        self.upload_to_doc_service_queue = Queue(maxsize=buffers_size)  # queue with info from EDR (Data.file_content)
         self.upload_to_tender_queue = Queue(maxsize=buffers_size)
 
         # blockers
-        self.initialization_event = gevent.event.Event()
-        self.services_not_available = gevent.event.Event()
+        self.initialization_event = event.Event()
+        self.services_not_available = event.Event()
+        self.services_not_available.set()
         self.db = Db(config)
         self.process_tracker = ProcessTracker(self.db, self.time_to_live)
+        unprocessed_items = self.process_tracker.get_unprocessed_items()
+        for item in unprocessed_items:
+            self.upload_to_doc_service_queue.put(loads(item))
 
         # Workers
         self.scanner = partial(Scanner.spawn,
@@ -112,22 +118,29 @@ class EdrDataBridge(object):
                                      delay=self.delay)
 
         self.edr_handler = partial(EdrHandler.spawn,
-                                   proxyClient=self.proxyClient,
+                                   proxy_client=self.proxy_client,
                                    edrpou_codes_queue=self.edrpou_codes_queue,
                                    upload_to_doc_service_queue=self.upload_to_doc_service_queue,
                                    process_tracker=self.process_tracker,
                                    services_not_available=self.services_not_available,
                                    delay=self.delay)
 
-        self.upload_file = partial(UploadFile.spawn,
-                                   client=self.client,
-                                   upload_to_doc_service_queue=self.upload_to_doc_service_queue,
-                                   upload_to_tender_queue=self.upload_to_tender_queue,
-                                   process_tracker=self.process_tracker,
-                                   doc_service_client=self.doc_service_client,
-                                   services_not_available=self.services_not_available,
-                                   sleep_change_value=self.sleep_change_value,
-                                   delay=self.delay)
+        self.upload_file_to_doc_service = partial(UploadFileToDocService.spawn,
+                                                  upload_to_doc_service_queue=self.upload_to_doc_service_queue,
+                                                  upload_to_tender_queue=self.upload_to_tender_queue,
+                                                  process_tracker=self.process_tracker,
+                                                  doc_service_client=self.doc_service_client,
+                                                  services_not_available=self.services_not_available,
+                                                  sleep_change_value=self.sleep_change_value,
+                                                  delay=self.delay)
+
+        self.upload_file_to_tender = partial(UploadFileToTender.spawn,
+                                             client=self.client,
+                                             upload_to_tender_queue=self.upload_to_tender_queue,
+                                             process_tracker=self.process_tracker,
+                                             services_not_available=self.services_not_available,
+                                             sleep_change_value=self.sleep_change_value,
+                                             delay=self.delay)
 
     def config_get(self, name):
         return self.config.get('main').get(name)
@@ -147,7 +160,7 @@ class EdrDataBridge(object):
     def check_proxy(self):
         """Check whether proxy is up and has the same sandbox mode (to prevent launching wrong pair of bot-proxy)"""
         try:
-            self.proxyClient.health(self.sandbox_mode)
+            self.proxy_client.health(self.sandbox_mode)
         except RequestException as e:
             logger.info('Proxy server connection error, message {} {}'.format(e, self.sandbox_mode),
                         extra=journal_context({"MESSAGE_ID": DATABRIDGE_PROXY_SERVER_CONN_ERROR}, {}))
@@ -194,7 +207,9 @@ class EdrDataBridge(object):
         self.jobs = {'scanner': self.scanner(),
                      'filter_tender': self.filter_tender(),
                      'edr_handler': self.edr_handler(),
-                     'upload_file': self.upload_file()}
+                     'upload_file_to_doc_service': self.upload_file_to_doc_service(),
+                     'upload_file_to_tender': self.upload_file_to_tender(),
+                     }
 
     def launch(self):
         while True:
@@ -213,29 +228,39 @@ class EdrDataBridge(object):
                 self.check_services()
                 if counter == 20:
                     counter = 0
-                    logger.info('Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {};'
-                                'Upload to doc service {}; Retry upload to doc service {}; '
-                                'Upload to tender {}; Retry upload to tender {}'.format(
-                                    self.filtered_tender_ids_queue.qsize(),
-                                    self.edrpou_codes_queue.qsize(),
-                                    self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs['edr_handler'] else 0,
-                                    self.upload_to_doc_service_queue.qsize(),
-                                    self.jobs['upload_file'].retry_upload_to_doc_service_queue.qsize() if self.jobs['upload_file'] else 0,
-                                    self.upload_to_tender_queue.qsize(),
-                                    self.jobs['upload_file'].retry_upload_to_tender_queue.qsize() if self.jobs['upload_file'] else 0
-                                ))
+                    logger.info(
+                        'Current state: Filtered tenders {}; Edrpou codes queue {}; Retry edrpou codes queue {};'
+                        'Upload to doc service {}; Retry upload to doc service {}; '
+                        'Upload to tender {}; Retry upload to tender {}'.format(
+                            self.filtered_tender_ids_queue.qsize(),
+                            self.edrpou_codes_queue.qsize(),
+                            self.jobs['edr_handler'].retry_edrpou_codes_queue.qsize() if self.jobs[
+                                'edr_handler'] else 0,
+                            self.upload_to_doc_service_queue.qsize(),
+                            self.jobs['upload_file_to_doc_service'].retry_upload_to_doc_service_queue.qsize() if
+                            self.jobs[
+                                'upload_file_to_doc_service'] else 0,
+                            self.upload_to_tender_queue.qsize(),
+                            self.jobs['upload_file_to_tender'].retry_upload_to_tender_queue.qsize() if self.jobs[
+                                'upload_file_to_tender'] else 0
+                        ))
                 counter += 1
-                for name, job in self.jobs.items():
-                    logger.debug("{}.dead: {}".format(name, job.dead))
-                    if job.dead:
-                        logger.warning('Restarting {} worker'.format(name),
-                                       extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
-                        self.jobs[name] = gevent.spawn(getattr(self, name))
+                self.check_and_revive_jobs()
         except KeyboardInterrupt:
             logger.info('Exiting...')
             gevent.killall(self.jobs, timeout=5)
         except Exception as e:
             logger.error(e)
+
+    def check_and_revive_jobs(self):
+        for name, job in self.jobs.items():
+            if job.dead:
+                self.revive_job(name)
+
+    def revive_job(self, name):
+        logger.warning('Restarting {} worker'.format(name),
+                       extra=journal_context({"MESSAGE_ID": DATABRIDGE_RESTART_WORKER}))
+        self.jobs[name] = gevent.spawn(getattr(self, name))
 
 
 def main():

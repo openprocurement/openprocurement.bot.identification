@@ -1,85 +1,20 @@
 # -*- coding: utf-8 -*-
-import yaml
 import io
-
-from uuid import uuid4
-from caching import db_key
+from copy import deepcopy, copy
 from logging import getLogger
-from datetime import datetime
-from restkit import ResourceError
-from collections import namedtuple
+from uuid import uuid4
 
-from openprocurement.bot.identification.databridge.constants import file_name
+import yaml
+from openprocurement.bot.identification.databridge.constants import file_name, version, \
+    qualification_procurementMethodType, pre_qualification_procurementMethodType
+from restkit import ResourceError
+from simplejson import JSONDecodeError
 
 LOGGER = getLogger(__name__)
-
-id_passport_len = 9
-
-
-class ProcessTracker(object):
-
-    def __init__(self, db=None, ttl=300):
-        self.processing_items = {}
-        self.processed_items = {}
-        self._db = db
-        self.tender_documents_to_process = {}
-        self.ttl = ttl
-
-    def set_item(self, tender_id, item_id, docs_amount=0):
-        self.processing_items[item_key(tender_id, item_id)] = docs_amount
-        self.add_docs_amount_to_tender(tender_id, docs_amount)
-
-    def add_docs_amount_to_tender(self, tender_id, docs_amount):
-        if self.tender_documents_to_process.get(tender_id):
-            self.tender_documents_to_process[tender_id] += docs_amount
-        else:
-            self.tender_documents_to_process[tender_id] = docs_amount
-
-    def remove_docs_amount_from_tender(self, tender_id):
-        if self.tender_documents_to_process[tender_id] > 1:
-            self.tender_documents_to_process[tender_id] -= 1
-        else:
-            self._db.put(db_key(tender_id), datetime.now().isoformat(), self.ttl)
-            del self.tender_documents_to_process[tender_id]
-
-    def check_processing_item(self, tender_id, item_id):
-        """Check if current tender_id, item_id is processing"""
-        return item_key(tender_id, item_id) in self.processing_items.keys()
-
-    def check_processed_item(self, tender_id, item_id):
-        """Check if current tender_id, item_id was already processed"""
-        return item_key(tender_id, item_id) in self.processed_items.keys()
-
-    def check_processed_tenders(self, tender_id):
-        return self._db.has(db_key(tender_id)) or False
-
-    def update_processing_items(self, tender_id, item_id):
-        key = item_key(tender_id, item_id)
-        if self.processing_items[key] > 1:
-            self.processing_items[key] -= 1
-        else:
-            self.processed_items[key] = datetime.now()
-            del self.processing_items[key]
-
-    def update_items_and_tender(self, tender_id, item_id):
-        self.update_processing_items(tender_id, item_id)
-        self.remove_docs_amount_from_tender(tender_id)
 
 
 def item_key(tender_id, item_id):
     return '{}_{}'.format(tender_id, item_id)
-
-Data = namedtuple('Data', [
-    'tender_id',  # tender ID
-    'item_id',  # qualification or award ID
-    'code',  # EDRPOU, IPN or passport
-    'item_name',  # "qualifications" or "awards"
-    'file_content'  # details for file
-])
-
-
-def data_string(data):
-    return "tender {} {} id: {}".format(data.tender_id, data.item_name[:-1], data.item_id)
 
 
 def journal_context(record={}, params={}):
@@ -94,10 +29,6 @@ def generate_req_id():
 
 def generate_doc_id():
     return uuid4().hex
-
-
-def validate_param(code):
-    return 'id' if code.isdigit() and len(code) != id_passport_len else 'passport'
 
 
 def create_file(details):
@@ -135,3 +66,75 @@ def check_412(func):
         return response
 
     return func_wrapper
+
+
+def get_res_json(response):
+    try:
+        return response.json()
+    except JSONDecodeError:
+        return response.text
+
+
+def is_no_document_in_edr(response, res_json):
+    return (response.status_code == 404 and isinstance(res_json, dict)
+            and res_json.get('errors')[0].get('description')[0].get('error').get('code') == u"notFound")
+
+
+def is_payment_required(response):
+    return (response.status_code == 403 and response.headers.get('content-type', '') == 'application/json'
+            and (response.json().get('errors')[0].get('description') ==
+                 [{'message': 'Payment required.', 'code': 5}]))
+
+
+def fill_data_list(response, tender_data, data_list, process_tracker):
+    for i, obj in enumerate(response.json()['data']):
+        document_id = check_add_suffix(response.json()['data'], tender_data.doc_id(), i + 1)
+        file_content = {'meta': {'sourceDate': response.json()['meta']['detailsSourceDate'][i]}, 'data': obj}
+        file_content['meta'].update(deepcopy(tender_data.file_content['meta']))
+        file_content['meta'].update({"version": version})
+        file_content['meta']['id'] = document_id
+        data = copy(tender_data)
+        data.file_content = file_content
+        process_tracker.add_unprocessed_item(tender_data)
+        data_list.append(data)
+
+
+def is_code_invalid(code):
+    return (not (type(code) == int or (type(code) == str and code.isdigit()) or
+                 (type(code) == unicode and code.isdigit())))
+
+
+def item_id(item):
+    return item['bidID' if item.get('bidID') else 'bid_id']
+
+
+def journal_item_name(item):
+    return "QUALIFICATION_ID" if item.get('bidID') else "AWARD_ID"
+
+
+def check_related_lot_status(tender, award):
+    """Check if related lot not in status cancelled"""
+    lot_id = award.get('lotID')
+    if lot_id:
+        if [l['status'] for l in tender.get('lots', []) if l['id'] == lot_id][0] != 'active':
+            return False
+    return True
+
+
+def journal_item_params(tender, item):
+    return {"TENDER_ID": tender['id'], "BID_ID": item_id(item), journal_item_name(item): item['id']}
+
+
+def more_tenders(params, response):
+    return not (params.get('descending')
+                and not len(response.data) and params.get('offset') == response.next_page.offset)
+
+
+def valid_qualification_tender(tender):
+    return (tender['status'] == "active.qualification" and
+            tender['procurementMethodType'] in qualification_procurementMethodType)
+
+
+def valid_prequal_tender(tender):
+    return (tender['status'] == 'active.pre-qualification' and
+            tender['procurementMethodType'] in pre_qualification_procurementMethodType)
