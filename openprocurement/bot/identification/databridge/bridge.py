@@ -190,7 +190,7 @@ class EdrDataBridge(object):
         try:
             self.check_proxy() and self.check_openprocurement_api() and self.check_doc_service()
         except Exception as e:
-            logger.info("Service is unavailable, message {}".format(e))
+            logger.info("Service is unavailable, message {}".format(e.message))
             return False
         else:
             return True
