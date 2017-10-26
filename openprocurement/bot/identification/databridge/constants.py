@@ -8,7 +8,7 @@ author = "IdentificationBot"
 retry_mult = 1000
 id_passport_len = 9
 identification_scheme = u'UA-EDR'
-pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
+pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU', 'esco')
 qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU',
-                                       'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
+                                       'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2', 'esco')
 DOC_TYPE = 'registerExtract'
