@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class Scanner(Greenlet):
     """ Edr API Data Bridge """
 
-    pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
-    qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
+    pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU', 'esco')
+    qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2', 'esco')
     sleep_change_value = 0
 
     def __init__(self, tenders_sync_client, filtered_tender_ids_queue, increment_step=1, decrement_step=1, delay=15):
