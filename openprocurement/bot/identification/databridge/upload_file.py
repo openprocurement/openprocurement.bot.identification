@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 class UploadFile(Greenlet):
     """ Upload file with details """
 
-    pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU')
-    qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2')
+    pre_qualification_procurementMethodType = ('aboveThresholdEU', 'competitiveDialogueUA', 'competitiveDialogueEU', 'esco')
+    qualification_procurementMethodType = ('aboveThresholdUA', 'aboveThresholdUA.defense', 'aboveThresholdEU', 'competitiveDialogueUA.stage2', 'competitiveDialogueEU.stage2', 'esco')
     sleep_change_value = 0
 
     def __init__(self, client, upload_to_doc_service_queue, upload_to_tender_queue, processing_items, processed_items, doc_service_client, increment_step=1, decrement_step=1, delay=15):
