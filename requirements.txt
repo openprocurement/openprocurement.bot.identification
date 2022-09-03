@@ -7,7 +7,7 @@ Pygments==2.0.2
 WebOb==1.4.1
 WebTest==2.0.18
 beautifulsoup4==4.3.2
-boto==2.31.1
+boto==2.39.0
 chaussette==1.2
 cornice==1.0.0
 coverage==3.7.1
